@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { placeholderImages } from '@/lib/placeholder-images';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
+import { Logo } from '@/components/logo';
 
 export function FlippingBook() {
   const [isFlipped, setIsFlipped] = useState(false);
@@ -17,21 +18,20 @@ export function FlippingBook() {
       style={{ transform: isFlipped ? 'translateX(50%) rotateY(-180deg)' : 'translateX(0) rotateY(0deg)'}}
     >
       {/* Book Cover */}
-      <div className="absolute w-full h-full backface-hidden rounded-md shadow-2xl overflow-hidden border-2 border-primary/50" style={{ transform: 'rotateY(0deg)' }}>
-        {bookCover && (
-          <Image
-            src={bookCover.imageUrl}
-            alt={bookCover.description}
-            fill
-            sizes="(max-width: 768px) 250px, 300px"
-            className="object-cover"
-            data-ai-hint={bookCover.imageHint}
-          />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent p-6 flex flex-col justify-end">
-            <h3 className="font-headline text-3xl text-white font-bold">Concepts Nichod</h3>
-            <p className="text-sm text-white/80 mt-2">Your journey to knowledge begins.</p>
+      <div className="absolute w-full h-full backface-hidden rounded-md shadow-2xl overflow-hidden border-2 border-primary/50 bg-gradient-to-br from-black via-zinc-900 to-amber-950/40 flex flex-col items-center justify-center p-6" style={{ transform: 'rotateY(0deg)' }}>
+        <div className="flex flex-col items-center gap-6 transform -translate-y-4">
+          <Logo className="w-28 h-28 drop-shadow-2xl" />
+          <div className="flex flex-col items-center">
+            <h3 className="font-headline text-4xl text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-amber-500 font-bold tracking-tight text-center drop-shadow-md">
+              ConceptsNichod
+            </h3>
+            <p className="text-sm text-amber-200/70 mt-3 font-medium tracking-wide uppercase">Your journey begins here.</p>
+          </div>
         </div>
+        
+        {/* Decorative elements */}
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-600 to-amber-400"></div>
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-12 h-1 rounded-full bg-amber-500/30"></div>
       </div>
       
       {/* Book Back/Inside */}
