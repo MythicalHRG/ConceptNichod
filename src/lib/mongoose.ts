@@ -24,7 +24,7 @@ async function dbConnect() {
   if (!cached.promise) {
     const opts = {
       bufferCommands: false,
-      serverSelectionTimeoutMS: 3000, // Fast timeout for first attempt
+      serverSelectionTimeoutMS: 1500, // Ultra-fast 1.5s timeout for first attempt
       socketTimeoutMS: 45000,
       connectTimeoutMS: 10000,
     };
@@ -32,11 +32,11 @@ async function dbConnect() {
     cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
       return mongoose;
     }).catch((e) => {
-      console.warn("MongoDB initial connection failed, retrying once in 1 second...", e.message);
-      return new Promise(resolve => setTimeout(resolve, 1000))
+      console.warn("MongoDB initial connection failed, retrying in 200ms...", e.message);
+      return new Promise(resolve => setTimeout(resolve, 200))
         .then(() => {
-           // Allow a slightly longer timeout on the retry
-           const retryOpts = { ...opts, serverSelectionTimeoutMS: 5000 };
+           // Give the retry attempt a solid chance to connect if it was asleep
+           const retryOpts = { ...opts, serverSelectionTimeoutMS: 4000 };
            return mongoose.connect(MONGODB_URI, retryOpts);
         })
         .then((mongoose) => {
