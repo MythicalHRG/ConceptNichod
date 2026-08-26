@@ -304,7 +304,7 @@ export function TopicPageClient({ topicId, initialTopic }: TopicPageClientProps)
           </TabsList>
         )}
         <TabsContent value="summary">
-          {topic.summary && timerState === 'idle' && (
+          {topic.summary && timerState === 'idle' && !finalAnalysis && (
             <Card className="mb-6">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2"><Timer className="w-5 h-5"/> How much time do you need?</CardTitle>
@@ -336,7 +336,7 @@ export function TopicPageClient({ topicId, initialTopic }: TopicPageClientProps)
             </Card>
           )}
 
-          {topic.summary && timerState === 'running' && (
+          {topic.summary && timerState === 'running' && !finalAnalysis && (
              <div className="mb-6 p-4 bg-primary/10 rounded-lg flex items-center justify-between sticky top-4 z-10 backdrop-blur-md border border-primary/20 shadow-sm">
                 <div className="flex items-center gap-3">
                   <Timer className="w-6 h-6 text-primary animate-pulse" />
@@ -354,7 +354,7 @@ export function TopicPageClient({ topicId, initialTopic }: TopicPageClientProps)
              </div>
           )}
 
-          {topic.summary && timerState !== 'idle' && <SummaryDisplay summary={topic.summary} />}
+          {topic.summary && (timerState !== 'idle' || finalAnalysis) && <SummaryDisplay summary={topic.summary} />}
         </TabsContent>
         <TabsContent value="practice">
           {topic.questions && (
