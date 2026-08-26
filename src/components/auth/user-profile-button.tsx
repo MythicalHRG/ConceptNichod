@@ -42,19 +42,19 @@ export function UserProfileButton() {
   const [activeTab, setActiveTab] = useState("profile");
 
   useEffect(() => {
-    if (activeTab === "delete") {
+    if (activeTab === "delete" && isDeleteEmailVerified) {
       setTimeout(() => {
         try {
           loadCaptchaEnginge(6);
         } catch(e) {}
       }, 200);
-    } else {
+    } else if (activeTab !== "delete") {
       setIsDeleteOtpSent(false);
       setIsDeleteEmailVerified(false);
       setDeleteOtp("");
       setDeleteCaptchaValue("");
     }
-  }, [activeTab]);
+  }, [activeTab, isDeleteEmailVerified]);
 
   const openSettings = () => {
     if (user) {
