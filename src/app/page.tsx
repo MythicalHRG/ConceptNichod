@@ -1,7 +1,8 @@
 
 import { FlippingBook } from '@/components/flipping-book';
 import { Button } from '@/components/ui/button';
-import { BookOpen, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
+import { Logo } from '@/components/ui/logo';
 import Link from 'next/link';
 
 const FloatingBooks = () => (
@@ -21,7 +22,7 @@ export default function Home() {
         <div className="relative z-10 w-full max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-center">
           <div className="flex flex-col items-center lg:items-start text-center lg:text-left">
             <div className="flex items-center gap-3 mb-4">
-              <BookOpen className="h-12 w-12 text-primary" />
+              <Logo className="h-16 w-16 drop-shadow-lg" />
               <h1 className="text-4xl md:text-5xl font-headline font-bold text-foreground">
                 Concepts Nichod
               </h1>

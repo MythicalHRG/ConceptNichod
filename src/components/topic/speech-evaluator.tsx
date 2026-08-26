@@ -50,7 +50,7 @@ export function SpeechRecorder({ transcript, setTranscript, isStandalone = true,
           interim_results: true,
           smart_format: true,
           language: 'en-US',
-          keepalive: "true", // Keep connection alive
+          keepalive: true, // Boolean, not string
         });
 
         recognition.on(LiveTranscriptionEvents.Open, () => {
@@ -63,7 +63,7 @@ export function SpeechRecorder({ transcript, setTranscript, isStandalone = true,
           if (transcriptChunk && data.is_final) {
                const newTranscript = (transcriptRef.current + " " + transcriptChunk).trim();
                transcriptRef.current = newTranscript;
-               setTranscript(newTranscript); // Pass string, not function!
+               setTranscript(newTranscript);
           }
         });
         
@@ -71,6 +71,13 @@ export function SpeechRecorder({ transcript, setTranscript, isStandalone = true,
           setIsConnecting(false);
           if (isRecordingRef.current) {
               setIsRecording(false);
+              // Stop the microphone when the connection unexpectedly closes!
+              if (microphoneRef.current?.state === 'recording') {
+                microphoneRef.current.stop();
+                if (microphoneRef.current.stream) {
+                  microphoneRef.current.stream.getTracks().forEach((track: any) => track.stop());
+                }
+              }
           }
         });
 
@@ -82,7 +89,15 @@ export function SpeechRecorder({ transcript, setTranscript, isStandalone = true,
               description: "An error occurred with the transcription service."
           });
           setIsConnecting(false);
-          setIsRecording(false);
+          if (isRecordingRef.current) {
+              setIsRecording(false);
+              if (microphoneRef.current?.state === 'recording') {
+                microphoneRef.current.stop();
+                if (microphoneRef.current.stream) {
+                  microphoneRef.current.stream.getTracks().forEach((track: any) => track.stop());
+                }
+              }
+          }
           reject(error);
         });
 

@@ -12,7 +12,7 @@ import {
   SidebarTrigger,
   SidebarFooter,
 } from "@/components/ui/sidebar";
-import { BookOpen } from "lucide-react";
+import { Logo } from "@/components/ui/logo";
 import dbConnect from "@/lib/mongoose";
 import Topic from "@/models/Topic";
 import { UserProfileButton } from "@/components/auth/user-profile-button";
@@ -41,8 +41,8 @@ export default async function DashboardLayout({
       <SidebarProvider>
         <Sidebar>
           <SidebarHeader>
-            <div className="flex items-center gap-2 data-[collapsed=true]:hidden">
-              <BookOpen className="size-6 text-primary" />
+            <div className="flex items-center gap-2 data-[collapsed=true]:hidden pl-2 pt-2">
+              <Logo className="size-8" />
               <h2 className="text-lg font-headline font-bold">Concepts Nichod</h2>
             </div>
           </SidebarHeader>
