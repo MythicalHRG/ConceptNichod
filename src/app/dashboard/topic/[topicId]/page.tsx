@@ -29,8 +29,7 @@ export default async function TopicPage({ params }: { params: { topicId: string 
   }
 
   const topic = {
-    ...topicDoc,
-    _id: topicDoc._id.toString(),
+    ...JSON.parse(JSON.stringify(topicDoc)),
     id: topicDoc._id.toString(),
   };
 

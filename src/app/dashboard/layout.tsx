@@ -31,10 +31,9 @@ export default async function DashboardLayout({
     topicsDocs = await Topic.find({ userId: userId }).sort({ createdAt: -1 }).lean();
   }
   
-  const topics = topicsDocs.map(doc => ({
+  const topics = JSON.parse(JSON.stringify(topicsDocs)).map((doc: any) => ({
     ...doc,
-    _id: doc._id.toString(),
-    id: doc._id.toString(),
+    id: doc._id,
   }));
 
   return (

@@ -32,10 +32,9 @@ export default async function DashboardPage() {
   // Fetch only the logged-in user's topics
   const topicsDocs = await Topic.find({ userId: user.uuid }).sort({ createdAt: -1 }).lean();
   
-  const topics = topicsDocs.map(doc => ({
+  const topics = JSON.parse(JSON.stringify(topicsDocs)).map((doc: any) => ({
     ...doc,
-    _id: doc._id.toString(),
-    id: doc._id.toString(),
+    id: doc._id,
   }));
 
   return (

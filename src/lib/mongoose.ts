@@ -17,21 +17,30 @@ async function dbConnect() {
     return cached.conn;
   }
 
-  if (!cached.promise) {
-    cached.promise = (async () => {
-      const opts = {
-        bufferCommands: false,
-      };
-
-      if (!MONGODB_URI) {
-        throw new Error("Please define the MONGODB_URI environment variable inside .env");
-      }
-
-      const m = await mongoose.connect(MONGODB_URI!, opts);
-      return m;
-    })();
+  if (!MONGODB_URI) {
+    throw new Error("Please define the MONGODB_URI environment variable inside .env");
   }
-  cached.conn = await cached.promise;
+
+  if (!cached.promise) {
+    const opts = {
+      bufferCommands: false,
+    };
+
+    cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
+      return mongoose;
+    }).catch(e => {
+      cached.promise = null;
+      throw e;
+    });
+  }
+  
+  try {
+    cached.conn = await cached.promise;
+  } catch (e) {
+    cached.promise = null;
+    throw e;
+  }
+  
   return cached.conn;
 }
 
