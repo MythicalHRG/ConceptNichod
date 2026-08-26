@@ -1,5 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  serverExternalPackages: [
+    '@genkit-ai/core', 
+    'genkit', 
+    '@opentelemetry/sdk-node', 
+    '@opentelemetry/exporter-jaeger',
+    'pino-pretty', 
+    'lokijs', 
+    'encoding'
+  ],
   productionBrowserSourceMaps: false,
   compiler: {
     removeConsole: process.env.NODE_ENV === "production" ? { exclude: ["error"] } : false,
@@ -33,7 +42,6 @@ const nextConfig = {
       }
     ]
   },
-  /* config options here */
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -61,20 +69,6 @@ const nextConfig = {
         pathname: '/**',
       },
     ],
-  },
-  // This is required to fix a bug in Genkit with Next.js App Router.
-  // See https://github.com/firebase/genkit/issues/1183
-  webpack: (config, { isServer }) => {
-    if (isServer) {
-      config.externals.push(
-        '@genkit-ai/core', 
-        'genkit', 
-        '@opentelemetry/sdk-node', 
-        '@opentelemetry/exporter-jaeger'
-      );
-    }
-    config.externals.push('pino-pretty', 'lokijs', 'encoding');
-    return config;
   },
 };
 
