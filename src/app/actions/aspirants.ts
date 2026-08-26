@@ -1,0 +1,62 @@
+"use server";
+import { cookies } from "next/headers";
+import dbConnect from "@/lib/mongoose";
+import User from "@/models/User";
+
+export type SearchFilters = {
+    searchQuery?: string;
+    classLevel?: string;
+    gender?: string;
+    city?: string;
+};
+
+export async function searchAspirantsAction(filters: SearchFilters) {
+    await dbConnect();
+    const sessionUuid = cookies().get("user_session")?.value;
+    if (!sessionUuid) throw new Error("Not authenticated");
+
+    const query: any = { uuid: { $ne: sessionUuid } }; // don't return the logged-in user
+
+    const escapeRegex = (string: any) => {
+        if (typeof string !== 'string') return '';
+        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    };
+
+    if (filters.searchQuery && typeof filters.searchQuery === 'string') {
+        const safeQuery = escapeRegex(filters.searchQuery);
+        query.$or = [
+            { fullName: { $regex: safeQuery, $options: "i" } },
+            { username: { $regex: safeQuery, $options: "i" } },
+            { city: { $regex: safeQuery, $options: "i" } },
+            { bio: { $regex: safeQuery, $options: "i" } }
+        ];
+    }
+    if (filters.classLevel && filters.classLevel !== "All") {
+        query.classLevel = filters.classLevel;
+    }
+    if (filters.gender && filters.gender !== "All") {
+        query.gender = filters.gender;
+    }
+    if (filters.city && filters.city !== "All" && typeof filters.city === 'string') {
+        const safeCity = escapeRegex(filters.city);
+        query.city = { $regex: safeCity, $options: "i" };
+    }
+
+    const users = await User.find(query).select('-password -email').limit(50).lean();
+    
+    // Ensure we convert _id to string or remove it so it's plain JSON serializable
+    return users.map((u: any) => ({
+        uuid: u.uuid,
+        username: u.username,
+        fullName: u.fullName,
+        gender: u.gender,
+        classLevel: u.classLevel,
+        examFocus: u.examFocus,
+        city: u.city,
+        futureCollege: u.futureCollege,
+        snapchat: u.snapchat,
+        instagram: u.instagram,
+        bio: u.bio,
+        createdAt: u.createdAt
+    }));
+}
