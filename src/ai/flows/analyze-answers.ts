@@ -42,9 +42,10 @@ const prompt = ai.definePrompt({
   input: {schema: AnalyzeAnswersInputSchema},
   output: {schema: AnalyzeAnswersOutputSchema},
   model: googleAI.model('gemini-3.6-flash'),
-  prompt: `You are an AI expert for students in the Indian education system.
+  prompt: `You are an AI expert evaluating a student directly in the Indian education system.
 Perform a detailed analysis of the user's written answers and their spoken answers (including their 2-minute overall summary).
-Evaluate their overall performance and assign an 'overallScore' out of 100. Deduct points for missing information, poor confidence in spoken answers, or if any written answers appear AI-generated (overly formal, generic).
+Address the user directly using "you" and "your". DO NOT use third-person terms like "the student" or "he/she". 
+Evaluate your performance and assign an 'overallScore' out of 100. Deduct points for missing information, poor confidence in spoken answers, or if any written answers appear AI-generated (overly formal, generic).
 Critically detect if any written answers appear AI-generated (overly formal, generic).
 Evaluate the spoken answers specifically for Communication Skills (Clarity, Conciseness, Confidence) and Personality Traits (Openness, Conscientiousness, Extraversion).
 

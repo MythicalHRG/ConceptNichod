@@ -299,7 +299,7 @@ export function TopicPageClient({ topicId, initialTopic }: TopicPageClientProps)
       <Tabs value={activeTab} className="w-full" onValueChange={handleTabChange}>
         {!(isPracticing && !finalAnalysis) && (
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="summary" disabled={(isPracticing && !finalAnalysis) || topic.summaryViewed}>Summary</TabsTrigger>
+            <TabsTrigger value="summary" disabled={!finalAnalysis && (isPracticing || topic.summaryViewed)}>Summary</TabsTrigger>
             <TabsTrigger value="practice">Practice & Analysis</TabsTrigger>
           </TabsList>
         )}
