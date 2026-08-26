@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { generateContentAction, runFinalAnalysisAction, deleteTopicAction, markSummaryViewedAction, updateTopicProgressAction } from "@/app/actions";
+import { generateContentAction, runFinalAnalysisAction, markSummaryViewedAction, updateTopicProgressAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -187,26 +187,7 @@ export function TopicPageClient({ topicId, initialTopic }: TopicPageClientProps)
     }
   };
   
-  const handleDeleteTopic = async () => {
-    setIsDeleting(true);
-    try {
-        await deleteTopicAction(topicId);
-        toast({
-            title: "Topic Deleted",
-            description: `"${topic?.name}" has been permanently removed.`,
-        });
-        router.push('/dashboard');
-    } catch (error) {
-        console.error("Deletion Error:", error);
-        toast({
-            variant: "destructive",
-            title: "Deletion Failed",
-            description: "Could not delete the topic. Please try again.",
-        });
-    } finally {
-        setIsDeleting(false);
-    }
-  };
+
 
   const handleFinalAnalysis = async (writtenAnswers: { question: string; answer: string }[], spokenAnswers: { question: string; answer: string }[], isAutoSubmit = false) => {
     if (!topic?.name || !topic.classLevel || !topic.summary) {
