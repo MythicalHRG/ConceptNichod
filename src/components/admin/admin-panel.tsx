@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { getAllUsersAction, deleteUserAction, getBansAction, banEntityAction, unbanEntityAction } from "@/app/actions/admin";
-import { createBroadcastAction } from "@/app/actions/broadcast";
+import { createBroadcastAction, getActiveBroadcastsAction, deleteBroadcastAction } from "@/app/actions/broadcast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 export function AdminPanel() {
   const [users, setUsers] = useState<any[]>([]);
   const [bans, setBans] = useState<any[]>([]);
+  const [activeBroadcasts, setActiveBroadcasts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [banType, setBanType] = useState<"ip" | "email" | "username">("email");
   const [banValue, setBanValue] = useState("");
@@ -24,12 +25,14 @@ export function AdminPanel() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [usersRes, bansRes] = await Promise.all([
+      const [usersRes, bansRes, broadcastsRes] = await Promise.all([
         getAllUsersAction(),
-        getBansAction()
+        getBansAction(),
+        getActiveBroadcastsAction()
       ]);
       if (usersRes.success) setUsers(usersRes.users);
       if (bansRes.success) setBans(bansRes.bans);
+      if (broadcastsRes.success) setActiveBroadcasts(broadcastsRes.broadcasts);
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally {
@@ -84,10 +87,22 @@ export function AdminPanel() {
       await createBroadcastAction(formData);
       toast({ title: "Broadcast Sent!", description: "Message is now live for all users for 36 hours." });
       (e.target as HTMLFormElement).reset();
+      fetchData(); // Refresh active broadcasts
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally {
       setBroadcastLoading(false);
+    }
+  };
+
+  const handleDeleteBroadcast = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this broadcast?")) return;
+    try {
+      await deleteBroadcastAction(id);
+      toast({ title: "Broadcast deleted successfully" });
+      setActiveBroadcasts(activeBroadcasts.filter(b => b._id !== id));
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
     }
   };
 
@@ -237,6 +252,45 @@ export function AdminPanel() {
                   Send Broadcast
                 </Button>
               </form>
+            </CardContent>
+          </Card>
+
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle>Active Broadcasts ({activeBroadcasts.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="text-xs uppercase bg-muted text-muted-foreground">
+                    <tr>
+                      <th className="px-4 py-3">Subject</th>
+                      <th className="px-4 py-3">Message</th>
+                      <th className="px-4 py-3">Expires In</th>
+                      <th className="px-4 py-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeBroadcasts.length === 0 ? (
+                      <tr><td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">No active broadcasts.</td></tr>
+                    ) : activeBroadcasts.map(b => {
+                      const hoursLeft = Math.max(0, Math.floor((new Date(b.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60)));
+                      return (
+                        <tr key={b._id} className="border-b last:border-0 hover:bg-muted/50">
+                          <td className="px-4 py-3 font-medium max-w-[200px] truncate">{b.subject}</td>
+                          <td className="px-4 py-3 max-w-[300px] truncate">{b.message}</td>
+                          <td className="px-4 py-3">{hoursLeft} hours</td>
+                          <td className="px-4 py-3 text-right">
+                            <Button variant="destructive" size="sm" onClick={() => handleDeleteBroadcast(b._id)}>
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

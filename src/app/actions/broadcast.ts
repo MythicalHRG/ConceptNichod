@@ -83,3 +83,9 @@ export async function getUnreadCountAction() {
 
   return { success: true, count };
 }
+
+export async function deleteBroadcastAction(id: string) {
+  await verifyAdmin();
+  await Broadcast.findByIdAndDelete(id);
+  return { success: true };
+}
