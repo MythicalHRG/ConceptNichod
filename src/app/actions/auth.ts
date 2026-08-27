@@ -12,6 +12,15 @@ function validateEmailDomain(email: string) {
     return email.endsWith("@gmail.com") || email.endsWith("@outlook.com") || email.endsWith("@outlook.in");
 }
 
+function validatePassword(password: string) {
+    if (password.length < 8) return "Password must be at least 8 characters long.";
+    if (!/[A-Z]/.test(password)) return "Password must contain at least one uppercase letter.";
+    if (!/[a-z]/.test(password)) return "Password must contain at least one lowercase letter.";
+    if (!/[0-9]/.test(password)) return "Password must contain at least one number.";
+    if (!/[^A-Za-z0-9]/.test(password)) return "Password must contain at least one special symbol.";
+    return null;
+}
+
 export async function registerAction(formData: FormData) {
     await dbConnect();
     const email = (formData.get("email") as string).toLowerCase().trim();
@@ -32,6 +41,9 @@ export async function registerAction(formData: FormData) {
     }
     if (!validateEmailDomain(email)) throw new Error("Only @gmail.com, @outlook.com, and @outlook.in emails are allowed.");
 
+    const passwordError = validatePassword(password);
+    if (passwordError) throw new Error(passwordError);
+
     // Check OTP verification
     const otpRecord = await OtpVerification.findOne({ email });
     if (!otpRecord || !otpRecord.isVerified) {
@@ -42,13 +54,11 @@ export async function registerAction(formData: FormData) {
     const safeEmail = escapeRegex(email);
     const safeUsername = escapeRegex(username);
 
-    const existingUser = await User.findOne({ 
-        $or: [
-            { email: new RegExp(`^${safeEmail}$`, 'i') }, 
-            { username: new RegExp(`^${safeUsername}$`, 'i') }
-        ] 
-    });
-    if (existingUser) throw new Error("Username or email already taken");
+    const existingUserByEmail = await User.findOne({ email: new RegExp(`^${safeEmail}$`, 'i') });
+    if (existingUserByEmail) throw new Error("Email is already registered.");
+    
+    const existingUserByUsername = await User.findOne({ username: new RegExp(`^${safeUsername}$`, 'i') });
+    if (existingUserByUsername) throw new Error("A user with this username already exists.");
 
     const encryptedPassword = await hashPassword(password);
     const uuid = crypto.randomUUID();
@@ -169,6 +179,9 @@ export async function resetPasswordAction(formData: FormData) {
 
     if (!email || !newPassword) throw new Error("Missing required fields");
 
+    const passwordError = validatePassword(newPassword);
+    if (passwordError) throw new Error(passwordError);
+
     // Check OTP verification
     const otpRecord = await OtpVerification.findOne({ email });
     if (!otpRecord || !otpRecord.isVerified) {
@@ -197,6 +210,9 @@ export async function changePasswordAction(formData: FormData) {
     const newPassword = formData.get("newPassword") as string;
 
     if (!currentPassword || !newPassword) throw new Error("Missing required fields");
+
+    const passwordError = validatePassword(newPassword);
+    if (passwordError) throw new Error(passwordError);
 
     const user = await User.findOne({ uuid: sessionId });
     if (!user) throw new Error("User not found");
