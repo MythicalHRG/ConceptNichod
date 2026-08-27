@@ -13,6 +13,7 @@ import {
 import { Sun, Moon, Monitor } from "lucide-react";
 import { useTheme } from "next-themes";
 import { FeedbackDialog } from "./feedback-dialog";
+import { NotificationBell } from "./notification-bell";
 
 
 function ModeToggle() {
@@ -50,6 +51,7 @@ export function Navbar() {
     <header className="sticky top-0 z-10 flex h-14 items-center gap-4 border-b bg-background/60 px-4 backdrop-blur-sm sm:px-6">
       <SidebarTrigger className="mr-2" />
       <div className="flex-1" />
+      <NotificationBell />
       <FeedbackDialog />
       <ModeToggle />
     </header>

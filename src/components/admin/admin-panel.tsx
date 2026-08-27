@@ -1,9 +1,11 @@
 "use client";
 import { useState, useEffect } from "react";
 import { getAllUsersAction, deleteUserAction, getBansAction, banEntityAction, unbanEntityAction } from "@/app/actions/admin";
+import { createBroadcastAction } from "@/app/actions/broadcast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Trash2, Ban } from "lucide-react";
@@ -16,6 +18,7 @@ export function AdminPanel() {
   const [banType, setBanType] = useState<"ip" | "email" | "username">("email");
   const [banValue, setBanValue] = useState("");
   const [banReason, setBanReason] = useState("");
+  const [broadcastLoading, setBroadcastLoading] = useState(false);
   const { toast } = useToast();
 
   const fetchData = async () => {
@@ -73,6 +76,21 @@ export function AdminPanel() {
     }
   };
 
+  const handleCreateBroadcast = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setBroadcastLoading(true);
+    const formData = new FormData(e.currentTarget);
+    try {
+      await createBroadcastAction(formData);
+      toast({ title: "Broadcast Sent!", description: "Message is now live for all users for 36 hours." });
+      (e.target as HTMLFormElement).reset();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setBroadcastLoading(false);
+    }
+  };
+
   if (loading) {
     return <div className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin" /></div>;
   }
@@ -83,6 +101,7 @@ export function AdminPanel() {
         <TabsList className="mb-4">
           <TabsTrigger value="users">Manage Users</TabsTrigger>
           <TabsTrigger value="bans">Manage Bans</TabsTrigger>
+          <TabsTrigger value="broadcasts">Broadcasts</TabsTrigger>
         </TabsList>
 
         <TabsContent value="users">
@@ -192,6 +211,32 @@ export function AdminPanel() {
                   </tbody>
                 </table>
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="broadcasts">
+          <Card>
+            <CardHeader>
+              <CardTitle>Send Global Broadcast</CardTitle>
+              <CardDescription>This message will appear in the notification bell for all users and automatically disappear after 36 hours.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleCreateBroadcast} className="space-y-4 max-w-2xl">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Subject</label>
+                  <Input name="subject" placeholder="e.g. Server Maintenance Tonight" required />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Message</label>
+                  <Textarea name="message" placeholder="Type your broadcast message here..." rows={5} required />
+                </div>
+                <p className="text-xs text-muted-foreground italic">Note: 50MB file attachments are temporarily disabled until external storage is configured.</p>
+                <Button type="submit" disabled={broadcastLoading}>
+                  {broadcastLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                  Send Broadcast
+                </Button>
+              </form>
             </CardContent>
           </Card>
         </TabsContent>
