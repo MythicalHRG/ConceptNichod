@@ -9,9 +9,9 @@ import {
   SidebarGroup,
   SidebarGroupLabel,
 } from "@/components/ui/sidebar";
-import { BookCopy, Home, BrainCircuit, Users } from "lucide-react";
+import { BookCopy, Home, BrainCircuit, Users, ShieldAlert } from "lucide-react";
 
-export function SidebarNav({ topics }: { topics: any[] }) {
+export function SidebarNav({ topics, isAdmin }: { topics: any[], isAdmin?: boolean }) {
   const pathname = usePathname();
 
   const mainNav = [
@@ -19,6 +19,10 @@ export function SidebarNav({ topics }: { topics: any[] }) {
     { name: "Concept Mirror", href: "/dashboard/concept-mirror", icon: BrainCircuit, isActive: pathname === "/dashboard/concept-mirror" },
     { name: "AspirantsConnect", href: "/dashboard/aspirants-connect", icon: Users, isActive: pathname === "/dashboard/aspirants-connect" },
   ];
+
+  if (isAdmin) {
+    mainNav.push({ name: "Admin Panel", href: "/dashboard/admin", icon: ShieldAlert, isActive: pathname === "/dashboard/admin" });
+  }
 
   return (
     <>

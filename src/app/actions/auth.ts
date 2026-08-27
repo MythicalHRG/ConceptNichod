@@ -3,8 +3,10 @@ import { cookies } from "next/headers";
 import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
 import OtpVerification from "@/models/OtpVerification";
+import Blacklist from "@/models/Blacklist";
 import { hashPassword, comparePassword } from "@/lib/encryption";
 import crypto from "crypto";
+import { headers } from "next/headers";
 
 const SECRET_KEY = process.env.ENCRYPTION_SECRET_KEY || "super_secret_default_key_for_encodec_12345!";
 
@@ -43,6 +45,16 @@ export async function registerAction(formData: FormData) {
 
     const passwordError = validatePassword(password);
     if (passwordError) throw new Error(passwordError);
+
+    const ip = headers().get("x-forwarded-for") || "unknown";
+    const isIpBanned = await Blacklist.findOne({ type: "ip", value: ip });
+    if (isIpBanned) throw new Error("Access denied: Your IP address is banned.");
+
+    const isEmailBanned = await Blacklist.findOne({ type: "email", value: email });
+    if (isEmailBanned) throw new Error("Access denied: This email address is banned.");
+
+    const isUsernameBanned = await Blacklist.findOne({ type: "username", value: username });
+    if (isUsernameBanned) throw new Error("Access denied: This username is banned.");
 
     // Check OTP verification
     const otpRecord = await OtpVerification.findOne({ email });
@@ -95,8 +107,18 @@ export async function loginAction(formData: FormData) {
 
     if (!email || !password) throw new Error("Missing email or password");
 
+    const ip = headers().get("x-forwarded-for") || "unknown";
+    const isIpBanned = await Blacklist.findOne({ type: "ip", value: ip });
+    if (isIpBanned) throw new Error("Access denied: Your IP address is banned.");
+
+    const isEmailBanned = await Blacklist.findOne({ type: "email", value: email });
+    if (isEmailBanned) throw new Error("Access denied: This email address is banned.");
+
     const user = await User.findOne({ email });
     if (!user) throw new Error("Invalid credentials");
+
+    const isUsernameBanned = await Blacklist.findOne({ type: "username", value: user.username });
+    if (isUsernameBanned) throw new Error("Access denied: This username is banned.");
 
     try {
         const isValid = await comparePassword(password, user.password);
@@ -182,7 +204,15 @@ export async function resetPasswordAction(formData: FormData) {
     const passwordError = validatePassword(newPassword);
     if (passwordError) throw new Error(passwordError);
 
+    const ip = headers().get("x-forwarded-for") || "unknown";
+    const isIpBanned = await Blacklist.findOne({ type: "ip", value: ip });
+    if (isIpBanned) throw new Error("Access denied: Your IP address is banned.");
+
+    const isEmailBanned = await Blacklist.findOne({ type: "email", value: email });
+    if (isEmailBanned) throw new Error("Access denied: This email address is banned.");
+
     // Check OTP verification
+
     const otpRecord = await OtpVerification.findOne({ email });
     if (!otpRecord || !otpRecord.isVerified) {
         throw new Error("Email address has not been verified via OTP.");

@@ -18,6 +18,7 @@ import Topic from "@/models/Topic";
 import { UserProfileButton } from "@/components/auth/user-profile-button";
 
 import { cookies } from "next/headers";
+import User from "@/models/User";
 
 export default async function DashboardLayout({
   children,
@@ -26,12 +27,17 @@ export default async function DashboardLayout({
 }) {
   let topicsDocs: any[] = [];
   let isDbWakingUp = false;
+  let isAdmin = false;
 
   try {
     await dbConnect();
     const userId = cookies().get("user_session")?.value;
     if (userId) {
       topicsDocs = await Topic.find({ userId: userId }).sort({ createdAt: -1 }).lean();
+      const user = await User.findOne({ uuid: userId }).lean();
+      if (user && user.username === "mythicalhrg") {
+        isAdmin = true;
+      }
     }
   } catch (error) {
     console.error("Dashboard layout dbConnect error:", error);
@@ -73,7 +79,7 @@ export default async function DashboardLayout({
           </SidebarHeader>
           <SidebarContent>
             <SidebarMenu>
-              <SidebarNav topics={topics as any} />
+              <SidebarNav topics={topics as any} isAdmin={isAdmin} />
             </SidebarMenu>
           </SidebarContent>
           <SidebarFooter className="p-4 border-t">
