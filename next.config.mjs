@@ -1,14 +1,16 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  serverExternalPackages: [
-    '@genkit-ai/core', 
-    'genkit', 
-    '@opentelemetry/sdk-node', 
-    '@opentelemetry/exporter-jaeger',
-    'pino-pretty', 
-    'lokijs', 
-    'encoding'
-  ],
+  experimental: {
+    serverComponentsExternalPackages: [
+      '@genkit-ai/core', 
+      'genkit', 
+      '@opentelemetry/sdk-node', 
+      '@opentelemetry/exporter-jaeger',
+      'pino-pretty', 
+      'lokijs', 
+      'encoding'
+    ],
+  },
   productionBrowserSourceMaps: false,
   compiler: {
     removeConsole: process.env.NODE_ENV === "production" ? { exclude: ["error"] } : false,
