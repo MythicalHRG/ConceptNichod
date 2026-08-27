@@ -9,13 +9,32 @@ import { MapPin, GraduationCap, Target, Instagram } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default async function DashboardPage() {
-  await dbConnect();
-  
-  const sessionUuid = cookies().get("user_session")?.value;
   let user = null;
+  let isDbConnecting = false;
   
-  if (sessionUuid) {
-    user = await User.findOne({ uuid: sessionUuid }).lean();
+  try {
+    await dbConnect();
+    const sessionUuid = cookies().get("user_session")?.value;
+    if (sessionUuid) {
+      user = await User.findOne({ uuid: sessionUuid }).lean();
+    }
+  } catch (error) {
+    console.error("Database connection error in dashboard:", error);
+    isDbConnecting = true;
+  }
+
+  if (isDbConnecting) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
+        <h1 className="text-3xl font-bold font-headline">Waking up the database...</h1>
+        <p className="text-muted-foreground text-center max-w-lg">
+          Since this is a free database, it goes to sleep when unused. Please wait a few seconds and then refresh the page.
+        </p>
+        <Button onClick={() => window.location.reload()} className="mt-4">
+          Refresh Page
+        </Button>
+      </div>
+    );
   }
 
   if (!user) {

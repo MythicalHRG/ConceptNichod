@@ -24,7 +24,7 @@ async function dbConnect() {
   if (!cached.promise) {
     const opts = {
       bufferCommands: false,
-      serverSelectionTimeoutMS: 8000, // 8 seconds to allow Atlas cold start
+      serverSelectionTimeoutMS: 2500, // Fast timeout for cold start detection
       socketTimeoutMS: 45000,
       connectTimeoutMS: 10000,
     };

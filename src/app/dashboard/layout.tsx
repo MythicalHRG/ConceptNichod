@@ -24,11 +24,37 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  await dbConnect();
-  const userId = cookies().get("user_session")?.value;
   let topicsDocs: any[] = [];
-  if (userId) {
-    topicsDocs = await Topic.find({ userId: userId }).sort({ createdAt: -1 }).lean();
+  let isDbWakingUp = false;
+
+  try {
+    await dbConnect();
+    const userId = cookies().get("user_session")?.value;
+    if (userId) {
+      topicsDocs = await Topic.find({ userId: userId }).sort({ createdAt: -1 }).lean();
+    }
+  } catch (error) {
+    console.error("Dashboard layout dbConnect error:", error);
+    isDbWakingUp = true;
+  }
+
+  if (isDbWakingUp) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground space-y-6">
+        {/* Auto-refresh every 3 seconds until DB is awake */}
+        <meta httpEquiv="refresh" content="3" />
+        <Logo className="w-20 h-20 animate-pulse drop-shadow-xl" />
+        <h1 className="text-3xl font-bold font-headline animate-pulse">Waking up the database...</h1>
+        <p className="text-muted-foreground text-center max-w-md">
+          Please hold on for a few seconds. The server is initializing your study space. This page will automatically refresh.
+        </p>
+        <div className="flex items-center gap-2 text-primary">
+          <div className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '0ms' }}></div>
+          <div className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '150ms' }}></div>
+          <div className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '300ms' }}></div>
+        </div>
+      </div>
+    );
   }
   
   const topics = JSON.parse(JSON.stringify(topicsDocs)).map((doc: any) => ({

@@ -18,7 +18,24 @@ export default async function TopicPage({ params }: { params: { topicId: string 
     redirect("/?login=true");
   }
 
-  const topicDoc = await Topic.findById(params.topicId).lean();
+  let topicDoc = null;
+  let isDbWakingUp = false;
+
+  try {
+    await dbConnect();
+    topicDoc = await Topic.findById(params.topicId).lean();
+  } catch (error) {
+    console.error("Topic page dbConnect error:", error);
+    isDbWakingUp = true;
+  }
+
+  if (isDbWakingUp) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh]">
+        <h1 className="text-2xl font-bold animate-pulse">Waking up database...</h1>
+      </div>
+    );
+  }
 
   if (!topicDoc) {
     return <div>Topic not found</div>;
