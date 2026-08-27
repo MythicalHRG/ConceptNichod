@@ -1,11 +1,6 @@
-"use client";
-
 import { FlippingBook } from '@/components/flipping-book';
-import { Button } from '@/components/ui/button';
-import { ArrowRight, Loader2 } from 'lucide-react';
 import { Logo } from '@/components/ui/logo';
-import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { DashboardButton } from '@/components/dashboard-button';
 
 const FloatingBooks = () => (
   <div className="absolute inset-0 w-full h-full overflow-hidden -z-10">
@@ -18,16 +13,6 @@ const FloatingBooks = () => (
 );
 
 export default function Home() {
-  const [isInitializing, setIsInitializing] = useState(true);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsInitializing(false);
-    }, 2000);
-    
-    return () => clearTimeout(timer);
-  }, []);
-
   return (
       <main className="relative flex min-h-screen w-full flex-col items-center justify-center bg-background p-4 lg:p-8 overflow-hidden">
         <FloatingBooks />
@@ -47,20 +32,7 @@ export default function Home() {
             </p>
 
             <div className="w-full max-w-sm mt-8">
-              <Link href="/dashboard" tabIndex={isInitializing ? -1 : 0} className={isInitializing ? 'pointer-events-none' : ''}>
-                <Button className="w-full" size="lg" disabled={isInitializing}>
-                  {isInitializing ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Initializing...
-                    </>
-                  ) : (
-                    <>
-                      Go to Dashboard <ArrowRight className="ml-2"/>
-                    </>
-                  )}
-                </Button>
-              </Link>
+              <DashboardButton />
             </div>
 
           </div>
