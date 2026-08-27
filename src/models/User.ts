@@ -15,6 +15,7 @@ export interface IUser extends Document {
   snapchat?: string;
   instagram?: string;
   bio?: string;
+  lastKnownIp?: string;
   createdAt: Date;
 }
 
@@ -33,6 +34,7 @@ const UserSchema: Schema<IUser> = new Schema({
   snapchat: { type: String, required: false },
   instagram: { type: String, required: false },
   bio: { type: String, required: false },
+  lastKnownIp: { type: String, required: false },
   createdAt: { type: Date, default: Date.now }
 });
 

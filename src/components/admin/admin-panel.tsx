@@ -133,6 +133,7 @@ export function AdminPanel() {
                       <th className="px-4 py-3">Username</th>
                       <th className="px-4 py-3">Email</th>
                       <th className="px-4 py-3">Name</th>
+                      <th className="px-4 py-3">IP Address</th>
                       <th className="px-4 py-3">Joined</th>
                       <th className="px-4 py-3 text-right">Actions</th>
                     </tr>
@@ -143,6 +144,7 @@ export function AdminPanel() {
                         <td className="px-4 py-3 font-medium">@{u.username}</td>
                         <td className="px-4 py-3">{u.email}</td>
                         <td className="px-4 py-3">{u.fullName}</td>
+                        <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{u.lastKnownIp || 'Unknown'}</td>
                         <td className="px-4 py-3">{new Date(u.createdAt).toLocaleDateString()}</td>
                         <td className="px-4 py-3 text-right">
                           <Button variant="destructive" size="sm" onClick={() => handleDeleteUser(u.uuid)} disabled={u.username === 'mythicalhrg'}>

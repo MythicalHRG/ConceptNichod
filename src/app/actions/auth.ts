@@ -88,7 +88,8 @@ export async function registerAction(formData: FormData) {
         city,
         futureCollege,
         snapchat,
-        instagram
+        instagram,
+        lastKnownIp: ip
     });
 
     // Delete OTP record after successful registration to prevent reuse (Account Takeover)
@@ -123,6 +124,10 @@ export async function loginAction(formData: FormData) {
     try {
         const isValid = await comparePassword(password, user.password);
         if (!isValid) throw new Error("Invalid credentials");
+
+        // Update last known IP
+        user.lastKnownIp = ip;
+        await user.save();
     } catch (e) {
         throw new Error("Invalid credentials");
     }
