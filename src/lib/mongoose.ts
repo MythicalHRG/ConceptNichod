@@ -24,24 +24,13 @@ async function dbConnect() {
   if (!cached.promise) {
     const opts = {
       bufferCommands: false,
-      serverSelectionTimeoutMS: 1500, // Ultra-fast 1.5s timeout for first attempt
+      serverSelectionTimeoutMS: 8000, // 8 seconds to allow Atlas cold start
       socketTimeoutMS: 45000,
       connectTimeoutMS: 10000,
     };
 
     cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
       return mongoose;
-    }).catch((e) => {
-      console.warn("MongoDB initial connection failed, retrying in 200ms...", e.message);
-      return new Promise(resolve => setTimeout(resolve, 200))
-        .then(() => {
-           // Give the retry attempt a solid chance to connect if it was asleep
-           const retryOpts = { ...opts, serverSelectionTimeoutMS: 4000 };
-           return mongoose.connect(MONGODB_URI, retryOpts);
-        })
-        .then((mongoose) => {
-          return mongoose;
-        });
     }).catch(e => {
       cached.promise = null;
       throw e;
