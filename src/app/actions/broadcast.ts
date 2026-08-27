@@ -23,6 +23,7 @@ export async function createBroadcastAction(formData: FormData) {
   
   const subject = formData.get("subject") as string;
   const message = formData.get("message") as string;
+  const fileUrl = formData.get("fileUrl") as string | null;
   
   if (!subject || !message) {
     throw new Error("Missing subject or message");
@@ -34,6 +35,7 @@ export async function createBroadcastAction(formData: FormData) {
   await Broadcast.create({
     subject,
     message,
+    fileUrl,
     expiresAt
   });
 

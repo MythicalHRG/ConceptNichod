@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Trash2, Ban } from "lucide-react";
+import { Loader2, Trash2, Ban, Upload } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export function AdminPanel() {
@@ -20,6 +20,7 @@ export function AdminPanel() {
   const [banValue, setBanValue] = useState("");
   const [banReason, setBanReason] = useState("");
   const [broadcastLoading, setBroadcastLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const { toast } = useToast();
 
   const fetchData = async () => {
@@ -82,16 +83,63 @@ export function AdminPanel() {
   const handleCreateBroadcast = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setBroadcastLoading(true);
-    const formData = new FormData(e.currentTarget);
+    setUploadProgress(null);
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    
     try {
+      const file = (form.elements.namedItem('file') as HTMLInputElement)?.files?.[0];
+      let uploadedFileUrl = null;
+
+      if (file) {
+        if (file.size > 50 * 1024 * 1024) {
+          throw new Error("File exceeds 50MB limit");
+        }
+
+        setUploadProgress(10);
+        // 1. Get presigned URL
+        const presignRes = await fetch("/api/upload/presign", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filename: file.name, contentType: file.type })
+        });
+        
+        if (!presignRes.ok) {
+          const err = await presignRes.json();
+          throw new Error(err.error || "Failed to get upload URL");
+        }
+        
+        const { presignedUrl, publicUrl } = await presignRes.json();
+        setUploadProgress(30);
+
+        // 2. Upload file directly to R2
+        const uploadRes = await fetch(presignedUrl, {
+          method: "PUT",
+          headers: { "Content-Type": file.type },
+          body: file
+        });
+
+        if (!uploadRes.ok) {
+          throw new Error("Failed to upload file to Cloudflare R2");
+        }
+
+        uploadedFileUrl = publicUrl;
+        setUploadProgress(90);
+      }
+
+      if (uploadedFileUrl) {
+        formData.append("fileUrl", uploadedFileUrl);
+      }
+
       await createBroadcastAction(formData);
       toast({ title: "Broadcast Sent!", description: "Message is now live for all users for 36 hours." });
-      (e.target as HTMLFormElement).reset();
+      form.reset();
       fetchData(); // Refresh active broadcasts
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally {
       setBroadcastLoading(false);
+      setUploadProgress(null);
     }
   };
 
@@ -248,10 +296,15 @@ export function AdminPanel() {
                   <label className="text-sm font-medium">Message</label>
                   <Textarea name="message" placeholder="Type your broadcast message here..." rows={5} required />
                 </div>
-                <p className="text-xs text-muted-foreground italic">Note: 50MB file attachments are temporarily disabled until external storage is configured.</p>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Attachment (Max 50MB, Optional)</label>
+                  <Input type="file" name="file" />
+                  <p className="text-xs text-muted-foreground">Uploaded securely to Cloudflare R2.</p>
+                </div>
+                
                 <Button type="submit" disabled={broadcastLoading}>
                   {broadcastLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                  Send Broadcast
+                  {uploadProgress !== null ? `Uploading... ${uploadProgress}%` : 'Send Broadcast'}
                 </Button>
               </form>
             </CardContent>
@@ -279,8 +332,15 @@ export function AdminPanel() {
                       const hoursLeft = Math.max(0, Math.floor((new Date(b.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60)));
                       return (
                         <tr key={b._id} className="border-b last:border-0 hover:bg-muted/50">
-                          <td className="px-4 py-3 font-medium max-w-[200px] truncate">{b.subject}</td>
-                          <td className="px-4 py-3 max-w-[300px] truncate">{b.message}</td>
+                        <td className="px-4 py-3 font-medium max-w-[200px] truncate">{b.subject}</td>
+                          <td className="px-4 py-3 max-w-[300px] truncate">
+                            {b.message}
+                            {b.fileUrl && (
+                              <a href={b.fileUrl} target="_blank" rel="noopener noreferrer" className="block mt-1 text-xs text-primary hover:underline flex items-center">
+                                <Upload className="w-3 h-3 mr-1" /> Attachment
+                              </a>
+                            )}
+                          </td>
                           <td className="px-4 py-3">{hoursLeft} hours</td>
                           <td className="px-4 py-3 text-right">
                             <Button variant="destructive" size="sm" onClick={() => handleDeleteBroadcast(b._id)}>

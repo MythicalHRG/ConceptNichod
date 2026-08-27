@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { Bell, Clock } from "lucide-react";
+import { Bell, Clock, Paperclip } from "lucide-react";
 import { getActiveBroadcastsAction, getUnreadCountAction, markBroadcastsAsReadAction } from "@/app/actions/broadcast";
 
 export function NotificationBell() {
@@ -69,6 +69,11 @@ export function NotificationBell() {
                   <div key={b._id} className="p-4 border-b last:border-0 hover:bg-muted/10 transition-colors">
                     <h4 className="font-semibold text-sm mb-1">{b.subject}</h4>
                     <p className="text-sm text-muted-foreground whitespace-pre-wrap">{b.message}</p>
+                    {b.fileUrl && (
+                      <a href={b.fileUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center text-xs font-medium text-primary hover:underline bg-primary/10 px-2 py-1 rounded-md">
+                        <Paperclip className="w-3 h-3 mr-1" /> View Attachment
+                      </a>
+                    )}
                     <div className="mt-3 flex items-center text-xs text-muted-foreground font-medium bg-secondary/50 w-fit px-2 py-1 rounded-md">
                       <Clock className="w-3 h-3 mr-1" />
                       Expires in {hoursLeft} hours
