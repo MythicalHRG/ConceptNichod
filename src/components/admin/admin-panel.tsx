@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Trash2, Ban, Upload } from "lucide-react";
+import { UploadButton } from "@/utils/uploadthing";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export function AdminPanel() {
@@ -20,7 +21,7 @@ export function AdminPanel() {
   const [banValue, setBanValue] = useState("");
   const [banReason, setBanReason] = useState("");
   const [broadcastLoading, setBroadcastLoading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadedFileUrl, setUploadedFileUrl] = useState<string | null>(null);
   const { toast } = useToast();
 
   const fetchData = async () => {
@@ -83,63 +84,21 @@ export function AdminPanel() {
   const handleCreateBroadcast = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setBroadcastLoading(true);
-    setUploadProgress(null);
     const form = e.currentTarget;
     const formData = new FormData(form);
     
+    // fileUrl is appended via hidden input after UploadButton succeeds
+    
     try {
-      const file = (form.elements.namedItem('file') as HTMLInputElement)?.files?.[0];
-      let uploadedFileUrl = null;
-
-      if (file) {
-        if (file.size > 50 * 1024 * 1024) {
-          throw new Error("File exceeds 50MB limit");
-        }
-
-        setUploadProgress(10);
-        // 1. Get presigned URL
-        const presignRes = await fetch("/api/upload/presign", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ filename: file.name, contentType: file.type })
-        });
-        
-        if (!presignRes.ok) {
-          const err = await presignRes.json();
-          throw new Error(err.error || "Failed to get upload URL");
-        }
-        
-        const { presignedUrl, publicUrl } = await presignRes.json();
-        setUploadProgress(30);
-
-        // 2. Upload file directly to R2
-        const uploadRes = await fetch(presignedUrl, {
-          method: "PUT",
-          headers: { "Content-Type": file.type },
-          body: file
-        });
-
-        if (!uploadRes.ok) {
-          throw new Error("Failed to upload file to Cloudflare R2");
-        }
-
-        uploadedFileUrl = publicUrl;
-        setUploadProgress(90);
-      }
-
-      if (uploadedFileUrl) {
-        formData.append("fileUrl", uploadedFileUrl);
-      }
-
       await createBroadcastAction(formData);
       toast({ title: "Broadcast Sent!", description: "Message is now live for all users for 36 hours." });
       form.reset();
+      setUploadedFileUrl(null);
       fetchData(); // Refresh active broadcasts
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally {
       setBroadcastLoading(false);
-      setUploadProgress(null);
     }
   };
 
@@ -297,14 +256,30 @@ export function AdminPanel() {
                   <Textarea name="message" placeholder="Type your broadcast message here..." rows={5} required />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Attachment (Max 50MB, Optional)</label>
-                  <Input type="file" name="file" />
-                  <p className="text-xs text-muted-foreground">Uploaded securely to Cloudflare R2.</p>
+                  <label className="text-sm font-medium">Attachment (Max 512MB, Optional)</label>
+                  {!uploadedFileUrl ? (
+                    <UploadButton
+                      endpoint="broadcastAttachment"
+                      onClientUploadComplete={(res) => {
+                        setUploadedFileUrl(res?.[0]?.url || null);
+                        toast({ title: "Upload Success", description: "File uploaded and attached." });
+                      }}
+                      onUploadError={(error: Error) => {
+                        toast({ title: "Upload Failed", description: error.message, variant: "destructive" });
+                      }}
+                    />
+                  ) : (
+                    <div className="flex items-center space-x-2">
+                      <p className="text-sm text-green-600 font-medium break-all">File Attached Successfully!</p>
+                      <Button variant="ghost" size="sm" type="button" onClick={() => setUploadedFileUrl(null)}>Remove</Button>
+                    </div>
+                  )}
+                  {uploadedFileUrl && <input type="hidden" name="fileUrl" value={uploadedFileUrl} />}
                 </div>
                 
                 <Button type="submit" disabled={broadcastLoading}>
                   {broadcastLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                  {uploadProgress !== null ? `Uploading... ${uploadProgress}%` : 'Send Broadcast'}
+                  Send Broadcast
                 </Button>
               </form>
             </CardContent>

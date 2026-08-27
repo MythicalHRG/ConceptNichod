@@ -12,8 +12,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1119.0",
-    "@aws-sdk/s3-request-presigner": "^3.1119.0",
     "@deepgram/sdk": "^3.4.1",
     "@genkit-ai/core": "^1.41.0",
     "@genkit-ai/google-genai": "^1.41.0",
@@ -43,6 +41,7 @@
     "@radix-ui/react-tooltip": "^1.1.8",
     "@radix-ui/react-visually-hidden": "^1.1.0",
     "@types/nodemailer": "^8.0.1",
+    "@uploadthing/react": "^7.3.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
@@ -62,6 +61,7 @@
     "recharts": "^2.15.4",
     "tailwind-merge": "^3.0.1",
     "tailwindcss-animate": "^1.0.7",
+    "uploadthing": "^7.7.4",
     "wav": "^1.0.2",
     "zod": "^3.23.8"
   },
