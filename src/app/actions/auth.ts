@@ -14,6 +14,14 @@ function validateEmailDomain(email: string) {
     return email.endsWith("@gmail.com") || email.endsWith("@outlook.com") || email.endsWith("@outlook.in");
 }
 
+function getIpAddress() {
+    const forwardedFor = headers().get("x-forwarded-for");
+    if (forwardedFor) {
+        return forwardedFor.split(',')[0].trim();
+    }
+    return headers().get("x-real-ip") || "127.0.0.1";
+}
+
 function validatePassword(password: string) {
     if (password.length < 8) return "Password must be at least 8 characters long.";
     if (!/[A-Z]/.test(password)) return "Password must contain at least one uppercase letter.";
@@ -46,7 +54,7 @@ export async function registerAction(formData: FormData) {
     const passwordError = validatePassword(password);
     if (passwordError) throw new Error(passwordError);
 
-    const ip = headers().get("x-forwarded-for") || "unknown";
+    const ip = getIpAddress();
     const isIpBanned = await Blacklist.findOne({ type: "ip", value: ip });
     if (isIpBanned) throw new Error("Access denied: Your IP address is banned.");
 
@@ -108,7 +116,7 @@ export async function loginAction(formData: FormData) {
 
     if (!email || !password) throw new Error("Missing email or password");
 
-    const ip = headers().get("x-forwarded-for") || "unknown";
+    const ip = getIpAddress();
     const isIpBanned = await Blacklist.findOne({ type: "ip", value: ip });
     if (isIpBanned) throw new Error("Access denied: Your IP address is banned.");
 
@@ -209,7 +217,7 @@ export async function resetPasswordAction(formData: FormData) {
     const passwordError = validatePassword(newPassword);
     if (passwordError) throw new Error(passwordError);
 
-    const ip = headers().get("x-forwarded-for") || "unknown";
+    const ip = getIpAddress();
     const isIpBanned = await Blacklist.findOne({ type: "ip", value: ip });
     if (isIpBanned) throw new Error("Access denied: Your IP address is banned.");
 
