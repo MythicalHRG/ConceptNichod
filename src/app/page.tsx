@@ -28,7 +28,7 @@ export default function Home() {
               Unlock your potential. Master any concept with AI-powered summaries, dynamic questions, and personalized feedback.
             </p>
             <p className="mt-4 text-base text-muted-foreground/80 max-w-md">
-                Powered by Sharma Achievers' Institute
+                Powered by Sharma Achievers' Institute in collaboration with ARCQIND.
             </p>
 
             <div className="w-full max-w-sm mt-8">
