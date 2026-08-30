@@ -40,6 +40,10 @@ export function SpeechRecorder({ transcript, setTranscript, isStandalone = true,
       try {
         const sessionKey = await getDeepgramSessionKey();
 
+        if (sessionKey.error) {
+          throw new Error(sessionKey.error);
+        }
+
         if (!sessionKey || !sessionKey.key) {
           throw new Error("Failed to get a session key from the server.");
         }

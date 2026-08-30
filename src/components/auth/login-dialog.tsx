@@ -127,12 +127,18 @@ export function LoginDialog() {
       formData.append("password", password);
       
       const res = await loginAction(formData);
+
+      if (res.error) {
+        throw new Error(res.error);
+      }
+
       if (res.success && res.user) {
         login(res.user);
         toast({
           title: "Welcome back!",
-          description: "You have successfully signed in.",
+          description: `Logged in as @${res.user.username}`,
         });
+        setAuthModalOpen(false);
       }
     } catch (err: any) {
       toast({
@@ -205,6 +211,10 @@ export function LoginDialog() {
       if (instagram) formData.append("instagram", instagram);
       
       const res = await registerAction(formData);
+      if (res.error) {
+        throw new Error(res.error);
+      }
+      
       if (res.success && res.user) {
         login(res.user);
         toast({

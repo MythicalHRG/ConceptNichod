@@ -83,12 +83,12 @@ export async function revalidateDashboard() {
   revalidatePath('/dashboard', 'layout');
 }
 
-export async function getDeepgramSessionKey() {
+export async function getDeepgramSessionKey(): Promise<{ key?: string; error?: string }> {
   const deepgramApiKey = process.env.DEEPGRAM_API_KEY;
   const projectId = process.env.DEEPGRAM_PROJECT_ID;
 
   if (!deepgramApiKey || !projectId) {
-    throw new Error("DEEPGRAM_API_KEY or DEEPGRAM_PROJECT_ID is not set in the environment.");
+    return { error: "DEEPGRAM_API_KEY or DEEPGRAM_PROJECT_ID is not set in the environment." };
   }
 
   const deepgram = createClient(deepgramApiKey);
@@ -104,11 +104,11 @@ export async function getDeepgramSessionKey() {
 
   if (error) {
     console.error("Deepgram key creation error:", error);
-    throw new Error("Could not create Deepgram session key.");
+    return { error: "Could not create Deepgram session key. Check your Deepgram Project ID." };
   }
   
   if (!result || !result.key) {
-      throw new Error("Deepgram returned no key.");
+    return { error: "Deepgram returned no key." };
   }
 
   return { key: result.key };

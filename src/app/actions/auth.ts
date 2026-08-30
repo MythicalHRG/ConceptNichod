@@ -31,24 +31,25 @@ function validatePassword(password: string) {
     return null;
 }
 
-export async function registerAction(formData: FormData) {
-    await dbConnect();
-    const email = (formData.get("email") as string).toLowerCase().trim();
-    const username = (formData.get("username") as string).toLowerCase().trim();
-    const password = formData.get("password") as string;
-    const fullName = formData.get("fullName") as string;
-    const gender = formData.get("gender") as string;
-    const dob = formData.get("dob") as string;
-    const classLevel = formData.get("classLevel") as string;
-    const examFocus = formData.get("examFocus") as string | null;
-    const city = formData.get("city") as string;
-    const futureCollege = formData.get("futureCollege") as string | null;
-    const snapchat = formData.get("snapchat") as string | null;
-    const instagram = formData.get("instagram") as string | null;
-
-    if (!email || !username || !password || !fullName || !gender || !dob || !classLevel || !city) {
-        throw new Error("Missing required fields");
-    }
+  export async function registerAction(formData: FormData) {
+      await dbConnect();
+      const email = (formData.get("email") as string).toLowerCase().trim();
+      const username = (formData.get("username") as string).toLowerCase().trim();
+      const password = formData.get("password") as string;
+      const fullName = formData.get("fullName") as string;
+      const gender = formData.get("gender") as string;
+      const dob = formData.get("dob") as string;
+      const classLevel = formData.get("classLevel") as string;
+      const examFocus = formData.get("examFocus") as string | null;
+      const city = formData.get("city") as string;
+      const futureCollege = formData.get("futureCollege") as string | null;
+      const snapchat = formData.get("snapchat") as string | null;
+      const instagram = formData.get("instagram") as string | null;
+  
+      try {
+          if (!email || !username || !password || !fullName || !gender || !dob || !classLevel || !city) {
+              throw new Error("Missing required fields");
+          }
     if (!validateEmailDomain(email)) throw new Error("Only @gmail.com, @outlook.com, and @outlook.in emails are allowed.");
 
     const passwordError = validatePassword(password);
@@ -103,10 +104,13 @@ export async function registerAction(formData: FormData) {
     // Delete OTP record after successful registration to prevent reuse (Account Takeover)
     await OtpVerification.deleteOne({ email });
 
-    cookies().set("user_session", newUser.uuid, { httpOnly: true, secure: process.env.NODE_ENV === "production", maxAge: 60 * 60 * 24 * 7 });
-    return { success: true, user: { 
-        uuid, username, email, fullName, gender, dob, classLevel, examFocus, city, futureCollege, snapchat, instagram 
-    } };
+      cookies().set("user_session", newUser.uuid, { httpOnly: true, secure: process.env.NODE_ENV === "production", maxAge: 60 * 60 * 24 * 7 });
+      return { success: true, user: { 
+          uuid, username, email, fullName, gender, dob, classLevel, examFocus, city, futureCollege, snapchat, instagram 
+      } };
+  } catch (e: any) {
+      return { success: false, error: e.message };
+  }
 }
 
 export async function loginAction(formData: FormData) {
@@ -114,7 +118,8 @@ export async function loginAction(formData: FormData) {
     const email = (formData.get("email") as string).toLowerCase().trim();
     const password = formData.get("password") as string;
 
-    if (!email || !password) throw new Error("Missing email or password");
+    try {
+        if (!email || !password) throw new Error("Missing email or password");
 
     const ip = getIpAddress();
     const isIpBanned = await Blacklist.findOne({ type: "ip", value: ip });
@@ -147,6 +152,9 @@ export async function loginAction(formData: FormData) {
         examFocus: user.examFocus, city: user.city, futureCollege: user.futureCollege,
         snapchat: user.snapchat, instagram: user.instagram 
     } };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
 }
 
 export async function logoutAction() {

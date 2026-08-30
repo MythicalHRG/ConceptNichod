@@ -1,14 +1,11 @@
 "use client";
 
-import Image from 'next/image';
-import { placeholderImages } from '@/lib/placeholder-images';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import { Logo } from '@/components/ui/logo';
 
 export function FlippingBook() {
   const [isFlipped, setIsFlipped] = useState(false);
-  const bookCover = placeholderImages.find(img => img.id === 'book-cover');
 
   return (
     <div
