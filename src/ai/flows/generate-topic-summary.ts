@@ -39,7 +39,7 @@ const prompt = ai.definePrompt({
   name: 'generateTopicSummaryPrompt',
   input: {schema: GenerateTopicSummaryInputSchema},
   output: {schema: GenerateTopicSummaryOutputSchema},
-  model: googleAI.model('gemini-3.6-flash'),
+  model: googleAI.model('gemini-1.5-flash'),
   prompt: `Generate a detailed, well-structured, textbook-style summary for the topic "{{{topic}}}" from the subject "{{{subject}}}" and chapter "{{{chapter}}}" suitable for a student in {{{classLevel}}}{{#if examFocus}} who is preparing for the {{{examFocus}}} exam{{/if}}. The summary should be comprehensive and easy to understand, keeping the exam requirements in mind. Use plain text with paragraphs.`,
 });
 
