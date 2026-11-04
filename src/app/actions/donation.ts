@@ -33,7 +33,7 @@ export async function getDonationInfoAction() {
   let setting = await DonationSetting.findOne().lean();
   if (!setting) {
     setting = await DonationSetting.create({
-      upiId: "mythicalhrg@okhdfcbank",
+      upiId: "harsh.2525@ptaxis",
       qrCodeUrl: "/qr.png",
       customInstructions: "Scan the QR code using Google Pay, PhonePe, Paytm, or BHIM UPI. Mention your username in the transaction notes so we can celebrate your support!",
       thankYouNote: "Thank you for empowering free, high-quality, concept-first education for every student."

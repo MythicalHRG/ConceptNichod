@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Script from 'next/script';
 
 import { Toaster } from '@/components/ui/toaster';
 import './globals.css';
@@ -26,8 +27,11 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=PT+Sans:wght@400;700&display=swap" rel="stylesheet" />
-        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4590877037311160"
-     crossOrigin="anonymous"></script>
+        <Script 
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4590877037311160"
+          strategy="lazyOnload"
+          crossOrigin="anonymous" 
+        />
       </head>
       <body className="font-body antialiased relative min-h-screen">
         <ThemeProvider
@@ -35,6 +39,7 @@ export default function RootLayout({
           defaultTheme="system"
           enableSystem
           disableTransitionOnChange
+          themes={["light", "dark", "midnight-neon", "sunset-amber", "forest-emerald", "cyberpunk-indigo"]}
         >
           <NextTopLoader color="hsl(var(--primary))" showSpinner={false} />
           <SecurityGuard />

@@ -103,7 +103,7 @@ export function AdminPanel() {
 
   // Donation & UPI State
   const [donationSettings, setDonationSettings] = useState({
-    upiId: "mythicalhrg@okhdfcbank",
+    upiId: "harsh.2525@ptaxis",
     qrCodeUrl: "",
     customInstructions: "",
     thankYouNote: "",
@@ -1042,7 +1042,7 @@ export function AdminPanel() {
                     <Input
                       value={donationSettings.upiId}
                       onChange={(e) => setDonationSettings({ ...donationSettings, upiId: e.target.value })}
-                      placeholder="e.g. mythicalhrg@okhdfcbank"
+                      placeholder="e.g. harsh.2525@ptaxis"
                       required
                     />
                   </div>

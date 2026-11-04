@@ -35,12 +35,44 @@ export function PracticeAndAnalysisSection({ topic, onFinalAnalysis, isAnalyzing
   const totalSteps = questions.length + 1; // +1 for the final overall summary step
   const autoSubmittedRef = useRef(false);
 
+  // Keep latest answers in a ref to avoid re-binding visibilitychange on every keystroke/speech update
+  const stateRef = useRef({
+    writtenAnswers,
+    spokenAnswers,
+    finalSummarySpeech,
+    textQuestions,
+    voiceQuestions,
+    finalAnalysis,
+    isAnalyzing,
+  });
+
+  useEffect(() => {
+    stateRef.current = {
+      writtenAnswers,
+      spokenAnswers,
+      finalSummarySpeech,
+      textQuestions,
+      voiceQuestions,
+      finalAnalysis,
+      isAnalyzing,
+    };
+  }, [
+    writtenAnswers,
+    spokenAnswers,
+    finalSummarySpeech,
+    textQuestions,
+    voiceQuestions,
+    finalAnalysis,
+    isAnalyzing,
+  ]);
+
   // Proctoring & Session Integrity:
   // Minimizing screen or switching tabs auto-submits practice session immediately
   useEffect(() => {
-    if (finalAnalysis || isAnalyzing) return;
-
     const handleVisibilityChange = () => {
+      const state = stateRef.current;
+      if (state.finalAnalysis || state.isAnalyzing) return;
+
       if (document.hidden && !autoSubmittedRef.current) {
         autoSubmittedRef.current = true;
         toast({
@@ -49,23 +81,23 @@ export function PracticeAndAnalysisSection({ topic, onFinalAnalysis, isAnalyzing
           variant: "destructive",
         });
 
-        const formattedWrittenAnswers = textQuestions.map((q, i) => ({
+        const formattedWrittenAnswers = state.textQuestions.map((q, i) => ({
           question: q.question,
-          answer: writtenAnswers[i]?.trim()
-            ? writtenAnswers[i]
+          answer: state.writtenAnswers[i]?.trim()
+            ? state.writtenAnswers[i]
             : "[Auto-submitted: Unanswered due to window minimize / tab-switch]",
         }));
-        const formattedSpokenAnswers = voiceQuestions.map((q, i) => ({
+        const formattedSpokenAnswers = state.voiceQuestions.map((q, i) => ({
           question: q.question,
-          answer: spokenAnswers[i]?.trim()
-            ? spokenAnswers[i]
+          answer: state.spokenAnswers[i]?.trim()
+            ? state.spokenAnswers[i]
             : "[Auto-submitted: Unanswered due to window minimize / tab-switch]",
         }));
 
         formattedSpokenAnswers.push({
           question: "Overall Topic Summary (2-Minute Challenge)",
-          answer: finalSummarySpeech?.trim()
-            ? finalSummarySpeech
+          answer: state.finalSummarySpeech?.trim()
+            ? state.finalSummarySpeech
             : "[Auto-submitted: Session terminated due to window minimize / tab-switch]",
         });
 
@@ -77,17 +109,7 @@ export function PracticeAndAnalysisSection({ topic, onFinalAnalysis, isAnalyzing
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [
-    finalAnalysis,
-    isAnalyzing,
-    writtenAnswers,
-    spokenAnswers,
-    finalSummarySpeech,
-    textQuestions,
-    voiceQuestions,
-    onFinalAnalysis,
-    toast,
-  ]);
+  }, [onFinalAnalysis, toast]);
 
   const handleWrittenAnswerChange = (answer: string) => {
     const newAnswers = [...writtenAnswers];

@@ -3,7 +3,9 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "./auth-context";
 import { Button } from "@/components/ui/button";
-import { LogOut, User, Settings, Loader2 } from "lucide-react";
+import { LogOut, User, Settings, Loader2, Palette, Sparkles, Check, Monitor, Volume2, ShieldAlert } from "lucide-react";
+import { useTheme } from "next-themes";
+import { THEME_OPTIONS } from "@/components/theme-toggle";
 import {
   Dialog,
   DialogContent,
@@ -20,6 +22,7 @@ import { loadCaptchaEnginge, LoadCanvasTemplate, validateCaptcha } from "react-s
 
 export function UserProfileButton() {
   const { user, isLoggedIn, logout, login, setAuthModalOpen } = useAuth();
+  const { theme, setTheme } = useTheme();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
@@ -311,8 +314,9 @@ export function UserProfileButton() {
               </DialogDescription>
             </DialogHeader>
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-3 mb-4">
+              <TabsList className="grid w-full grid-cols-4 mb-4">
                 <TabsTrigger value="profile">Profile</TabsTrigger>
+                <TabsTrigger value="appearance">Themes</TabsTrigger>
                 <TabsTrigger value="password">Password</TabsTrigger>
                 <TabsTrigger value="delete" className="text-destructive data-[state=active]:bg-destructive/10 data-[state=active]:text-destructive">Danger</TabsTrigger>
               </TabsList>
@@ -348,7 +352,7 @@ export function UserProfileButton() {
                       onChange={(e) => setClassLevel(e.target.value)}
                     >
                       <option value="">Select Class</option>
-                      {["Class 9", "Class 10", "Class 11", "Class 12", "Dropper", "Other"].map(c => <option key={c} value={c}>{c}</option>)}
+                      {["Class 9", "Class 10", "Class 11", "Class 12", "12+", "Dropper", "Other"].map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                   </div>
                   <div className="space-y-2">
@@ -407,6 +411,78 @@ export function UserProfileButton() {
                     {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Save Changes"}
                   </Button>
                 </form>
+              </TabsContent>
+
+              {/* APPEARANCE & THEMES TAB */}
+              <TabsContent value="appearance">
+                <div className="space-y-4 max-h-[60vh] overflow-y-auto px-1 pb-2">
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-semibold flex items-center gap-2">
+                      <Palette className="w-4 h-4 text-primary" /> Visual Palettes
+                    </h4>
+                    <p className="text-xs text-muted-foreground">
+                      Choose an interface theme designed for long study sessions and high focus.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5 pt-1">
+                    {THEME_OPTIONS.map((t) => {
+                      const isSelected = theme === t.id;
+                      return (
+                        <div
+                          key={t.id}
+                          onClick={() => setTheme(t.id)}
+                          className={`p-3 rounded-xl border text-left cursor-pointer transition-all flex flex-col justify-between gap-2 ${
+                            isSelected
+                              ? "border-primary bg-primary/10 shadow-sm ring-1 ring-primary/40"
+                              : "border-border/70 hover:border-border hover:bg-muted/50"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span
+                              className="w-4 h-4 rounded-full border border-black/20 shrink-0 shadow-xs"
+                              style={{ backgroundColor: t.color }}
+                            />
+                            {isSelected && <Check className="w-3.5 h-3.5 text-primary" />}
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-foreground">{t.label}</p>
+                            <p className="text-[10px] text-muted-foreground">{t.description}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* System Theme Card */}
+                    <div
+                      onClick={() => setTheme("system")}
+                      className={`p-3 rounded-xl border text-left cursor-pointer transition-all flex flex-col justify-between gap-2 col-span-2 ${
+                        theme === "system"
+                          ? "border-primary bg-primary/10 shadow-sm ring-1 ring-primary/40"
+                          : "border-border/70 hover:border-border hover:bg-muted/50"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <Monitor className="w-4 h-4 text-muted-foreground" />
+                        {theme === "system" && <Check className="w-3.5 h-3.5 text-primary" />}
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-foreground">System Default</p>
+                        <p className="text-[10px] text-muted-foreground">Sync automatically with your operating system appearance</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Study & Proctoring Notes */}
+                  <div className="pt-2 border-t border-border/60 space-y-2">
+                    <p className="text-xs font-medium text-foreground flex items-center gap-1.5">
+                      <ShieldAlert className="w-3.5 h-3.5 text-amber-500" /> Active Session Proctoring
+                    </p>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      During active practice tests, minimizing the browser window or switching to another tab triggers automatic test submission to guarantee academic integrity.
+                    </p>
+                  </div>
+                </div>
               </TabsContent>
               
               <TabsContent value="password">

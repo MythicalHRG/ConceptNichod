@@ -450,7 +450,7 @@ export function LoginDialog() {
                   <label className="text-xs font-medium">Class *</label>
                   <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background" value={classLevel} onChange={(e) => setClassLevel(e.target.value)} required>
                     <option value="">Select Class</option>
-                    {["Class 1", "Class 2", "Class 3", "Class 4", "Class 5", "Class 6", "Class 7", "Class 8", "Class 9", "Class 10", "Class 11", "Class 12", "Dropper"].map(c => <option key={c} value={c}>{c}</option>)}
+                    {["Class 1", "Class 2", "Class 3", "Class 4", "Class 5", "Class 6", "Class 7", "Class 8", "Class 9", "Class 10", "Class 11", "Class 12", "12+", "Dropper"].map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div className="space-y-2">
@@ -458,7 +458,7 @@ export function LoginDialog() {
                   <Input type="text" placeholder="Delhi" value={city} onChange={(e) => setCity(e.target.value)} required />
                 </div>
               </div>
-              {['Class 11', 'Class 12', 'Dropper'].includes(classLevel) && (
+              {['Class 11', 'Class 12', '12+', 'Dropper'].includes(classLevel) && (
                 <div className="space-y-2">
                   <label className="text-xs font-medium">Competitive Exam (Optional)</label>
                   <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background" value={examFocus} onChange={(e) => setExamFocus(e.target.value)}>

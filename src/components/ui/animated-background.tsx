@@ -12,12 +12,25 @@ export function AnimatedBackground() {
   if (!mounted) return null;
 
   return (
-    <div className="fixed inset-0 z-[-1] overflow-hidden pointer-events-none bg-background">
-      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-primary/20 blur-[100px] animate-[blob_7s_infinite]"></div>
-      <div className="absolute top-[20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-blue-500/20 blur-[120px] animate-[blob_8s_infinite_animation-delay-2s]"></div>
-      <div className="absolute bottom-[-20%] left-[20%] w-[60%] h-[60%] rounded-full bg-purple-500/20 blur-[150px] animate-[blob_9s_infinite_animation-delay-4s]"></div>
-      
-      <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))] opacity-20"></div>
+    <div 
+      className="fixed inset-0 z-[-1] overflow-hidden pointer-events-none bg-background select-none"
+      style={{
+        contain: "strict",
+        transform: "translate3d(0, 0, 0)",
+      }}
+    >
+      {/* High-performance hardware-accelerated ambient glow (0 repaint overhead) */}
+      <div 
+        className="absolute inset-0 opacity-40 dark:opacity-25 transition-opacity duration-700"
+        style={{
+          background: `
+            radial-gradient(circle at 10% 10%, hsl(var(--primary) / 0.18) 0%, transparent 40%),
+            radial-gradient(circle at 90% 15%, hsl(var(--accent) / 0.15) 0%, transparent 45%),
+            radial-gradient(circle at 50% 90%, hsl(var(--primary) / 0.12) 0%, transparent 50%)
+          `
+        }} 
+      />
+      <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))] opacity-15" />
     </div>
   );
 }

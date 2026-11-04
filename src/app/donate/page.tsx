@@ -133,7 +133,7 @@ export default function DonatePage() {
                   </label>
                   <div className="flex items-center gap-2 p-2 bg-muted/60 rounded-xl border border-border/80">
                     <span className="font-mono text-sm font-bold text-foreground px-2 truncate flex-1">
-                      {settings?.upiId || "mythicalhrg@okhdfcbank"}
+                      {settings?.upiId || "harsh.2525@ptaxis"}
                     </span>
                     <Button 
                       size="sm" 

@@ -83,7 +83,7 @@ export default function AspirantsConnectPage() {
                                 onChange={(e) => setFilters({ ...filters, classLevel: e.target.value })}
                             >
                                 <option value="All">All Classes</option>
-                                {["Class 9", "Class 10", "Class 11", "Class 12", "Dropper"].map(c => <option key={c} value={c}>{c}</option>)}
+                                {["Class 9", "Class 10", "Class 11", "Class 12", "12+", "Dropper"].map(c => <option key={c} value={c}>{c}</option>)}
                             </select>
                         </div>
 
