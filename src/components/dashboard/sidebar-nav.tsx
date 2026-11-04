@@ -9,7 +9,7 @@ import {
   SidebarGroup,
   SidebarGroupLabel,
 } from "@/components/ui/sidebar";
-import { BookCopy, Home, BrainCircuit, Users, ShieldAlert, Sparkles } from "lucide-react";
+import { BookCopy, Home, BrainCircuit, Users, ShieldAlert, Sparkles, Heart } from "lucide-react";
 
 export function SidebarNav({ topics, isAdmin }: { topics: any[], isAdmin?: boolean }) {
   const pathname = usePathname();
@@ -18,6 +18,7 @@ export function SidebarNav({ topics, isAdmin }: { topics: any[], isAdmin?: boole
     { name: "Home", href: "/dashboard", icon: Home, isActive: pathname === "/dashboard" },
     { name: "Concept Mirror", href: "/dashboard/concept-mirror", icon: BrainCircuit, isActive: pathname === "/dashboard/concept-mirror" },
     { name: "AspirantsConnect", href: "/dashboard/aspirants-connect", icon: Users, isActive: pathname === "/dashboard/aspirants-connect" },
+    { name: "Support / Donate", href: "/donate", icon: Heart, isActive: pathname === "/donate" },
     { name: "Changelog", href: "/changelog", icon: Sparkles, isActive: pathname === "/changelog" },
   ];
 
@@ -43,30 +44,24 @@ export function SidebarNav({ topics, isAdmin }: { topics: any[], isAdmin?: boole
           </SidebarMenuItem>
         ))}
       </SidebarGroup>
-      
+
       <SidebarSeparator />
 
       <SidebarGroup>
-        <SidebarGroupLabel>Your Topics</SidebarGroupLabel>
-        {topics.length === 0 ? (
-          <p className="p-4 text-sm text-muted-foreground text-center data-[collapsed=true]:hidden">
-            No topics yet. Add one to get started!
-          </p>
-        ) : (
-          topics.map((topic) => (
-            <SidebarMenuItem key={topic.id}>
-              <Link href={`/dashboard/topic/${topic.id}`} className="w-full">
-                <SidebarMenuButton
-                  isActive={pathname === `/dashboard/topic/${topic.id}`}
-                  tooltip={topic.name}
-                >
-                  <BookCopy />
-                  <span>{topic.name}</span>
-                </SidebarMenuButton>
-              </Link>
-            </SidebarMenuItem>
-          ))
-        )}
+        <SidebarGroupLabel>Your Topics ({topics.length})</SidebarGroupLabel>
+        {topics.map((topic) => (
+          <SidebarMenuItem key={topic.id}>
+            <Link href={`/dashboard/topic/${topic.id}`} className="w-full">
+              <SidebarMenuButton
+                isActive={pathname === `/dashboard/topic/${topic.id}`}
+                tooltip={topic.name}
+              >
+                <BookCopy />
+                <span className="truncate">{topic.name}</span>
+              </SidebarMenuButton>
+            </Link>
+          </SidebarMenuItem>
+        ))}
       </SidebarGroup>
     </>
   );

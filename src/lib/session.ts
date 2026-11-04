@@ -1,0 +1,50 @@
+import crypto from "crypto";
+
+const SECRET =
+  process.env.ENCRYPTION_SECRET_KEY ||
+  "concept-nichod-default-secret-salt-2026";
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function createSignedSessionCookie(uuid: string): string {
+  if (!uuid || typeof uuid !== "string") {
+    throw new Error("UUID is required to create a session cookie.");
+  }
+  const signature = crypto.createHmac("sha256", SECRET).update(uuid).digest("hex");
+  return `${uuid}.${signature}`;
+}
+
+export function verifySessionCookie(cookieValue?: string | null): string | null {
+  if (!cookieValue || typeof cookieValue !== "string") {
+    return null;
+  }
+
+  const trimmed = cookieValue.trim();
+  const dotIndex = trimmed.lastIndexOf(".");
+
+  if (dotIndex > 0) {
+    const uuid = trimmed.substring(0, dotIndex);
+    const signature = trimmed.substring(dotIndex + 1);
+
+    const expectedSignature = crypto
+      .createHmac("sha256", SECRET)
+      .update(uuid)
+      .digest("hex");
+    const sigBuf = Buffer.from(signature);
+    const expectedBuf = Buffer.from(expectedSignature);
+
+    if (
+      sigBuf.length === expectedBuf.length &&
+      crypto.timingSafeEqual(sigBuf, expectedBuf)
+    ) {
+      return uuid;
+    }
+  }
+
+  // Backward compatibility: If an unsigned valid UUID was provided, accept it
+  if (UUID_REGEX.test(trimmed)) {
+    return trimmed;
+  }
+
+  return null;
+}

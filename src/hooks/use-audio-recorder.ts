@@ -4,14 +4,10 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 
 /**
  * use-audio-recorder.ts
- * Browser-native Web Speech API with:
- * 1. Audio chime/tone on start so user knows EXACTLY when mic is hot.
- * 2. 0 to length full iteration of event.results so NO early words are ever missed or dropped.
- * 3. Auto-reconnection on Chrome silence disconnects while user is still in recording mode.
- * 4. TypeScript-safe browser globals.
+ * Browser-native Web Speech API with Pause/Resume, Reset, and Audio Chime
  */
 
-// Play a subtle, pleasant 659Hz beep when mic is truly live
+// Subtle mic chime when recording begins
 function playMicReadyChime() {
   try {
     if (typeof window === 'undefined') return;
@@ -35,12 +31,15 @@ function playMicReadyChime() {
   }
 }
 
-interface AudioRecorderState {
+export interface AudioRecorderState {
   isRecording: boolean;
+  isPaused: boolean;
   isConnecting: boolean;
   transcript: string;
   errorMessage: string | null;
   startRecording: () => void;
+  pauseRecording: () => void;
+  resumeRecording: () => void;
   stopRecording: () => void;
   resetTranscript: () => void;
   clearError: () => void;
@@ -49,12 +48,15 @@ interface AudioRecorderState {
 
 export function useAudioRecorder(): AudioRecorderState {
   const [isRecording, setIsRecording] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const recognitionRef = useRef<any>(null);
   const isIntentActiveRef = useRef(false);
+  const isPausedRef = useRef(false);
+  const baseTranscriptRef = useRef('');
   const fullTranscriptRef = useRef('');
 
   const isSupported =
@@ -75,6 +77,7 @@ export function useAudioRecorder(): AudioRecorderState {
     recognition.onstart = () => {
       setIsConnecting(false);
       setIsRecording(true);
+      setIsPaused(false);
       setErrorMessage(null);
       playMicReadyChime();
     };
@@ -83,7 +86,6 @@ export function useAudioRecorder(): AudioRecorderState {
       let finalSegment = '';
       let interimSegment = '';
 
-      // Loop through all results from index 0 to length so early words are never missed
       for (let i = 0; i < event.results.length; i++) {
         const res = event.results[i];
         if (res.isFinal) {
@@ -93,7 +95,8 @@ export function useAudioRecorder(): AudioRecorderState {
         }
       }
 
-      const combined = (finalSegment + interimSegment).trim();
+      const prefix = baseTranscriptRef.current ? baseTranscriptRef.current + ' ' : '';
+      const combined = (prefix + finalSegment + interimSegment).trim();
       fullTranscriptRef.current = combined;
       setTranscript(combined);
     };
@@ -104,26 +107,27 @@ export function useAudioRecorder(): AudioRecorderState {
       if (event.error === 'not-allowed') {
         isIntentActiveRef.current = false;
         setIsRecording(false);
+        setIsPaused(false);
         setIsConnecting(false);
         setErrorMessage(
-          'Microphone permission denied. Please allow microphone access in your browser or type your explanation manually.'
+          'Microphone permission denied. Please allow microphone access in your browser settings.'
         );
       } else if (event.error === 'no-speech') {
-        // No speech detected for a short pause. Don't crash.
+        // No speech detected during pause, keep connection intact
       } else if (event.error === 'network') {
-        setErrorMessage('Network connection lost for speech recognition. Retrying...');
+        setErrorMessage('Network connection dropped for speech recognition. Retrying...');
       }
     };
 
     recognition.onend = () => {
-      if (isIntentActiveRef.current) {
+      if (isIntentActiveRef.current && !isPausedRef.current) {
         try {
           recognition.start();
         } catch {
           setIsRecording(false);
           setIsConnecting(false);
         }
-      } else {
+      } else if (!isPausedRef.current) {
         setIsRecording(false);
         setIsConnecting(false);
       }
@@ -137,14 +141,17 @@ export function useAudioRecorder(): AudioRecorderState {
 
     if (!isSupported) {
       setErrorMessage(
-        'Speech recognition is not supported in this browser. Please use Chrome or Edge, or type your explanation directly.'
+        'Speech recognition is not supported in this browser. Please use Chrome or Edge.'
       );
       return;
     }
 
+    baseTranscriptRef.current = '';
     fullTranscriptRef.current = '';
     setTranscript('');
     isIntentActiveRef.current = true;
+    isPausedRef.current = false;
+    setIsPaused(false);
     setIsConnecting(true);
 
     if (recognitionRef.current) {
@@ -164,12 +171,43 @@ export function useAudioRecorder(): AudioRecorderState {
       console.error('Failed to start recognition:', e);
       setIsConnecting(false);
       isIntentActiveRef.current = false;
-      setErrorMessage('Could not initialize microphone. Please check permissions or type your explanation.');
+      setErrorMessage('Could not initialize microphone. Please check permissions.');
     }
   }, [isSupported, initRecognition]);
 
+  const pauseRecording = useCallback(() => {
+    if (!isRecording || isPaused) return;
+    isPausedRef.current = true;
+    setIsPaused(true);
+    baseTranscriptRef.current = fullTranscriptRef.current;
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {}
+    }
+  }, [isRecording, isPaused]);
+
+  const resumeRecording = useCallback(() => {
+    if (!isRecording || !isPaused) return;
+    isPausedRef.current = false;
+    setIsPaused(false);
+    setIsConnecting(true);
+
+    const recognition = initRecognition();
+    if (!recognition) return;
+
+    recognitionRef.current = recognition;
+    try {
+      recognition.start();
+    } catch (e) {
+      console.error('Failed to resume recognition:', e);
+      setIsConnecting(false);
+    }
+  }, [isRecording, isPaused, initRecognition]);
+
   const stopRecording = useCallback(() => {
     isIntentActiveRef.current = false;
+    isPausedRef.current = false;
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
@@ -177,12 +215,25 @@ export function useAudioRecorder(): AudioRecorderState {
       recognitionRef.current = null;
     }
     setIsRecording(false);
+    setIsPaused(false);
     setIsConnecting(false);
   }, []);
 
   const resetTranscript = useCallback(() => {
+    isIntentActiveRef.current = false;
+    isPausedRef.current = false;
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {}
+      recognitionRef.current = null;
+    }
+    baseTranscriptRef.current = '';
     fullTranscriptRef.current = '';
     setTranscript('');
+    setIsRecording(false);
+    setIsPaused(false);
+    setIsConnecting(false);
     setErrorMessage(null);
   }, []);
 
@@ -194,6 +245,7 @@ export function useAudioRecorder(): AudioRecorderState {
   useEffect(() => {
     return () => {
       isIntentActiveRef.current = false;
+      isPausedRef.current = false;
       if (recognitionRef.current) {
         try {
           recognitionRef.current.stop();
@@ -204,10 +256,13 @@ export function useAudioRecorder(): AudioRecorderState {
 
   return {
     isRecording,
+    isPaused,
     isConnecting,
     transcript,
     errorMessage,
     startRecording,
+    pauseRecording,
+    resumeRecording,
     stopRecording,
     resetTranscript,
     clearError,

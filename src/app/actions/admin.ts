@@ -4,12 +4,14 @@ import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
 import Blacklist from "@/models/Blacklist";
 import Topic from "@/models/Topic";
+import { verifySessionCookie } from "@/lib/session";
 
 const ADMIN_USERNAME = "mythicalhrg";
 
 async function verifyAdmin() {
   await dbConnect();
-  const sessionUuid = cookies().get("user_session")?.value;
+  const rawSession = cookies().get("user_session")?.value;
+  const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
 
   const user = await User.findOne({ uuid: sessionUuid });

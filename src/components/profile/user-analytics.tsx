@@ -190,6 +190,7 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
                     axisLine={false}
                   />
                   <RechartsTooltip 
+                    cursor={false}
                     formatter={(val: number) => [`${val} sessions`, 'Frequency']}
                     contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))', backgroundColor: 'hsl(var(--background))', color: 'hsl(var(--foreground))' }}
                   />

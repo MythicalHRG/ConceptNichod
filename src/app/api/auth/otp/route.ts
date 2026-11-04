@@ -2,10 +2,17 @@ import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongoose';
 import OtpVerification from '@/models/OtpVerification';
 import User from '@/models/User';
+import Blacklist from '@/models/Blacklist';
 import nodemailer from 'nodemailer';
+import { getClientIp } from '@/lib/ip';
+import { checkRateLimit } from '@/lib/rate-limiter';
 
 const MAX_VERIFY_ATTEMPTS = 5;
 const RESEND_COOLDOWN_MS = 60 * 1000; // 60 seconds cooldown
+
+function validateEmailDomain(email: string) {
+  return email.endsWith("@gmail.com") || email.endsWith("@outlook.com") || email.endsWith("@outlook.in");
+}
 
 export async function POST(req: Request) {
   try {
@@ -21,10 +28,39 @@ export async function POST(req: Request) {
 
     await dbConnect();
 
+    const ip = getClientIp(req.headers);
+
+    // Blacklist enforcement
+    const isIpBanned = await Blacklist.findOne({ type: "ip", value: ip });
+    if (isIpBanned) {
+      return NextResponse.json({ error: 'Access denied: Your IP address is banned.' }, { status: 403 });
+    }
+
+    const isEmailBanned = await Blacklist.findOne({ type: "email", value: email });
+    if (isEmailBanned) {
+      return NextResponse.json({ error: 'Access denied: This email address is banned.' }, { status: 403 });
+    }
+
     const senderUser = process.env.EMAIL_SERVER_USER || process.env.GMAIL_USER || 'mythicalhrg@gmail.com';
     const senderPass = process.env.EMAIL_SERVER_PASSWORD || process.env.GMAIL_APP_PASSWORD || process.env.EMAIL_PASS;
 
     if (action === 'send') {
+      // IP Rate limiting: 5 requests per 15 minutes
+      const rateLimit = checkRateLimit(`otp:${ip}`, 5, 15 * 60 * 1000);
+      if (!rateLimit.success) {
+        return NextResponse.json(
+          { error: 'Too many OTP requests from this IP. Please try again later.' },
+          { status: 429 }
+        );
+      }
+
+      // Enforce email domain restriction
+      if (!validateEmailDomain(email)) {
+        return NextResponse.json(
+          { error: 'Only @gmail.com, @outlook.com, and @outlook.in emails are allowed.' },
+          { status: 400 }
+        );
+      }
       if (isPasswordReset) {
         const existingUser = await User.findOne({ email });
         if (!existingUser) {

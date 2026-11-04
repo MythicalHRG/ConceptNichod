@@ -167,6 +167,7 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
                             tickFormatter={(v) => `${v}%`}
                           />
                           <GeneralTooltip 
+                            cursor={false}
                             formatter={(val: number) => [`${val}%`, 'Coverage Score']}
                             contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} 
                           />

@@ -5,12 +5,23 @@ import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
 import EmailBroadcast from "@/models/EmailBroadcast";
 import nodemailer from "nodemailer";
+import { verifySessionCookie } from "@/lib/session";
 
 const ADMIN_USERNAME = "mythicalhrg";
 
+function escapeHtml(str: string): string {
+  return (str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 async function verifyAdmin() {
   await dbConnect();
-  const sessionUuid = cookies().get("user_session")?.value;
+  const rawSession = cookies().get("user_session")?.value;
+  const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
 
   const user = await User.findOne({ uuid: sessionUuid }).lean();
@@ -94,13 +105,13 @@ export async function sendEmailBroadcastAction(formData: FormData) {
         <p style="margin: 4px 0 0; color: #71717a; font-size: 13px;">Sent from ${senderUser}</p>
       </div>
       <div style="font-size: 15px; line-height: 1.6; color: #27272a; white-space: pre-wrap;">
-        ${body}
+        ${escapeHtml(body)}
       </div>
       ${
         attachmentUrl
           ? `<div style="margin-top: 24px; padding: 12px; background: #f4f4f5; border-radius: 6px;">
                <p style="margin: 0; font-size: 13px; font-weight: 600;">Attached File:</p>
-               <a href="${attachmentUrl}" target="_blank" style="font-size: 13px; color: #4f46e5; text-decoration: underline;">${attachmentName}</a>
+               <a href="${attachmentUrl}" target="_blank" style="font-size: 13px; color: #4f46e5; text-decoration: underline;">${escapeHtml(attachmentName)}</a>
              </div>`
           : ""
       }

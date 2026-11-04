@@ -16,6 +16,10 @@ export interface IUser extends Document {
   instagram?: string;
   bio?: string;
   role: "user" | "admin";
+  firstLoginIp?: string;
+  firstLoginAt?: Date;
+  lastLoginIp?: string;
+  lastLoginAt?: Date;
   lastKnownIp?: string;
   createdAt: Date;
 }
@@ -36,8 +40,19 @@ const UserSchema: Schema<IUser> = new Schema({
   instagram: { type: String, required: false },
   bio: { type: String, required: false },
   role: { type: String, enum: ["user", "admin"], default: "user" },
+  firstLoginIp: { type: String, required: false },
+  firstLoginAt: { type: Date, required: false },
+  lastLoginIp: { type: String, required: false },
+  lastLoginAt: { type: Date, required: false },
   lastKnownIp: { type: String, required: false },
   createdAt: { type: Date, default: Date.now }
+});
+
+UserSchema.pre(["find", "findOne", "findOneAndUpdate", "deleteOne", "deleteMany"], function (this: any) {
+  const query = this.getQuery();
+  if (query && typeof query.uuid === "string" && query.uuid.includes(".")) {
+    query.uuid = query.uuid.split(".")[0];
+  }
 });
 
 const User: Model<IUser> = mongoose.models.User || mongoose.model<IUser>("User", UserSchema);

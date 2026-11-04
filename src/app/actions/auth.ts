@@ -6,20 +6,19 @@ import OtpVerification from "@/models/OtpVerification";
 import Blacklist from "@/models/Blacklist";
 import { hashPassword, comparePassword } from "@/lib/encryption";
 import crypto from "crypto";
-import { headers } from "next/headers";
+import { getClientIp } from "@/lib/ip";
+import { createSignedSessionCookie, verifySessionCookie } from "@/lib/session";
+import {
+  checkRateLimit,
+  peekRateLimit,
+  recordFailedAttempt,
+  resetRateLimit,
+} from "@/lib/rate-limiter";
 
 const SECRET_KEY = process.env.ENCRYPTION_SECRET_KEY || "super_secret_default_key_for_encodec_12345!";
 
 function validateEmailDomain(email: string) {
     return email.endsWith("@gmail.com") || email.endsWith("@outlook.com") || email.endsWith("@outlook.in");
-}
-
-function getIpAddress() {
-    const forwardedFor = headers().get("x-forwarded-for");
-    if (forwardedFor) {
-        return forwardedFor.split(',')[0].trim();
-    }
-    return headers().get("x-real-ip") || "127.0.0.1";
 }
 
 function validatePassword(password: string) {
@@ -75,7 +74,12 @@ export async function registerAction(formData: FormData) {
         const passwordError = validatePassword(password);
         if (passwordError) throw new Error(passwordError);
 
-        const ip = getIpAddress();
+        const ip = getClientIp();
+        const regRate = checkRateLimit(`register:${ip}`, 3, 60 * 60 * 1000);
+        if (!regRate.success) {
+            throw new Error("Too many registration attempts from this IP. Please try again later.");
+        }
+
         const isIpBanned = await Blacklist.findOne({ type: "ip", value: ip });
         if (isIpBanned) throw new Error("Access denied: Your IP address is banned.");
 
@@ -103,6 +107,7 @@ export async function registerAction(formData: FormData) {
 
         const encryptedPassword = await hashPassword(password);
         const uuid = crypto.randomUUID();
+        const now = new Date();
 
         const newUser = await User.create({
             uuid,
@@ -118,13 +123,17 @@ export async function registerAction(formData: FormData) {
             futureCollege: futureCollege || undefined,
             snapchat: snapchat || undefined,
             instagram: instagram || undefined,
+            firstLoginIp: ip,
+            firstLoginAt: now,
+            lastLoginIp: ip,
+            lastLoginAt: now,
             lastKnownIp: ip
         });
 
         // Delete OTP record after successful registration to prevent reuse (Account Takeover)
         await OtpVerification.deleteOne({ email });
 
-        cookies().set("user_session", uuid, { 
+        cookies().set("user_session", createSignedSessionCookie(uuid), { 
             httpOnly: true, 
             secure: process.env.NODE_ENV === "production", 
             sameSite: "lax",
@@ -147,7 +156,13 @@ export async function loginAction(formData: FormData) {
     try {
         if (!rawInput || !password) throw new Error("Missing email or password");
 
-        const ip = getIpAddress();
+        const ip = getClientIp();
+        const loginRateKey = `login:${ip}:${rawInput.toLowerCase()}`;
+        const loginRateStatus = peekRateLimit(loginRateKey, 5, 15 * 60 * 1000);
+        if (!loginRateStatus.success) {
+            throw new Error("Too many failed login attempts. Please try again after 15 minutes.");
+        }
+
         const isIpBanned = await Blacklist.findOne({ type: "ip", value: ip });
         if (isIpBanned) throw new Error("Access denied: Your IP address is banned.");
 
@@ -162,7 +177,10 @@ export async function loginAction(formData: FormData) {
             ]
         });
 
-        if (!user) throw new Error("Invalid credentials");
+        if (!user) {
+            recordFailedAttempt(loginRateKey, 5, 15 * 60 * 1000);
+            throw new Error("Invalid credentials");
+        }
 
         const isEmailBanned = await Blacklist.findOne({ type: "email", value: user.email.toLowerCase() });
         if (isEmailBanned) throw new Error("Access denied: This email address is banned.");
@@ -172,16 +190,30 @@ export async function loginAction(formData: FormData) {
 
         try {
             const isValid = await comparePassword(password, user.password);
-            if (!isValid) throw new Error("Invalid credentials");
+            if (!isValid) {
+                recordFailedAttempt(loginRateKey, 5, 15 * 60 * 1000);
+                throw new Error("Invalid credentials");
+            }
 
-            // Update last known IP
+            // Reset failed login count on successful authentication
+            resetRateLimit(loginRateKey);
+
+            // Update login IP and timestamps
+            const now = new Date();
+            user.lastLoginIp = ip;
+            user.lastLoginAt = now;
             user.lastKnownIp = ip;
+            if (!user.firstLoginIp) {
+                user.firstLoginIp = ip;
+                user.firstLoginAt = user.createdAt || now;
+            }
             await user.save();
-        } catch (e) {
+        } catch (e: any) {
+            recordFailedAttempt(loginRateKey, 5, 15 * 60 * 1000);
             throw new Error("Invalid credentials");
         }
 
-        cookies().set("user_session", user.uuid, { 
+        cookies().set("user_session", createSignedSessionCookie(user.uuid), { 
             httpOnly: true, 
             secure: process.env.NODE_ENV === "production", 
             sameSite: "lax",
@@ -206,7 +238,8 @@ export async function logoutAction() {
 
 export async function meAction() {
     await dbConnect();
-    const sessionUuid = cookies().get("user_session")?.value;
+    const rawSession = cookies().get("user_session")?.value;
+    const sessionUuid = verifySessionCookie(rawSession);
     if (!sessionUuid) return { user: null };
 
     const user = await User.findOne({ uuid: sessionUuid });
@@ -222,7 +255,8 @@ export async function meAction() {
 
 export async function updateProfileAction(formData: FormData) {
     await dbConnect();
-    const sessionUuid = cookies().get("user_session")?.value;
+    const rawSession = cookies().get("user_session")?.value;
+    const sessionUuid = verifySessionCookie(rawSession);
     if (!sessionUuid) throw new Error("Not authenticated");
 
     const username = formData.get("username") as string;
@@ -274,7 +308,8 @@ export async function updateProfileAction(formData: FormData) {
 
 export async function requestEmailChangeOtpAction(newEmail: string) {
     await dbConnect();
-    const sessionUuid = cookies().get("user_session")?.value;
+    const rawSession = cookies().get("user_session")?.value;
+    const sessionUuid = verifySessionCookie(rawSession);
     if (!sessionUuid) throw new Error("Not authenticated");
 
     const currentUser = await User.findOne({ uuid: sessionUuid });
@@ -330,7 +365,8 @@ export async function requestEmailChangeOtpAction(newEmail: string) {
 
 export async function confirmEmailChangeAction(newEmail: string, otp: string) {
     await dbConnect();
-    const sessionUuid = cookies().get("user_session")?.value;
+    const rawSession = cookies().get("user_session")?.value;
+    const sessionUuid = verifySessionCookie(rawSession);
     if (!sessionUuid) throw new Error("Not authenticated");
 
     const email = newEmail.toLowerCase().trim();
@@ -384,7 +420,7 @@ export async function resetPasswordAction(formData: FormData) {
     const passwordError = validatePassword(newPassword);
     if (passwordError) throw new Error(passwordError);
 
-    const ip = getIpAddress();
+    const ip = getClientIp();
     const isIpBanned = await Blacklist.findOne({ type: "ip", value: ip });
     if (isIpBanned) throw new Error("Access denied: Your IP address is banned.");
 
@@ -410,7 +446,8 @@ export async function resetPasswordAction(formData: FormData) {
 
 export async function changePasswordAction(formData: FormData) {
     await dbConnect();
-    const sessionId = cookies().get("user_session")?.value;
+    const rawSession = cookies().get("user_session")?.value;
+    const sessionId = verifySessionCookie(rawSession);
     if (!sessionId) throw new Error("Not authenticated");
 
     const currentPassword = formData.get("currentPassword") as string;
@@ -440,7 +477,8 @@ export async function changePasswordAction(formData: FormData) {
 
 export async function deleteAccountAction(formData: FormData) {
     await dbConnect();
-    const sessionId = cookies().get("user_session")?.value;
+    const rawSession = cookies().get("user_session")?.value;
+    const sessionId = verifySessionCookie(rawSession);
     if (!sessionId) throw new Error("Not authenticated");
 
     const email = (formData.get("email") as string).toLowerCase().trim();

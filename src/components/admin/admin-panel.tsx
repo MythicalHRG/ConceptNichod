@@ -18,6 +18,12 @@ import {
   getEmailBroadcastHistoryAction,
 } from "@/app/actions/email-broadcast";
 import {
+  getDonationInfoAction,
+  updateDonationSettingsAction,
+  addDonorCardAction,
+  deleteDonorCardAction,
+} from "@/app/actions/donation";
+import {
   getChangelogsAction,
   createChangelogAction,
   deleteChangelogAction,
@@ -52,6 +58,8 @@ import {
   CheckCircle2,
   Clock,
   Radio,
+  Heart,
+  QrCode,
 } from "lucide-react";
 import { UploadButton } from "@/utils/uploadthing";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -93,6 +101,23 @@ export function AdminPanel() {
   const [changelogContent, setChangelogContent] = useState("");
   const [changelogLoading, setChangelogLoading] = useState(false);
 
+  // Donation & UPI State
+  const [donationSettings, setDonationSettings] = useState({
+    upiId: "mythicalhrg@okhdfcbank",
+    qrCodeUrl: "",
+    customInstructions: "",
+    thankYouNote: "",
+  });
+  const [donorCards, setDonorCards] = useState<any[]>([]);
+  const [newDonor, setNewDonor] = useState({
+    username: "",
+    amount: "",
+    tier: "Supporter" as "Supporter" | "Patron" | "Benefactor" | "Legend",
+    message: "",
+  });
+  const [isSavingDonation, setIsSavingDonation] = useState(false);
+  const [isAddingDonor, setIsAddingDonor] = useState(false);
+
   const { toast } = useToast();
 
   const fetchData = async () => {
@@ -112,6 +137,11 @@ export function AdminPanel() {
       if (broadcastsRes.success) setActiveBroadcasts(broadcastsRes.broadcasts);
       if (emailRes?.success) setEmailBroadcasts(emailRes.broadcasts || []);
       if (changelogsRes?.success) setChangelogs(changelogsRes.changelogs || []);
+      const donationRes = await getDonationInfoAction().catch(() => ({ success: true, settings: null, donors: [] }));
+      if (donationRes?.success) {
+        if (donationRes.settings) setDonationSettings(donationRes.settings);
+        if (donationRes.donors) setDonorCards(donationRes.donors);
+      }
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally {
@@ -270,6 +300,58 @@ export function AdminPanel() {
     }
   };
 
+  const handleSaveDonationSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingDonation(true);
+    try {
+      const res = await updateDonationSettingsAction(donationSettings);
+      if (res.success) {
+        toast({ title: "UPI Settings Saved", description: "Donation page details updated successfully." });
+      }
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Error", description: e.message });
+    } finally {
+      setIsSavingDonation(false);
+    }
+  };
+
+  const handleAddDonorCard = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newDonor.username.trim() || !newDonor.amount) {
+      toast({ variant: "destructive", title: "Error", description: "Username and amount are required." });
+      return;
+    }
+    setIsAddingDonor(true);
+    try {
+      const res = await addDonorCardAction({
+        username: newDonor.username,
+        amount: Number(newDonor.amount),
+        tier: newDonor.tier,
+        message: newDonor.message,
+      });
+      if (res.success) {
+        toast({ title: "Donor Card Added!", description: `Added @${newDonor.username} to Hall of Patrons.` });
+        setDonorCards([res.donor, ...donorCards]);
+        setNewDonor({ username: "", amount: "", tier: "Supporter", message: "" });
+      }
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Error", description: e.message });
+    } finally {
+      setIsAddingDonor(false);
+    }
+  };
+
+  const handleDeleteDonorCard = async (uuid: string) => {
+    if (!confirm("Remove this donor card from Hall of Patrons?")) return;
+    try {
+      await deleteDonorCardAction(uuid);
+      toast({ title: "Donor Card Removed" });
+      setDonorCards(donorCards.filter((d) => d.uuid !== uuid));
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Error", description: e.message });
+    }
+  };
+
   const handleDeleteChangelog = async (id: string) => {
     if (!confirm("Are you sure you want to delete this changelog entry?")) return;
     try {
@@ -304,6 +386,9 @@ export function AdminPanel() {
           <TabsTrigger value="changelog" className="flex items-center gap-1.5">
             <Sparkles className="w-4 h-4 text-amber-500" /> Changelog Manager
           </TabsTrigger>
+          <TabsTrigger value="donations" className="flex items-center gap-1.5">
+            <Heart className="w-4 h-4 text-rose-500 fill-rose-500" /> Donations & UPI
+          </TabsTrigger>
         </TabsList>
 
         {/* USERS TAB */}
@@ -321,7 +406,8 @@ export function AdminPanel() {
                       <th className="px-4 py-3">Username</th>
                       <th className="px-4 py-3">Email</th>
                       <th className="px-4 py-3">Name</th>
-                      <th className="px-4 py-3">IP Address</th>
+                      <th className="px-4 py-3">First Login</th>
+                      <th className="px-4 py-3">Last Login</th>
                       <th className="px-4 py-3">Joined</th>
                       <th className="px-4 py-3 text-right">Actions</th>
                     </tr>
@@ -343,8 +429,45 @@ export function AdminPanel() {
                           </td>
                           <td className="px-4 py-3">{u.email}</td>
                           <td className="px-4 py-3">{u.fullName}</td>
-                          <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
-                            {u.lastKnownIp || "Unknown"}
+                          <td className="px-4 py-3 text-xs">
+                            <div className="flex flex-col gap-1">
+                              <span className="font-mono bg-muted/80 px-1.5 py-0.5 rounded text-[11px] w-fit font-medium">
+                                {u.firstLoginIp || u.lastKnownIp || "Unknown"}
+                              </span>
+                              {u.firstLoginAt ? (
+                                <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                                  <Clock className="w-3 h-3 text-primary/70 inline" />
+                                  {new Date(u.firstLoginAt).toLocaleString(undefined, {
+                                    dateStyle: "short",
+                                    timeStyle: "short",
+                                  })}
+                                </span>
+                              ) : (
+                                <span className="text-[11px] text-muted-foreground">
+                                  {new Date(u.createdAt).toLocaleDateString()}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-xs">
+                            <div className="flex flex-col gap-1">
+                              <span className="font-mono bg-muted/80 px-1.5 py-0.5 rounded text-[11px] w-fit font-medium">
+                                {u.lastLoginIp || u.lastKnownIp || "Unknown"}
+                              </span>
+                              {u.lastLoginAt ? (
+                                <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                                  <Clock className="w-3 h-3 text-emerald-500 inline" />
+                                  {new Date(u.lastLoginAt).toLocaleString(undefined, {
+                                    dateStyle: "short",
+                                    timeStyle: "short",
+                                  })}
+                                </span>
+                              ) : (
+                                <span className="text-[11px] text-muted-foreground">
+                                  {new Date(u.createdAt).toLocaleDateString()}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-4 py-3">{new Date(u.createdAt).toLocaleDateString()}</td>
                           <td className="px-4 py-3 text-right">
@@ -894,6 +1017,209 @@ export function AdminPanel() {
               </div>
             </CardContent>
           </Card>
+        
+        </TabsContent>
+
+        {/* DONATIONS & UPI CONFIG TAB */}
+        <TabsContent value="donations">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* UPI QR & Instructions Settings */}
+            <Card className="lg:col-span-5">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <QrCode className="w-5 h-5 text-primary" /> UPI & QR Configuration
+                </CardTitle>
+                <CardDescription>
+                  Configure your official UPI ID, QR code image, and custom instructions shown on /donate.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSaveDonationSettings} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      Official UPI ID / VPA
+                    </label>
+                    <Input
+                      value={donationSettings.upiId}
+                      onChange={(e) => setDonationSettings({ ...donationSettings, upiId: e.target.value })}
+                      placeholder="e.g. mythicalhrg@okhdfcbank"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      UPI QR Code Image URL
+                    </label>
+                    <Input
+                      value={donationSettings.qrCodeUrl}
+                      onChange={(e) => setDonationSettings({ ...donationSettings, qrCodeUrl: e.target.value })}
+                      placeholder="https://... or /qr-code.png or paste base64 image data"
+                    />
+                    {donationSettings.qrCodeUrl && (
+                      <div className="mt-2 p-2 border rounded-lg bg-white max-w-[140px] aspect-square flex items-center justify-center">
+                        <img src={donationSettings.qrCodeUrl} alt="QR Preview" className="max-w-full max-h-full object-contain" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      Custom Instructions for Donors
+                    </label>
+                    <Textarea
+                      value={donationSettings.customInstructions}
+                      onChange={(e) => setDonationSettings({ ...donationSettings, customInstructions: e.target.value })}
+                      placeholder="Instructions shown on the donation card..."
+                      rows={4}
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      Thank You Message
+                    </label>
+                    <Input
+                      value={donationSettings.thankYouNote}
+                      onChange={(e) => setDonationSettings({ ...donationSettings, thankYouNote: e.target.value })}
+                      placeholder="Thank you for supporting ConceptNichod!"
+                    />
+                  </div>
+
+                  <Button type="submit" disabled={isSavingDonation} className="w-full">
+                    {isSavingDonation ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Heart className="mr-2 h-4 w-4 fill-current" />}
+                    Save UPI Settings
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            {/* Donor Cards Manager (Hall of Patrons) */}
+            <div className="lg:col-span-7 space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-amber-500" /> Add Donor Card
+                  </CardTitle>
+                  <CardDescription>
+                    Manually add verified donor contributions to showcase on the public Hall of Patrons (/donate).
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleAddDonorCard} className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                          Username
+                        </label>
+                        <Input
+                          placeholder="e.g. anurag or rohit"
+                          value={newDonor.username}
+                          onChange={(e) => setNewDonor({ ...newDonor, username: e.target.value })}
+                          required
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                          Donated Amount (₹)
+                        </label>
+                        <Input
+                          type="number"
+                          placeholder="e.g. 500, 1000"
+                          value={newDonor.amount}
+                          onChange={(e) => setNewDonor({ ...newDonor, amount: e.target.value })}
+                          required
+                          min={1}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                          Honorary Tier
+                        </label>
+                        <Select
+                          value={newDonor.tier}
+                          onValueChange={(val: any) => setNewDonor({ ...newDonor, tier: val })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select Tier" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Supporter">Supporter (₹100+)</SelectItem>
+                            <SelectItem value="Patron">Patron (₹500+)</SelectItem>
+                            <SelectItem value="Benefactor">Benefactor (₹1,000+)</SelectItem>
+                            <SelectItem value="Legend">Legend (₹2,500+)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                          Personal Message / Note
+                        </label>
+                        <Input
+                          placeholder="e.g. Keep empowering students!"
+                          value={newDonor.message}
+                          onChange={(e) => setNewDonor({ ...newDonor, message: e.target.value })}
+                        />
+                      </div>
+                    </div>
+
+                    <Button type="submit" disabled={isAddingDonor} className="w-full">
+                      {isAddingDonor ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                      Add Donor Card to Hall of Patrons
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+
+              {/* List of Current Donor Cards */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Hall of Patrons Cards ({donorCards.length})</CardTitle>
+                  <CardDescription>All publicly displayed donor cards on the donation page.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {donorCards.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-6 text-center">No donor cards added yet.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {donorCards.map((donor) => (
+                        <div
+                          key={donor.uuid}
+                          className="p-3.5 rounded-xl border border-border/80 bg-muted/20 flex flex-col justify-between space-y-2 hover:border-primary/40 transition-colors"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <p className="font-bold text-sm text-foreground">@{donor.username}</p>
+                              <p className="text-base font-black text-primary">₹{Number(donor.amount).toLocaleString('en-IN')}</p>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <Badge variant="outline" className="text-[10px]">{donor.tier}</Badge>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10"
+                                onClick={() => handleDeleteDonorCard(donor.uuid)}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                          {donor.message && (
+                            <p className="text-xs text-muted-foreground italic">"{donor.message}"</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         </TabsContent>
       </Tabs>
     </div>

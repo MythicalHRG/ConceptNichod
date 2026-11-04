@@ -27,71 +27,105 @@ export function SpeechRecorder({
   customDescription,
 }: SpeechRecorderProps) {
   const [timeLeft, setTimeLeft] = useState(timeLimitSeconds || 0);
-  const [localText, setLocalText] = useState(transcript || "");
   const { toast } = useToast();
 
   const {
     isRecording,
+    isPaused,
     isConnecting,
     transcript: liveTranscript,
     errorMessage,
     startRecording,
+    pauseRecording,
+    resumeRecording,
     stopRecording,
+    resetTranscript,
     isSupported,
   } = useAudioRecorder();
 
-  // Sync live speech recognition into parent transcript and local textarea
+  // Sync live transcribed speech directly to parent state
   useEffect(() => {
-    if (liveTranscript) {
-      setLocalText(liveTranscript);
+    if (liveTranscript !== undefined) {
       setTranscript(liveTranscript);
     }
   }, [liveTranscript, setTranscript]);
 
-  // Keep localText synced with external transcript changes (e.g. step changes)
-  useEffect(() => {
-    if (transcript !== localText && !isRecording) {
-      setLocalText(transcript);
-    }
-  }, [transcript]);
-
-  // Countdown timer when recording
+  // Countdown timer when recording and not paused
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    if (isRecording && timeLimitSeconds) {
+    if (isRecording && !isPaused && timeLimitSeconds) {
       interval = setInterval(() => {
         setTimeLeft((prev) => {
           if (prev <= 1) {
             clearInterval(interval);
             stopRecording();
             toast({
-              title: "Time Limit Reached",
-              description: "Your speech recording has completed.",
+              title: "Time's up!",
+              description: "Recording has been automatically stopped.",
             });
             return 0;
           }
           return prev - 1;
         });
       }, 1000);
-    } else {
+    } else if (!isRecording) {
       setTimeLeft(timeLimitSeconds || 0);
     }
     return () => clearInterval(interval);
-  }, [isRecording, timeLimitSeconds, stopRecording, toast]);
+  }, [isRecording, isPaused, timeLimitSeconds, stopRecording, toast]);
 
-  const handleManualEdit = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const text = e.target.value;
-    setLocalText(text);
-    setTranscript(text);
+  const toggleRecording = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      if (!isSupported) {
+        toast({
+          variant: "destructive",
+          title: "Browser Unsupported",
+          description: "Speech recognition is not supported in this browser. Please use Chrome or Edge.",
+        });
+        return;
+      }
+      setTimeLeft(timeLimitSeconds || 0);
+      startRecording();
+    }
+  };
+
+  const togglePause = () => {
+    if (isPaused) {
+      resumeRecording();
+    } else {
+      pauseRecording();
+    }
+  };
+
+  const handleReset = () => {
+    resetTranscript();
+    setTranscript("");
+    setTimeLeft(timeLimitSeconds || 0);
   };
 
   const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, "0")}`;
   };
 
-  const cardContent = (
+  const buttonText = isConnecting
+    ? "Connecting..."
+    : isRecording
+    ? "Stop"
+    : "Start";
+
+  const buttonIcon = isConnecting ? (
+    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+  ) : isRecording ? (
+    <MicOff className="mr-2 h-4 w-4" />
+  ) : (
+    <Mic className="mr-2 h-4 w-4" />
+  );
+
+  const content = (
     <div className="space-y-4">
       {errorMessage && (
         <Alert variant="destructive">
@@ -100,84 +134,94 @@ export function SpeechRecorder({
         </Alert>
       )}
 
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border rounded-xl bg-card">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            {isConnecting && (
-              <span className="flex items-center gap-1.5 text-xs text-amber-600 font-semibold animate-pulse">
-                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Initializing mic... Wait 1 second
-              </span>
-            )}
-            {!isConnecting && isRecording && (
-              <span className="flex items-center gap-1.5 text-xs text-emerald-600 font-bold">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping inline-block" />
-                Listening... Speak your answer now
-              </span>
-            )}
-            {!isConnecting && !isRecording && (
-              <span className="text-xs text-muted-foreground">
-                {isSupported ? "Native Web Speech API ready." : "Web Speech unavailable. Please type below."}
-              </span>
-            )}
-          </div>
+      <div className="flex items-center gap-4 flex-wrap">
+        <Button
+          type="button"
+          onClick={toggleRecording}
+          size="lg"
+          className="w-full sm:w-auto"
+          variant={isRecording ? "destructive" : "default"}
+          disabled={isConnecting}
+        >
+          {buttonIcon}
+          {buttonText}
+        </Button>
 
-          {timeLimitSeconds && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono">
-              <Timer className="w-3.5 h-3.5" />
-              <span>Time Remaining: {formatTime(timeLeft)}</span>
-            </div>
-          )}
-        </div>
+        {isRecording && (
+          <Button
+            type="button"
+            onClick={togglePause}
+            size="lg"
+            variant="secondary"
+            className="w-full sm:w-auto"
+          >
+            {isPaused ? "Resume" : "Pause"}
+          </Button>
+        )}
 
         <Button
           type="button"
-          onClick={isRecording ? stopRecording : startRecording}
-          disabled={isConnecting}
-          variant={isRecording ? "destructive" : "default"}
-          className="gap-2 shrink-0"
+          onClick={handleReset}
+          size="lg"
+          variant="outline"
+          className="w-full sm:w-auto"
         >
-          {isConnecting ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : isRecording ? (
-            <MicOff className="w-4 h-4" />
-          ) : (
-            <Mic className="w-4 h-4" />
-          )}
-          {isConnecting ? "Starting Mic..." : isRecording ? "Stop Recording" : "Start Spoken Answer"}
+          Reset
         </Button>
+
+        {timeLimitSeconds !== undefined && (
+          <div
+            className={`flex items-center gap-2 font-mono text-xl ${
+              isRecording && !isPaused && timeLeft <= 15
+                ? "text-destructive animate-pulse"
+                : "text-primary"
+            } ${isPaused ? "opacity-50" : ""}`}
+          >
+            <Timer className="h-6 w-6" />
+            {formatTime(timeLeft)}
+          </div>
+        )}
       </div>
 
-      <div className="space-y-1.5">
-        <label className="text-xs font-medium text-muted-foreground">
-          Answer Transcript (Speak or Type / Edit Manually):
-        </label>
-        <Textarea
-          rows={5}
-          placeholder="Your spoken words will appear here in real-time, or you can type directly..."
-          value={localText}
-          onChange={handleManualEdit}
-          disabled={isRecording}
-          className="font-sans text-base leading-relaxed"
-        />
-      </div>
+      <Textarea
+        placeholder="Your speech transcript will appear here..."
+        value={transcript}
+        readOnly={true}
+        rows={5}
+        className="bg-muted text-base cursor-not-allowed"
+      />
     </div>
   );
 
   if (!isStandalone) {
-    return cardContent;
+    return (
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-primary">
+            {customLabel || "Verbal Summary"}
+          </p>
+          <h3 className="text-xl font-semibold">
+            {customDescription ||
+              "Summarize the topic out loud in your own words. Click start, speak, and then click stop. Your transcript will appear below."}
+          </h3>
+        </div>
+        {content}
+      </div>
+    );
   }
 
   return (
-    <Card className="w-full">
+    <Card>
       <CardHeader>
-        <CardTitle className="text-xl font-bold font-headline">
-          {customLabel || "Speech Evaluator"}
+        <CardTitle className="font-headline">
+          {customLabel || "2. Verbal Summary"}
         </CardTitle>
         <CardDescription>
-          {customDescription || "Record your spoken answer using your microphone or edit your transcript directly."}
+          {customDescription ||
+            "Summarize the topic out loud in your own words. Click start, speak, and then click stop. Your transcript will appear below."}
         </CardDescription>
       </CardHeader>
-      <CardContent>{cardContent}</CardContent>
+      <CardContent>{content}</CardContent>
     </Card>
   );
 }

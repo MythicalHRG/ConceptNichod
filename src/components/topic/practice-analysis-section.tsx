@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Topic } from "@/lib/types";
-import { Loader2, ArrowLeft, ArrowRight, BrainCircuit } from "lucide-react";
+import { Loader2, ArrowLeft, ArrowRight, BrainCircuit, ShieldAlert } from "lucide-react";
 import { QuestionDisplay } from "./question-section";
 import { SpeechRecorder } from "./speech-evaluator";
 import { FinalAnalysisDisplay } from "./final-analysis-display";
@@ -33,6 +33,61 @@ export function PracticeAndAnalysisSection({ topic, onFinalAnalysis, isAnalyzing
   const [finalSummarySpeech, setFinalSummarySpeech] = useState<string>("");
 
   const totalSteps = questions.length + 1; // +1 for the final overall summary step
+  const autoSubmittedRef = useRef(false);
+
+  // Proctoring & Session Integrity:
+  // Minimizing screen or switching tabs auto-submits practice session immediately
+  useEffect(() => {
+    if (finalAnalysis || isAnalyzing) return;
+
+    const handleVisibilityChange = () => {
+      if (document.hidden && !autoSubmittedRef.current) {
+        autoSubmittedRef.current = true;
+        toast({
+          title: "Session Auto-Submitted",
+          description: "Window minimization or tab switch detected. Test session has been automatically submitted for evaluation.",
+          variant: "destructive",
+        });
+
+        const formattedWrittenAnswers = textQuestions.map((q, i) => ({
+          question: q.question,
+          answer: writtenAnswers[i]?.trim()
+            ? writtenAnswers[i]
+            : "[Auto-submitted: Unanswered due to window minimize / tab-switch]",
+        }));
+        const formattedSpokenAnswers = voiceQuestions.map((q, i) => ({
+          question: q.question,
+          answer: spokenAnswers[i]?.trim()
+            ? spokenAnswers[i]
+            : "[Auto-submitted: Unanswered due to window minimize / tab-switch]",
+        }));
+
+        formattedSpokenAnswers.push({
+          question: "Overall Topic Summary (2-Minute Challenge)",
+          answer: finalSummarySpeech?.trim()
+            ? finalSummarySpeech
+            : "[Auto-submitted: Session terminated due to window minimize / tab-switch]",
+        });
+
+        onFinalAnalysis(formattedWrittenAnswers, formattedSpokenAnswers);
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [
+    finalAnalysis,
+    isAnalyzing,
+    writtenAnswers,
+    spokenAnswers,
+    finalSummarySpeech,
+    textQuestions,
+    voiceQuestions,
+    onFinalAnalysis,
+    toast,
+  ]);
 
   const handleWrittenAnswerChange = (answer: string) => {
     const newAnswers = [...writtenAnswers];
@@ -74,14 +129,12 @@ export function PracticeAndAnalysisSection({ topic, onFinalAnalysis, isAnalyzing
       
       // Save partial progress to DB for anti-cheating
       if (topic.id) {
-          import("@/app/actions").then(({ updateTopicProgressAction }) => {
-              updateTopicProgressAction(topic.id as string, 'in_progress', writtenAnswers, spokenAnswers).catch(console.error);
-          });
+        import("@/app/actions").then(({ updateTopicProgressAction }) => {
+          updateTopicProgressAction(topic.id as string, 'in_progress', writtenAnswers, spokenAnswers).catch(console.error);
+        });
       }
     }
   };
-
-  
 
   const handleTriggerAnalysis = () => {
     if (finalSummarySpeech.trim().length === 0) {
@@ -94,17 +147,17 @@ export function PracticeAndAnalysisSection({ topic, onFinalAnalysis, isAnalyzing
     }
 
     const formattedWrittenAnswers = textQuestions.map((q, i) => ({
-        question: q.question,
-        answer: writtenAnswers[i] || "No answer provided.",
+      question: q.question,
+      answer: writtenAnswers[i] || "No answer provided.",
     }));
     const formattedSpokenAnswers = voiceQuestions.map((q, i) => ({
-        question: q.question,
-        answer: spokenAnswers[i] || "No answer provided.",
+      question: q.question,
+      answer: spokenAnswers[i] || "No answer provided.",
     }));
     
     formattedSpokenAnswers.push({
-        question: "Overall Topic Summary (2-Minute Challenge)",
-        answer: finalSummarySpeech,
+      question: "Overall Topic Summary (2-Minute Challenge)",
+      answer: finalSummarySpeech,
     });
 
     onFinalAnalysis(formattedWrittenAnswers, formattedSpokenAnswers);
@@ -129,11 +182,17 @@ export function PracticeAndAnalysisSection({ topic, onFinalAnalysis, isAnalyzing
   const isFinalStep = currentQuestionIndex === questions.length;
   
   const isNextDisabled = currentQuestionIndex === totalSteps - 1;
-  const isAnalysisDisabled = isAnalyzing;
-
 
   return (
     <div className="space-y-8">
+      {/* Proctoring & Integrity Notice */}
+      <div className="flex items-center gap-2 p-3 text-xs rounded-lg border border-amber-500/30 bg-amber-500/5 text-amber-600 dark:text-amber-400">
+        <ShieldAlert className="w-4 h-4 shrink-0" />
+        <span>
+          <strong>Proctoring Integrity Active:</strong> Do not minimize the window or switch browser tabs. Leaving this screen will automatically submit your session for immediate evaluation.
+        </span>
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle className="font-headline">Practice Section</CardTitle>

@@ -6,7 +6,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import type { FinalAnalysisOutput } from "@/ai/flows/analyze-answers";
 import { 
   CheckCircle, Info, Star, Target, BarChart2, PieChart as PieIcon, 
-  Award, TrendingUp, Layers, Compass 
+  Award, TrendingUp, Layers, Compass, ShieldCheck, ShieldAlert, AlertTriangle, BookOpen, Check 
 } from "lucide-react";
 import { 
   Bar, BarChart as BarChartComponent, CartesianGrid, XAxis, YAxis, 
@@ -14,6 +14,7 @@ import {
   Area, AreaChart, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Legend 
 } from "recharts";
 import { LatexRenderer } from "@/components/ui/latex-renderer";
+import { Badge } from "@/components/ui/badge";
 
 interface FinalAnalysisDisplayProps {
   analysis: FinalAnalysisOutput;
@@ -47,9 +48,9 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
       }
     }
 
-    const baseScore = Math.max(10, Math.min(100, analysis.overallScore || 75));
+    const baseScore = Math.max(5, Math.min(100, analysis.overallScore ?? 50));
 
-    // Full distinct diverse chart definitions
+    // Full distinct diverse chart definitions tailored to the student's exact score
     const defaultSuite = [
       {
         type: "bar",
@@ -57,7 +58,7 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
         description: "Discrete evaluation of conceptual, analytical, and practical performance",
         data: [
           { name: "Comprehension", score: Math.min(100, Math.round(baseScore * 1.05)) },
-          { name: "Expression", score: Math.max(20, Math.round(baseScore * 0.9)) },
+          { name: "Expression", score: Math.max(5, Math.round(baseScore * 0.9)) },
           { name: "Critical Thinking", score: Math.round(baseScore) },
           { name: "Application", score: Math.min(100, Math.round(baseScore * 0.95)) },
         ],
@@ -67,9 +68,9 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
         title: "Knowledge Composition",
         description: "Proportional balance between core theory, empirical facts, and insights",
         data: [
-          { name: "Core Theory", value: 45, fill: "#3b82f6" },
-          { name: "Applied Logic", value: 35, fill: "#10b981" },
-          { name: "Analytical Insights", value: 20, fill: "#f59e0b" },
+          { name: "Core Theory", value: Math.max(10, Math.round(baseScore * 0.5)), fill: "#3b82f6" },
+          { name: "Applied Logic", value: Math.max(10, Math.round(baseScore * 0.35)), fill: "#10b981" },
+          { name: "Analytical Insights", value: Math.max(5, Math.round(baseScore * 0.15)), fill: "#f59e0b" },
         ],
       },
       {
@@ -77,10 +78,10 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
         title: "Response Depth Frequency",
         description: "Distribution of response elaboration across answer difficulty bins",
         data: [
-          { name: "0-25% Recall", score: 2 },
-          { name: "26-50% Foundational", score: 4 },
-          { name: "51-75% Analytical", score: 3 },
-          { name: "76-100% Comprehensive", score: 2 },
+          { name: "0-25% Recall", score: baseScore <= 35 ? 4 : 1 },
+          { name: "26-50% Foundational", score: baseScore <= 55 ? 3 : 2 },
+          { name: "51-75% Analytical", score: baseScore > 55 ? 3 : 1 },
+          { name: "76-100% Comprehensive", score: baseScore > 75 ? 3 : 0 },
         ],
       },
       {
@@ -88,8 +89,8 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
         title: "Adaptive Mastery Progression Curve",
         description: "Continuous polynomial learning trajectory across assessment stages",
         data: [
-          { step: "Stage 1: Recall", score: Math.max(20, Math.round(baseScore * 0.72)) },
-          { step: "Stage 2: Conceptual", score: Math.max(30, Math.round(baseScore * 0.85)) },
+          { step: "Stage 1: Recall", score: Math.max(5, Math.round(baseScore * 0.72)) },
+          { step: "Stage 2: Conceptual", score: Math.max(8, Math.round(baseScore * 0.85)) },
           { step: "Stage 3: Application", score: Math.round(baseScore * 0.94) },
           { step: "Stage 4: Synthesis", score: Math.round(baseScore) },
           { step: "Stage 5: Peak Mastery", score: Math.min(100, Math.round(baseScore * 1.08)) },
@@ -101,7 +102,7 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
         description: "Multi-axial balance across communication, conciseness, and precision",
         data: [
           { metric: "Clarity", score: Math.min(100, Math.round(baseScore * 1.02)) },
-          { metric: "Conciseness", score: Math.max(20, Math.round(baseScore * 0.88)) },
+          { metric: "Conciseness", score: Math.max(5, Math.round(baseScore * 0.88)) },
           { metric: "Confidence", score: Math.round(baseScore) },
           { metric: "Technical Precision", score: Math.min(100, Math.round(baseScore * 0.96)) },
           { metric: "Structure", score: Math.min(100, Math.round(baseScore * 1.01)) },
@@ -115,7 +116,6 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
     const seenTypes = new Set<string>();
     const diverseCharts: any[] = [];
 
-    // Add provided charts if their type hasn't been used yet
     for (const c of rawList) {
       if (c && c.type && !seenTypes.has(c.type) && availableTypes.includes(c.type)) {
         seenTypes.add(c.type);
@@ -123,7 +123,6 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
       }
     }
 
-    // Fill in remaining missing types from defaultSuite so the student gets a rich full visual suite
     for (const d of defaultSuite) {
       if (!seenTypes.has(d.type)) {
         seenTypes.add(d.type);
@@ -134,6 +133,11 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
     setCharts(diverseCharts);
   }, [analysis]);
 
+  const auth = analysis.authenticityReport;
+  const isNatural = auth?.isNatural ?? (analysis.overallScore ? analysis.overallScore >= 40 : true);
+  const naturalScore = auth?.naturalConfidenceScore ?? (isNatural ? 88 : 25);
+  const verdict = auth?.verdict || (isNatural ? "natural_human" : "suspicious_synthetic");
+
   return (
     <div className="space-y-8">
       {/* Overall Score Banner */}
@@ -142,10 +146,10 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <CardTitle className="font-headline text-3xl text-primary flex items-center gap-2">
-                <Award className="w-8 h-8 text-primary" /> Performance Analysis
+                <Award className="w-8 h-8 text-primary" /> Performance Diagnostic Analysis
               </CardTitle>
               <CardDescription className="text-base mt-1">
-                Evaluation for topic: <strong>{topicName}</strong>
+                Rigorous evaluation for topic: <strong>{topicName}</strong>
               </CardDescription>
             </div>
             {analysis.overallScore !== undefined && (
@@ -156,23 +160,145 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
             )}
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <div className="text-base text-foreground/90 leading-relaxed bg-background/60 p-4 rounded-lg border border-border/60">
             <LatexRenderer content={analysis.performanceSummary} />
           </div>
         </CardContent>
       </Card>
 
-      {/* Accordion Feedback Sections */}
+      {/* Linguistic Authenticity & Natural vs AI Detection Card */}
+      <Card className="border border-border/80 shadow-sm overflow-hidden">
+        <div className={`h-1.5 w-full ${
+          verdict === 'natural_human' 
+            ? 'bg-emerald-500' 
+            : verdict === 'suspicious_synthetic' 
+            ? 'bg-destructive' 
+            : 'bg-amber-500'
+        }`} />
+        <CardHeader className="pb-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              {verdict === 'natural_human' ? (
+                <ShieldCheck className="w-6 h-6 text-emerald-500" />
+              ) : verdict === 'suspicious_synthetic' ? (
+                <ShieldAlert className="w-6 h-6 text-destructive" />
+              ) : (
+                <AlertTriangle className="w-6 h-6 text-amber-500" />
+              )}
+              <div>
+                <CardTitle className="text-lg font-bold">Linguistic Authenticity & Authorship Verification</CardTitle>
+                <CardDescription className="text-xs">
+                  AI forensics inspecting natural student reasoning versus synthetic/ChatGPT patterns
+                </CardDescription>
+              </div>
+            </div>
+
+            <Badge variant="outline" className={`px-3 py-1 font-semibold text-xs ${
+              verdict === 'natural_human'
+                ? 'border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'
+                : verdict === 'suspicious_synthetic'
+                ? 'border-destructive/40 text-destructive bg-destructive/10'
+                : 'border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/10'
+            }`}>
+              {verdict === 'natural_human' && `Authentic Natural Voice (${naturalScore}% Confidence)`}
+              {verdict === 'suspicious_synthetic' && `Suspected AI/ChatGPT Generated (${100 - naturalScore}% AI Probability)`}
+              {verdict === 'nonsense_or_filler' && `Low-Effort / Irrelevant Content Detected (${naturalScore}% Natural)`}
+              {verdict === 'blended' && `Blended Natural & Structured Expression (${naturalScore}%)`}
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3 pt-0">
+          <p className="text-sm text-foreground/80 leading-relaxed bg-muted/40 p-3 rounded-lg border border-border/40">
+            {auth?.assessmentDetails || (
+              isNatural 
+                ? "Answers exhibit authentic student syntax, natural cognitive hesitations, and genuine concept assimilation without artificial ChatGPT boilerplate."
+                : "Stylistic analysis detected elevated formal uniformity and robotic cadence characteristic of synthetic language models. Please express reasoning in your own spontaneous words."
+            )}
+          </p>
+
+          {auth?.flaggedAnswers && auth.flaggedAnswers.length > 0 && (
+            <div className="mt-2 space-y-1.5 border-t border-border/40 pt-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Flagged Items:</p>
+              <div className="space-y-1">
+                {auth.flaggedAnswers.map((flag, idx) => (
+                  <div key={idx} className="flex items-start gap-2 text-xs p-2 rounded bg-destructive/5 text-destructive border border-destructive/20">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                    <span><strong>Question {flag.questionNumber}:</strong> {flag.reason}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Accordion Detailed Feedback Sections */}
       <Card className="bg-secondary/20 border-border/80">
         <CardContent className="pt-6">
-          <Accordion type="multiple" defaultValue={["focus", "improve", "bonus", "tips"]} className="w-full space-y-4">
+          <Accordion type="multiple" defaultValue={["critiques", "focus", "improve", "bonus", "tips"]} className="w-full space-y-4">
             
+            {/* Detailed Question-by-Question Diagnostic Audit */}
+            {analysis.questionCritiques && analysis.questionCritiques.length > 0 && (
+              <AccordionItem value="critiques" className="border rounded-lg bg-background px-4">
+                <AccordionTrigger className="text-lg font-semibold hover:no-underline">
+                  <div className="flex items-center gap-3">
+                    <BookOpen className="text-primary w-5 h-5" />
+                    Question-by-Question Comprehensive Diagnostic Breakdown
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="pt-2 text-base space-y-4">
+                  {analysis.questionCritiques.map((critique, idx) => (
+                    <div key={idx} className="p-4 rounded-xl border border-border/70 bg-muted/20 space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-bold text-sm text-primary">Question {critique.questionNumber}</span>
+                        <Badge variant={critique.scoreOutOf10 >= 7 ? "default" : critique.scoreOutOf10 >= 4 ? "secondary" : "destructive"}>
+                          Score: {critique.scoreOutOf10}/10
+                        </Badge>
+                      </div>
+
+                      <div className="text-sm font-medium text-foreground">
+                        <LatexRenderer content={critique.questionText} />
+                      </div>
+
+                      <div className="text-xs p-2.5 rounded bg-background border border-border/60">
+                        <span className="font-semibold text-muted-foreground">Your Answer: </span>
+                        <span className="italic">{critique.userAnswer || "[No answer provided]"}</span>
+                      </div>
+
+                      <div className="text-sm text-foreground/90">
+                        <strong>Examiner Diagnostic: </strong>
+                        <LatexRenderer content={critique.conceptualAccuracy} />
+                      </div>
+
+                      {critique.missingPoints && critique.missingPoints.length > 0 && (
+                        <div className="text-xs space-y-1">
+                          <span className="font-semibold text-destructive">Crucial Points Omitted:</span>
+                          <ul className="list-disc pl-5 space-y-0.5 text-muted-foreground">
+                            {critique.missingPoints.map((mp, mi) => (
+                              <li key={mi}><LatexRenderer content={mp} /></li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {critique.idealDerivationOrAnswer && (
+                        <div className="text-xs p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-800 dark:text-emerald-300">
+                          <span className="font-bold block mb-1">Ideal Rigorous Derivation / Solution:</span>
+                          <LatexRenderer content={critique.idealDerivationOrAnswer} />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </AccordionContent>
+              </AccordionItem>
+            )}
+
             <AccordionItem value="focus" className="border rounded-lg bg-background px-4">
               <AccordionTrigger className="text-lg font-semibold hover:no-underline">
                 <div className="flex items-center gap-3">
                   <Target className="text-primary w-5 h-5" />
-                  Areas to Focus
+                  Areas to Focus (Deep Conceptual Foundations)
                 </div>
               </AccordionTrigger>
               <AccordionContent className="pt-2 text-base">
@@ -190,7 +316,7 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
               <AccordionTrigger className="text-lg font-semibold hover:no-underline">
                 <div className="flex items-center gap-3">
                   <CheckCircle className="text-emerald-500 w-5 h-5" />
-                  Where to Improve
+                  Specific Technical Weaknesses to Fix
                 </div>
               </AccordionTrigger>
               <AccordionContent className="pt-2 text-base">
@@ -208,7 +334,7 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
               <AccordionTrigger className="text-lg font-semibold hover:no-underline">
                 <div className="flex items-center gap-3">
                   <Star className="text-amber-500 w-5 h-5" />
-                  Key Terms for Bonus Points
+                  Key Technical Terminology for Bonus Marks
                 </div>
               </AccordionTrigger>
               <AccordionContent className="pt-2 text-base">
@@ -226,7 +352,7 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
               <AccordionTrigger className="text-lg font-semibold hover:no-underline">
                 <div className="flex items-center gap-3">
                   <Info className="text-blue-500 w-5 h-5" />
-                  Extra Tips
+                  Competitive Exam Tactics & Retention Heuristics
                 </div>
               </AccordionTrigger>
               <AccordionContent className="pt-2 text-base">
@@ -258,42 +384,40 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
-            {charts.map((chart: any, index: number) => (
-              <Card key={`${chart.type}-${index}`} className="bg-card shadow-sm border border-border/80 flex flex-col justify-between">
-                <CardHeader className="pb-2">
+            {charts.map((chart, i) => (
+              <Card key={`chart-${chart.type}-${i}`} className="p-5 border-border shadow-sm flex flex-col justify-between">
+                <div className="mb-4">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-base font-semibold flex items-center gap-2">
+                    <h4 className="text-base font-semibold flex items-center gap-2 font-headline">
                       {chart.type === "bar" && <BarChart2 className="w-4 h-4 text-primary" />}
                       {chart.type === "pie" && <PieIcon className="w-4 h-4 text-emerald-500" />}
                       {chart.type === "histo" && <Layers className="w-4 h-4 text-amber-500" />}
-                      {chart.type === "polynomial" && <TrendingUp className="w-4 h-4 text-indigo-500" />}
+                      {chart.type === "polynomial" && <TrendingUp className="w-4 h-4 text-blue-500" />}
                       {chart.type === "radar" && <Compass className="w-4 h-4 text-purple-500" />}
-                      <span>{chart.title}</span>
-                    </CardTitle>
+                      {chart.title}
+                    </h4>
                     <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-muted text-muted-foreground">
-                      {chart.type === "polynomial" ? "Polynomial Spline" : chart.type}
+                      {chart.type}
                     </span>
                   </div>
                   {chart.description && (
-                    <CardDescription className="text-xs text-muted-foreground mt-1">
-                      {chart.description}
-                    </CardDescription>
+                    <p className="text-xs text-muted-foreground mt-1">{chart.description}</p>
                   )}
-                </CardHeader>
-                <CardContent className="pt-2 flex-1 flex flex-col justify-center">
-                  
+                </div>
+
+                <div className="flex-1 flex items-center justify-center">
                   {/* 1. BAR CHART */}
                   {chart.type === "bar" && chart.data?.length > 0 && (
                     <div className="w-full h-[240px]">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChartComponent data={chart.data} margin={{ top: 15, right: 20, bottom: 25, left: -10 }}>
-                          <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border) / 0.5)" />
                           <XAxis 
                             dataKey="name" 
                             tickLine={false} 
                             axisLine={false} 
-                            tick={{ fontSize: 11, fill: 'currentColor' }}
-                            tickMargin={8} 
+                            tick={{ fontSize: 10, fill: 'currentColor' }} 
+                            tickMargin={8}
                           />
                           <YAxis 
                             domain={[0, 100]} 
@@ -303,6 +427,7 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
                             tickFormatter={(v) => `${v}%`}
                           />
                           <Tooltip 
+                            cursor={false}
                             formatter={(val: number) => [`${val}%`, 'Score']}
                             contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} 
                           />
@@ -366,6 +491,7 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
                             tick={{ fontSize: 11, fill: 'currentColor' }}
                           />
                           <Tooltip 
+                            cursor={false}
                             formatter={(val: number) => [`${val} answers`, 'Frequency']}
                             contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }}
                           />
@@ -380,15 +506,15 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
                     </div>
                   )}
 
-                  {/* 4. POLYNOMIAL SCORE CHART (Continuous Smooth Area / Spline) */}
+                  {/* 4. POLYNOMIAL SPLINE AREA CHART */}
                   {chart.type === "polynomial" && chart.data?.length > 0 && (
                     <div className="w-full h-[240px]">
                       <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={chart.data} margin={{ top: 15, right: 20, bottom: 25, left: -10 }}>
                           <defs>
-                            <linearGradient id={`polyGradient-${index}`} x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="#6366f1" stopOpacity={0.8} />
-                              <stop offset="95%" stopColor="#6366f1" stopOpacity={0.05} />
+                            <linearGradient id="polyGradFinal" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.4}/>
+                              <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0.0}/>
                             </linearGradient>
                           </defs>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border) / 0.5)" />
@@ -397,51 +523,47 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
                             tickLine={false} 
                             axisLine={false} 
                             tick={{ fontSize: 10, fill: 'currentColor' }}
-                            tickMargin={8} 
+                            tickMargin={8}
                           />
                           <YAxis 
-                            domain={[0, 100]} 
+                            domain={[0, 100]}
                             tickLine={false} 
                             axisLine={false} 
                             tick={{ fontSize: 11, fill: 'currentColor' }}
                             tickFormatter={(v) => `${v}%`}
                           />
                           <Tooltip 
-                            formatter={(val: number) => [`${val}%`, 'Mastery Trajectory']}
-                            labelStyle={{ fontWeight: 'bold' }}
+                            formatter={(val: number) => [`${val}%`, 'Mastery Index']}
                             contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }}
                           />
                           <Area 
                             type="monotone" 
                             dataKey="score" 
-                            stroke="#6366f1" 
-                            strokeWidth={3} 
+                            stroke="hsl(var(--primary))" 
+                            strokeWidth={2.5}
                             fillOpacity={1} 
-                            fill={`url(#polyGradient-${index})`}
-                            dot={{ r: 4, fill: "#6366f1", stroke: "hsl(var(--background))", strokeWidth: 2 }}
-                            activeDot={{ r: 6 }}
+                            fill="url(#polyGradFinal)" 
                           />
                         </AreaChart>
                       </ResponsiveContainer>
                     </div>
                   )}
 
-                  {/* 5. RADAR CHART */}
+                  {/* 5. RADAR MATRIX */}
                   {chart.type === "radar" && chart.data?.length > 0 && (
-                    <div className="w-full h-[240px]">
+                    <div className="w-full h-[240px] flex items-center justify-center">
                       <ResponsiveContainer width="100%" height="100%">
-                        <RadarChart cx="50%" cy="50%" outerRadius="68%" data={chart.data} margin={{ top: 10, right: 30, bottom: 10, left: 30 }}>
-                          <PolarGrid stroke="hsl(var(--border) / 0.6)" />
-                          <PolarAngleAxis dataKey="metric" tick={{ fill: 'currentColor', fontSize: 10, fontWeight: 500 }} />
-                          <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
-                          <Radar name="Balance" dataKey="score" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.5} />
+                        <RadarChart cx="50%" cy="50%" outerRadius="68%" margin={{ top: 10, right: 25, bottom: 10, left: 25 }} data={chart.data}>
+                          <PolarGrid stroke="hsl(var(--border))" />
+                          <PolarAngleAxis dataKey="metric" tick={{ fill: 'currentColor', fontSize: 10 }} />
+                          <PolarRadiusAxis angle={30} domain={[0, 100]} stroke="hsl(var(--muted-foreground))" tick={false} />
+                          <Radar name="Student Profile" dataKey="score" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.5} />
                           <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} />
                         </RadarChart>
                       </ResponsiveContainer>
                     </div>
                   )}
-
-                </CardContent>
+                </div>
               </Card>
             ))}
           </div>

@@ -2,6 +2,7 @@
 import { cookies } from "next/headers";
 import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
+import { verifySessionCookie } from "@/lib/session";
 
 export type SearchFilters = {
     searchQuery?: string;
@@ -12,7 +13,8 @@ export type SearchFilters = {
 
 export async function searchAspirantsAction(filters: SearchFilters) {
     await dbConnect();
-    const sessionUuid = cookies().get("user_session")?.value;
+    const rawSession = cookies().get("user_session")?.value;
+    const sessionUuid = verifySessionCookie(rawSession);
     if (!sessionUuid) throw new Error("Not authenticated");
 
     const query: any = { uuid: { $ne: sessionUuid } }; // don't return the logged-in user
@@ -46,7 +48,6 @@ export async function searchAspirantsAction(filters: SearchFilters) {
     
     // Ensure we convert _id to string or remove it so it's plain JSON serializable
     return users.map((u: any) => ({
-        uuid: u.uuid,
         username: u.username,
         fullName: u.fullName,
         gender: u.gender,
