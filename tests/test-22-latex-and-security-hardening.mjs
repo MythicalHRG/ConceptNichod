@@ -458,3 +458,35 @@ test("Tareeka 22.16: OTP verify endpoint enforces IP rate limiting", () => {
     "/api/auth/otp must rate limit verification attempts by IP"
   );
 });
+
+test("Tareeka 22.17: Socratic Grill Mode integration in follow-up chat", () => {
+  const followupActionPath = path.resolve("src/app/actions/followup.ts");
+  const actionContent = fs.readFileSync(followupActionPath, "utf-8");
+  assert.ok(
+    actionContent.includes("isGrillMode") && actionContent.includes("Socratic Grill"),
+    "followup.ts must support Socratic Grilling mode"
+  );
+
+  const followupCompPath = path.resolve("src/components/topic/follow-up-chat.tsx");
+  const compContent = fs.readFileSync(followupCompPath, "utf-8");
+  assert.ok(
+    compContent.includes("isGrillMode") && compContent.includes("Socratic Grill"),
+    "follow-up-chat.tsx must provide interactive Socratic Grill mode toggle"
+  );
+});
+
+test("Tareeka 22.18: Printable Concept Reference Cheat Sheet and clean media print styles", () => {
+  const displayPath = path.resolve("src/components/topic/final-analysis-display.tsx");
+  const displayContent = fs.readFileSync(displayPath, "utf-8");
+  assert.ok(
+    displayContent.includes("window.print()") && displayContent.includes("Print Cheat Sheet"),
+    "final-analysis-display.tsx must provide 1-click printable cheat sheet export"
+  );
+
+  const cssPath = path.resolve("src/app/globals.css");
+  const cssContent = fs.readFileSync(cssPath, "utf-8");
+  assert.ok(
+    cssContent.includes("@media print") && cssContent.includes("print\\:hidden"),
+    "globals.css must provide distraction-free academic print stylesheets"
+  );
+});

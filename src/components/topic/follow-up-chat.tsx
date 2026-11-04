@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, MessageSquare, Send } from 'lucide-react';
+import { Loader2, MessageSquare, Send, Flame, Sparkles } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { LatexRenderer } from '@/components/ui/latex-renderer';
 import { askFollowUpAction } from '@/app/actions/followup';
@@ -27,6 +27,7 @@ export function FollowUpChat({ topicName, topicSummary, classLevel, subject }: F
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [isGrillMode, setIsGrillMode] = useState(false);
   const { toast } = useToast();
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -56,6 +57,7 @@ export function FollowUpChat({ topicName, topicSummary, classLevel, subject }: F
         classLevel,
         subject,
         conversationHistory: newMessages,
+        mode: isGrillMode ? 'grill' : 'standard',
       });
 
       setMessages([...newMessages, { role: 'assistant', content: res.answer }]);
@@ -85,10 +87,31 @@ export function FollowUpChat({ topicName, topicSummary, classLevel, subject }: F
   return (
     <Card className="mt-4 border-primary/20 shadow-md">
       <CardHeader className="pb-2 border-b border-border">
-        <CardTitle className="text-base flex items-center gap-2 text-primary">
-          <MessageSquare className="h-4 w-4" />
-          Ask Follow-up Questions about "{topicName}"
-        </CardTitle>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <CardTitle className="text-base flex items-center gap-2 text-primary">
+            <MessageSquare className="h-4 w-4" />
+            Ask Follow-up Questions about "{topicName}"
+          </CardTitle>
+          <Button
+            type="button"
+            size="sm"
+            variant={isGrillMode ? "destructive" : "outline"}
+            onClick={() => setIsGrillMode(!isGrillMode)}
+            className="text-xs h-7 px-2.5 gap-1.5 transition-all shadow-xs"
+          >
+            {isGrillMode ? (
+              <>
+                <Flame className="w-3.5 h-3.5 animate-pulse text-amber-300" />
+                <span className="font-semibold">Socratic Grill Active</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-3.5 h-3.5 text-primary" />
+                <span>Enable Socratic Grill</span>
+              </>
+            )}
+          </Button>
+        </div>
       </CardHeader>
 
       <CardContent className="p-0">

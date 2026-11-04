@@ -2,11 +2,12 @@
 
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import type { FinalAnalysisOutput } from "@/ai/flows/analyze-answers";
 import { 
   CheckCircle, Info, Star, Target, BarChart2, PieChart as PieIcon, 
-  Award, TrendingUp, Layers, Compass, ShieldCheck, ShieldAlert, AlertTriangle, BookOpen, Check 
+  Award, TrendingUp, Layers, Compass, ShieldCheck, ShieldAlert, AlertTriangle, BookOpen, Check, Printer 
 } from "lucide-react";
 import { 
   Bar, BarChart as BarChartComponent, CartesianGrid, XAxis, YAxis, 
@@ -153,12 +154,23 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
                 <strong className="inline-block"><LatexRenderer content={topicName} /></strong>
               </CardDescription>
             </div>
-            {analysis.overallScore !== undefined && (
-              <div className="text-right bg-background/80 px-4 py-2 rounded-xl border border-primary/20 shadow-sm">
-                <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Overall Score</p>
-                <p className="text-3xl font-black text-primary">{analysis.overallScore}/100</p>
-              </div>
-            )}
+            <div className="flex items-center gap-3 flex-wrap">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => window.print()}
+                className="gap-1.5 text-xs print:hidden shadow-xs border-primary/30 hover:bg-primary/10"
+              >
+                <Printer className="w-3.5 h-3.5 text-primary" />
+                <span>Print Cheat Sheet</span>
+              </Button>
+              {analysis.overallScore !== undefined && (
+                <div className="text-right bg-background/80 px-4 py-2 rounded-xl border border-primary/20 shadow-sm">
+                  <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Overall Score</p>
+                  <p className="text-3xl font-black text-primary">{analysis.overallScore}/100</p>
+                </div>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">

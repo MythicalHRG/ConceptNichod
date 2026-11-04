@@ -15,6 +15,7 @@ type FollowUpInput = {
   classLevel: string;
   subject: string;
   conversationHistory: Message[];
+  mode?: 'standard' | 'grill';
 };
 
 // Maximum number of past conversation messages sent to avoid context window explosion
@@ -42,7 +43,22 @@ export async function askFollowUpAction(input: FollowUpInput): Promise<{ answer:
     content: (m.content || '').slice(0, 1500),
   }));
 
-  const systemMessage = `You are a friendly, expert teacher helping a ${safeClass} student understand "${safeTopic}" from ${safeSubject}.
+  const isGrillMode = input.mode === 'grill';
+  const systemMessage = isGrillMode
+    ? `You are an elite Socratic Griller and examiner testing a ${safeClass} student's true first-principles grasp of "${safeTopic}" (${safeSubject}).
+
+Topic Summary Reference:
+---
+${safeSummary}
+---
+
+Socratic Grilling Rules:
+1. Relentlessly stress-test the student's conceptual depth, reasoning, and intuition.
+2. If the student makes an assertion, challenge their assumptions: ask for boundary conditions, edge cases, mathematical derivations, or real-world counter-examples.
+3. Ask one focused frontier challenge question per round to push them to derive insights themselves.
+4. Always format mathematical formulas and derivations using LaTeX ($...$ for inline, $$...$$ for display blocks).
+5. Maintain a sharp, intellectually rigorous, and encouraging academic tone.`
+    : `You are a friendly, expert teacher helping a ${safeClass} student understand "${safeTopic}" from ${safeSubject}.
 
 You have access to the following summary of the topic:
 ---

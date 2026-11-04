@@ -345,4 +345,26 @@
     filter: blur(2px) grayscale(100%);
     transition: all 0.3s ease;
   }
+
+  /* Clean Academic Print & Reference Cheat Sheet Styles */
+  @media print {
+    body {
+      background: white !important;
+      color: black !important;
+    }
+    header, nav, [data-sidebar="sidebar"], [data-sidebar="header"], button, .print\:hidden {
+      display: none !important;
+    }
+    .latex-content {
+      color: black !important;
+    }
+    .katex {
+      font-size: 1.1em !important;
+    }
+    .card {
+      border: 1px solid #ccc !important;
+      box-shadow: none !important;
+      break-inside: avoid;
+    }
+  }
 }
