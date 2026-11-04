@@ -2,7 +2,6 @@
 import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
 import Topic from "@/models/Topic";
-import { format, subDays, startOfDay } from "date-fns";
 
 export async function getPublicProfileData(username: string) {
   await dbConnect();
@@ -63,21 +62,23 @@ export async function getPublicProfileData(username: string) {
   analyzedTopics.forEach(t => {
       try {
           if (t.analysis.chartsData) {
-            const charts = JSON.parse(t.analysis.chartsData);
-            charts.forEach((chart: any) => {
-                if (Array.isArray(chart.data)) {
-                    chart.data.forEach((d: any) => {
-                        if (d.name && typeof d.score === 'number') {
-                            if (!skillAggregator.has(d.name)) {
-                                skillAggregator.set(d.name, { total: 0, count: 0 });
-                            }
-                            const metric = skillAggregator.get(d.name)!;
-                            metric.total += d.score;
-                            metric.count++;
-                        }
-                    });
-                }
-            });
+            const charts = typeof t.analysis.chartsData === 'string' ? JSON.parse(t.analysis.chartsData) : t.analysis.chartsData;
+            if (Array.isArray(charts)) {
+              charts.forEach((chart: any) => {
+                  if (Array.isArray(chart.data)) {
+                      chart.data.forEach((d: any) => {
+                          if (d.name && typeof d.score === 'number') {
+                              if (!skillAggregator.has(d.name)) {
+                                  skillAggregator.set(d.name, { total: 0, count: 0 });
+                              }
+                              const metric = skillAggregator.get(d.name)!;
+                              metric.total += d.score;
+                              metric.count++;
+                          }
+                      });
+                  }
+              });
+            }
           }
       } catch (e) {
           // ignore parse errors
@@ -89,12 +90,22 @@ export async function getPublicProfileData(username: string) {
       score: Math.round(metric.total / metric.count)
   })).sort((a, b) => b.score - a.score);
 
+  // 5. Polynomial Learning Trajectory: Sequential performance across assessed topics
+  const learningProgression = analyzedTopics
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+    .slice(-7)
+    .map((t, idx) => ({
+      session: t.name ? (t.name.length > 14 ? t.name.slice(0, 12) + '..' : t.name) : `Topic ${idx + 1}`,
+      score: t.analysis.overallScore
+    }));
+
   return {
     user: user.toObject(),
     totalTopics,
     averageScore,
     subjectDistribution,
     scoreDistribution,
-    skillAverages
+    skillAverages,
+    learningProgression
   };
 }

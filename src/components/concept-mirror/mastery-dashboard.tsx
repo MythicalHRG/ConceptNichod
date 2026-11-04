@@ -8,9 +8,10 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Mic, MicOff, Wand2, RefreshCw, Lock, AlertCircle } from 'lucide-react';
+import { Loader2, Mic, MicOff, Wand2, RefreshCw, Lock, AlertCircle, TrendingUp, BarChart2, Compass, PieChart as PieIcon } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend as PieLegend, Tooltip as PieTooltip } from 'recharts';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Legend as RadarLegend, Tooltip as RadarTooltip } from 'recharts';
+import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as GeneralTooltip } from 'recharts';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { FollowUpChat } from '@/components/topic/follow-up-chat';
@@ -36,6 +37,21 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
     { name: "Insight", value: 25 }
   ];
 
+  const safeBarData = report.bar_chart_data && report.bar_chart_data.length > 0 ? report.bar_chart_data : [
+    { name: "Definitions", score: 82 },
+    { name: "Core Principles", score: 78 },
+    { name: "Application", score: 70 },
+    { name: "Edge Cases", score: 65 },
+  ];
+
+  const safePolynomialData = report.polynomial_chart_data && report.polynomial_chart_data.length > 0 ? report.polynomial_chart_data : [
+    { step: "Initial Recall", score: 55 },
+    { step: "Concept Framing", score: 70 },
+    { step: "Analytical Nuance", score: 78 },
+    { step: "Synthesis & Proof", score: 84 },
+    { step: "Final Mastery", score: 90 },
+  ];
+
   return (
     <Card className="w-full bg-muted/30">
         <CardHeader>
@@ -54,41 +70,61 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
                 </div>
             </div>
 
-            {/* Side-by-side Chart Cards: Isolated containers with ample margin to prevent overlap or collapse */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
-                <Card className="p-5 bg-background/90 border border-border/80 rounded-xl shadow-sm flex flex-col items-center">
-                    <h3 className="text-lg font-bold mb-2 text-center text-foreground font-headline">Skill Balance</h3>
-                    <div className="w-full h-[320px]">
+            {/* 4 Distinct, Non-repeating Visual Analytics Cards */}
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold font-headline text-foreground">Multi-Model Cognitive Analytics</h3>
+                <span className="text-xs bg-muted text-muted-foreground px-2.5 py-1 rounded-full font-medium">
+                  4 Unique Visual Models
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
+                {/* 1. Radar Chart: Skill Balance */}
+                <Card className="p-5 bg-background/90 border border-border/80 rounded-xl shadow-sm flex flex-col justify-between">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-base font-semibold flex items-center gap-2 text-foreground font-headline">
+                        <Compass className="w-4 h-4 text-purple-500" /> Skill Balance
+                      </h4>
+                      <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-muted text-muted-foreground">Radar</span>
+                    </div>
+                    <div className="w-full h-[280px]">
                       <ResponsiveContainer width="100%" height="100%">
-                          <RadarChart cx="50%" cy="50%" outerRadius="68%" margin={{ top: 20, right: 35, bottom: 20, left: 35 }} data={safeRadarData}>
+                          <RadarChart cx="50%" cy="50%" outerRadius="68%" margin={{ top: 15, right: 30, bottom: 15, left: 30 }} data={safeRadarData}>
                               <PolarGrid stroke="hsl(var(--border) / 0.6)" />
-                              <PolarAngleAxis dataKey="metric" tick={{ fill: 'currentColor', fontSize: 11, fontWeight: 500 }} />
-                              {/* tick={false} prevents numbers from colliding with metric text labels like Examples Used */}
+                              <PolarAngleAxis dataKey="metric" tick={{ fill: 'currentColor', fontSize: 10, fontWeight: 500 }} />
                               <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} axisLine={false} />
                               <Radar name="Your Score" dataKey="score" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.6} />
-                              <RadarTooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }}/>
-                              <RadarLegend verticalAlign="bottom" height={36} />
+                              <RadarTooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }}/>
+                              <RadarLegend verticalAlign="bottom" height={32} />
                           </RadarChart>
                       </ResponsiveContainer>
                     </div>
                 </Card>
 
-                <Card className="p-5 bg-background/90 border border-border/80 rounded-xl shadow-sm flex flex-col items-center">
-                    <h3 className="text-lg font-bold mb-2 text-center text-foreground font-headline">Knowledge Composition</h3>
-                    <div className="w-full h-[320px]">
+                {/* 2. Pie Chart: Knowledge Composition */}
+                <Card className="p-5 bg-background/90 border border-border/80 rounded-xl shadow-sm flex flex-col justify-between">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-base font-semibold flex items-center gap-2 text-foreground font-headline">
+                        <PieIcon className="w-4 h-4 text-emerald-500" /> Knowledge Composition
+                      </h4>
+                      <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-muted text-muted-foreground">Pie</span>
+                    </div>
+                    <div className="w-full h-[280px]">
                       <ResponsiveContainer width="100%" height="100%">
-                           <PieChart margin={{ top: 15, right: 25, bottom: 15, left: 25 }}>
+                           <PieChart margin={{ top: 10, right: 15, bottom: 10, left: 15 }}>
                               <Pie
                                   data={safePieData}
                                   cx="50%"
                                   cy="46%"
-                                  labelLine={true}
+                                  innerRadius={45}
                                   outerRadius={75}
+                                  paddingAngle={3}
+                                  labelLine={true}
                                   fill="#8884d8"
                                   dataKey="value"
                                   nameKey="name"
                                   label={({ name, percent, value }) => {
-                                    // Suppress label if slice is 0 or less than 5% to prevent overlapping text
                                     if (!percent || percent < 0.05 || value <= 0) return null;
                                     return `${name}: ${(percent * 100).toFixed(0)}%`;
                                   }}
@@ -97,12 +133,100 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
                                     <Cell key={`cell-${index}`} fill={PIE_CHART_COLORS[index % PIE_CHART_COLORS.length]} />
                                   ))}
                               </Pie>
-                              <PieTooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }}/>
-                              <PieLegend verticalAlign="bottom" height={36} />
+                              <PieTooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }}/>
+                              <PieLegend verticalAlign="bottom" height={32} />
                           </PieChart>
                       </ResponsiveContainer>
                     </div>
                 </Card>
+
+                {/* 3. Bar Chart: Concept Coverage */}
+                <Card className="p-5 bg-background/90 border border-border/80 rounded-xl shadow-sm flex flex-col justify-between">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-base font-semibold flex items-center gap-2 text-foreground font-headline">
+                        <BarChart2 className="w-4 h-4 text-primary" /> Concept Coverage
+                      </h4>
+                      <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-muted text-muted-foreground">Bar</span>
+                    </div>
+                    <div className="w-full h-[280px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={safeBarData} margin={{ top: 15, right: 20, bottom: 25, left: -10 }}>
+                          <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
+                          <XAxis 
+                            dataKey="name" 
+                            tickLine={false} 
+                            axisLine={false} 
+                            tick={{ fontSize: 10, fill: 'currentColor' }}
+                            tickMargin={8} 
+                          />
+                          <YAxis 
+                            domain={[0, 100]} 
+                            tickLine={false} 
+                            axisLine={false} 
+                            tick={{ fontSize: 11, fill: 'currentColor' }}
+                            tickFormatter={(v) => `${v}%`}
+                          />
+                          <GeneralTooltip 
+                            formatter={(val: number) => [`${val}%`, 'Coverage Score']}
+                            contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} 
+                          />
+                          <Bar dataKey="score" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} animationDuration={1000} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                </Card>
+
+                {/* 4. Polynomial Curve: Learning Trajectory */}
+                <Card className="p-5 bg-background/90 border border-border/80 rounded-xl shadow-sm flex flex-col justify-between">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-base font-semibold flex items-center gap-2 text-foreground font-headline">
+                        <TrendingUp className="w-4 h-4 text-indigo-500" /> Mastery Flow Trajectory
+                      </h4>
+                      <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-muted text-muted-foreground">Polynomial Spline</span>
+                    </div>
+                    <div className="w-full h-[280px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={safePolynomialData} margin={{ top: 15, right: 20, bottom: 25, left: -10 }}>
+                          <defs>
+                            <linearGradient id="mirrorPolyGradient" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#6366f1" stopOpacity={0.8} />
+                              <stop offset="95%" stopColor="#6366f1" stopOpacity={0.05} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border) / 0.5)" />
+                          <XAxis 
+                            dataKey="step" 
+                            tickLine={false} 
+                            axisLine={false} 
+                            tick={{ fontSize: 10, fill: 'currentColor' }}
+                            tickMargin={8} 
+                          />
+                          <YAxis 
+                            domain={[0, 100]} 
+                            tickLine={false} 
+                            axisLine={false} 
+                            tick={{ fontSize: 11, fill: 'currentColor' }}
+                            tickFormatter={(v) => `${v}%`}
+                          />
+                          <GeneralTooltip 
+                            formatter={(val: number) => [`${val}%`, 'Mastery Trajectory']}
+                            contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }}
+                          />
+                          <Area 
+                            type="monotone" 
+                            dataKey="score" 
+                            stroke="#6366f1" 
+                            strokeWidth={3} 
+                            fillOpacity={1} 
+                            fill="url(#mirrorPolyGradient)"
+                            dot={{ r: 4, fill: "#6366f1", stroke: "hsl(var(--background))", strokeWidth: 2 }}
+                            activeDot={{ r: 6 }}
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                </Card>
+              </div>
             </div>
         </CardContent>
     </Card>

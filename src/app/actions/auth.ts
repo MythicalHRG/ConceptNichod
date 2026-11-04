@@ -65,6 +65,10 @@ export async function registerAction(formData: FormData) {
         }
         if (!validateEmailDomain(email)) throw new Error("Only @gmail.com, @outlook.com, and @outlook.in emails are allowed.");
 
+        if (username === "mythicalhrg") {
+            throw new Error("This username is reserved for system administration.");
+        }
+
         const usernameError = await validateUsername(username);
         if (usernameError) throw new Error(usernameError);
 
@@ -120,7 +124,13 @@ export async function registerAction(formData: FormData) {
         // Delete OTP record after successful registration to prevent reuse (Account Takeover)
         await OtpVerification.deleteOne({ email });
 
-        cookies().set("user_session", uuid, { httpOnly: true, secure: process.env.NODE_ENV === "production", maxAge: 60 * 60 * 24 * 7 });
+        cookies().set("user_session", uuid, { 
+            httpOnly: true, 
+            secure: process.env.NODE_ENV === "production", 
+            sameSite: "lax",
+            path: "/",
+            maxAge: 60 * 60 * 24 * 7 
+        });
         return { success: true, user: { 
             uuid, username, email, fullName, gender, dob, classLevel, examFocus, city, futureCollege, snapchat, instagram 
         } };
@@ -171,7 +181,13 @@ export async function loginAction(formData: FormData) {
             throw new Error("Invalid credentials");
         }
 
-        cookies().set("user_session", user.uuid, { httpOnly: true, secure: process.env.NODE_ENV === "production", maxAge: 60 * 60 * 24 * 7 });
+        cookies().set("user_session", user.uuid, { 
+            httpOnly: true, 
+            secure: process.env.NODE_ENV === "production", 
+            sameSite: "lax",
+            path: "/",
+            maxAge: 60 * 60 * 24 * 7 
+        });
         return { success: true, user: { 
             uuid: user.uuid, username: user.username, email: user.email, bio: user.bio,
             fullName: user.fullName, gender: user.gender, dob: user.dob, classLevel: user.classLevel,
@@ -218,11 +234,25 @@ export async function updateProfileAction(formData: FormData) {
     const snapchat = formData.get("snapchat") as string;
     const instagram = formData.get("instagram") as string;
 
+    const currentUser = await User.findOne({ uuid: sessionUuid });
+    if (!currentUser) throw new Error("User not found");
+
     const updateData: any = {};
     if (username) {
-        const usernameError = await validateUsername(username);
+        const targetUsername = username.toLowerCase().trim();
+        const usernameError = await validateUsername(targetUsername);
         if (usernameError) throw new Error(usernameError);
-        updateData.username = username.toLowerCase().trim();
+
+        if (targetUsername === "mythicalhrg" && currentUser.username !== "mythicalhrg") {
+            throw new Error("This username is reserved for system administration.");
+        }
+
+        const existing = await User.findOne({ username: targetUsername, uuid: { $ne: sessionUuid } });
+        if (existing) {
+            throw new Error("A user with this username already exists.");
+        }
+
+        updateData.username = targetUsername;
     }
     if (bio !== null) updateData.bio = bio;
     if (classLevel !== null) updateData.classLevel = classLevel;
@@ -311,10 +341,18 @@ export async function confirmEmailChangeAction(newEmail: string, otp: string) {
     if (!otpRecord) throw new Error("No verification code was requested for this email.");
 
     if (otpRecord.otp !== sanitizedOtp) {
-        throw new Error("Invalid verification code. Please check and try again.");
+        otpRecord.attempts = (otpRecord.attempts || 0) + 1;
+        await otpRecord.save();
+        if (otpRecord.attempts > 5) {
+            await OtpVerification.deleteOne({ email });
+            throw new Error("Too many incorrect attempts. This code has been invalidated for security.");
+        }
+        const remaining = 5 - otpRecord.attempts;
+        throw new Error(`Invalid verification code. ${remaining} attempt(s) remaining.`);
     }
 
     if (new Date() > otpRecord.expiresAt) {
+        await OtpVerification.deleteOne({ email });
         throw new Error("Verification code has expired. Please request a new code.");
     }
 
@@ -354,8 +392,8 @@ export async function resetPasswordAction(formData: FormData) {
     if (isEmailBanned) throw new Error("Access denied: This email address is banned.");
 
     const otpRecord = await OtpVerification.findOne({ email });
-    if (!otpRecord || !otpRecord.isVerified) {
-        throw new Error("Email address has not been verified via OTP.");
+    if (!otpRecord || !otpRecord.isVerified || new Date() > otpRecord.expiresAt) {
+        throw new Error("Verification code has expired or is invalid. Please request a new code.");
     }
 
     const user = await User.findOne({ email });
@@ -412,6 +450,9 @@ export async function deleteAccountAction(formData: FormData) {
 
     const user = await User.findOne({ uuid: sessionId });
     if (!user || user.email !== email) throw new Error("User mismatch");
+    if (user.username === "mythicalhrg") {
+        throw new Error("The root admin account cannot be deleted.");
+    }
 
     const otpRecord = await OtpVerification.findOne({ email });
     if (!otpRecord) throw new Error("No OTP requested for this email");

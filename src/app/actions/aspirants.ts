@@ -31,14 +31,14 @@ export async function searchAspirantsAction(filters: SearchFilters) {
             { bio: { $regex: safeQuery, $options: "i" } }
         ];
     }
-    if (filters.classLevel && filters.classLevel !== "All") {
-        query.classLevel = filters.classLevel;
+    if (typeof filters.classLevel === 'string' && filters.classLevel !== "All") {
+        query.classLevel = filters.classLevel.trim();
     }
-    if (filters.gender && filters.gender !== "All") {
-        query.gender = filters.gender;
+    if (typeof filters.gender === 'string' && filters.gender !== "All") {
+        query.gender = filters.gender.trim();
     }
-    if (filters.city && filters.city !== "All" && typeof filters.city === 'string') {
-        const safeCity = escapeRegex(filters.city);
+    if (typeof filters.city === 'string' && filters.city !== "All") {
+        const safeCity = escapeRegex(filters.city.trim());
         query.city = { $regex: safeCity, $options: "i" };
     }
 

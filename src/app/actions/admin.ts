@@ -12,15 +12,24 @@ async function verifyAdmin() {
   const sessionUuid = cookies().get("user_session")?.value;
   if (!sessionUuid) throw new Error("Not authenticated");
 
-  const user = await User.findOne({ uuid: sessionUuid }).lean();
+  const user = await User.findOne({ uuid: sessionUuid });
   if (!user || user.username !== ADMIN_USERNAME) {
     throw new Error("Forbidden: Admin access only");
   }
+
+  // Ensure role is synchronized
+  if (user.role !== "admin") {
+    user.role = "admin";
+    await user.save();
+  }
+
+  return user;
 }
 
 export async function getAllUsersAction() {
   await verifyAdmin();
-  const users = await User.find({}).sort({ createdAt: -1 }).lean();
+  // Security: Exclude password hashes from serialization
+  const users = await User.find({}).select("-password").sort({ createdAt: -1 }).lean();
   return { success: true, users: JSON.parse(JSON.stringify(users)) };
 }
 
@@ -30,7 +39,7 @@ export async function deleteUserAction(uuid: string) {
   // Protect admin from self-deletion
   const userToDelete = await User.findOne({ uuid }).lean();
   if (userToDelete && userToDelete.username === ADMIN_USERNAME) {
-      throw new Error("Cannot delete admin account");
+    throw new Error("Cannot delete admin account");
   }
 
   await User.deleteOne({ uuid });
@@ -42,8 +51,8 @@ export async function deleteUserAction(uuid: string) {
 export async function banEntityAction(type: "ip" | "email" | "username", value: string, reason?: string) {
   await verifyAdmin();
   
-  if (type === "username" && value === ADMIN_USERNAME) {
-      throw new Error("Cannot ban admin username");
+  if (type === "username" && value.toLowerCase().trim() === ADMIN_USERNAME) {
+    throw new Error("Cannot ban admin username");
   }
 
   try {
@@ -51,7 +60,7 @@ export async function banEntityAction(type: "ip" | "email" | "username", value: 
     return { success: true };
   } catch (e: any) {
     if (e.code === 11000) {
-        throw new Error("This entity is already banned.");
+      throw new Error("This entity is already banned.");
     }
     throw new Error("Failed to ban entity");
   }

@@ -1,5 +1,6 @@
 'use server';
 
+import { cookies } from 'next/headers';
 import { callOpenRouter } from '@/lib/openrouter';
 
 type Message = {
@@ -20,6 +21,12 @@ const MAX_HISTORY_MESSAGES = 10;
 const MAX_SUMMARY_CHARS = 4000;
 
 export async function askFollowUpAction(input: FollowUpInput): Promise<{ answer: string }> {
+  // Authentication check to prevent unauthenticated bot AI-scraping and token draining
+  const sessionUuid = cookies().get('user_session')?.value;
+  if (!sessionUuid) {
+    throw new Error('Please log in to ask follow-up questions.');
+  }
+
   const { topicName, topicSummary, classLevel, subject, conversationHistory = [] } = input;
 
   const safeTopic = (topicName || 'General Topic').slice(0, 150);
