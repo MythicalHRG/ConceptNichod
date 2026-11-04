@@ -61,10 +61,51 @@ export interface InlineToken {
   children?: InlineToken[];
 }
 
+const BARE_TEX_SYMBOLS = [
+  '\\emptyset', '\\varnothing', '\\cup', '\\cap', '\\in', '\\notin',
+  '\\subset', '\\subseteq', '\\supset', '\\supseteq', '\\setminus',
+  '\\forall', '\\exists', '\\infty', '\\pm', '\\times', '\\div',
+  '\\leq', '\\geq', '\\neq', '\\approx', '\\equiv', '\\to', '\\implies', '\\iff',
+  '\\alpha', '\\beta', '\\gamma', '\\delta', '\\theta', '\\lambda', '\\mu', '\\pi', '\\sigma', '\\phi', '\\omega',
+  '\\partial', '\\nabla', '\\int', '\\sum', '\\prod'
+];
+
+const BARE_TEX_PREFIXES = [
+  '\\frac{', '\\sqrt{', '\\text{', '\\mathbf{', '\\mathbb{', '\\mathcal{', '\\vec{', '\\hat{', '\\bar{'
+];
+
+function findMatchingBrace(str: string, openPos: number): number {
+  let depth = 0;
+  for (let i = openPos; i < str.length; i++) {
+    if (str[i] === '{' && (i === 0 || str[i - 1] !== '\\')) depth++;
+    else if (str[i] === '}' && (i === 0 || str[i - 1] !== '\\')) {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+function findMatchingEscapedBrace(str: string, openPos: number): number {
+  let depth = 0;
+  for (let i = openPos; i < str.length - 1; i++) {
+    if (str[i] === '\\' && str[i + 1] === '{') {
+      depth++;
+      i++;
+    } else if (str[i] === '\\' && str[i + 1] === '}') {
+      depth--;
+      i++;
+      if (depth === 0) return i; // index of '}'
+    }
+  }
+  return -1;
+}
+
 /**
  * Tokenizes an inline line of text for math ($...$, \(...\)), code (`...`), and markdown bold (**...**)
  * without mangling math expressions containing asterisks like $f^*(x)$.
  * Follows CommonMark/Pandoc math standard: opening $ cannot be followed by whitespace, closing $ cannot be preceded by whitespace.
+ * Also intelligently recognizes bare LaTeX commands (\emptyset, \{x \mid ...\}, \frac{...}{...}) and unclosed math expressions.
  */
 export function tokenizeInline(text: string | null | undefined): InlineToken[] {
   if (!text || typeof text !== 'string') return [];
@@ -136,7 +177,75 @@ export function tokenizeInline(text: string | null | undefined): InlineToken[] {
           textStart = i;
           continue;
         }
+
+        // Check if unclosed $ starts with set builder \{...\}
+        if (text.startsWith('$\\{', i)) {
+          const closeBrace = findMatchingEscapedBrace(text, i + 1);
+          if (closeBrace !== -1) {
+            flushText(i);
+            tokens.push({ type: 'inline-math', formula: text.substring(mathStart, closeBrace + 1).trim() });
+            i = closeBrace + 1;
+            if (i < text.length && text[i] === '$') i++;
+            textStart = i;
+            continue;
+          }
+        }
       }
+    }
+
+    // Bare TeX set notation: \{ ... \}
+    if (text.startsWith('\\{', i)) {
+      const closeBrace = findMatchingEscapedBrace(text, i);
+      if (closeBrace !== -1) {
+        flushText(i);
+        tokens.push({ type: 'inline-math', formula: text.substring(i, closeBrace + 1).trim() });
+        i = closeBrace + 1;
+        textStart = i;
+        continue;
+      }
+    }
+
+    // Bare TeX prefix functions: \frac{...}{...}, \sqrt{...}, etc.
+    let matchedPrefix: string | null = null;
+    for (const prefix of BARE_TEX_PREFIXES) {
+      if (text.startsWith(prefix, i)) {
+        matchedPrefix = prefix;
+        break;
+      }
+    }
+    if (matchedPrefix) {
+      const firstBraceEnd = findMatchingBrace(text, i + matchedPrefix.length - 1);
+      if (firstBraceEnd !== -1) {
+        let formulaEnd = firstBraceEnd;
+        if (firstBraceEnd + 1 < text.length && text[firstBraceEnd + 1] === '{') {
+          const secondBraceEnd = findMatchingBrace(text, firstBraceEnd + 1);
+          if (secondBraceEnd !== -1) formulaEnd = secondBraceEnd;
+        }
+        flushText(i);
+        tokens.push({ type: 'inline-math', formula: text.substring(i, formulaEnd + 1).trim() });
+        i = formulaEnd + 1;
+        textStart = i;
+        continue;
+      }
+    }
+
+    // Bare TeX isolated symbols: \emptyset, \cup, \cap, etc.
+    let matchedSymbol: string | null = null;
+    for (const sym of BARE_TEX_SYMBOLS) {
+      if (text.startsWith(sym, i)) {
+        const after = i + sym.length;
+        if (after >= text.length || !/[a-zA-Z]/.test(text[after])) {
+          matchedSymbol = sym;
+          break;
+        }
+      }
+    }
+    if (matchedSymbol) {
+      flushText(i);
+      tokens.push({ type: 'inline-math', formula: matchedSymbol });
+      i += matchedSymbol.length;
+      textStart = i;
+      continue;
     }
 
     // Markdown Bold ** ... **

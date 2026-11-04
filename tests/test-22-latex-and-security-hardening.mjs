@@ -51,6 +51,46 @@ function splitDisplayMathBlocks(content) {
   return blocks;
 }
 
+const BARE_TEX_SYMBOLS = [
+  '\\emptyset', '\\varnothing', '\\cup', '\\cap', '\\in', '\\notin',
+  '\\subset', '\\subseteq', '\\supset', '\\supseteq', '\\setminus',
+  '\\forall', '\\exists', '\\infty', '\\pm', '\\times', '\\div',
+  '\\leq', '\\geq', '\\neq', '\\approx', '\\equiv', '\\to', '\\implies', '\\iff',
+  '\\alpha', '\\beta', '\\gamma', '\\delta', '\\theta', '\\lambda', '\\mu', '\\pi', '\\sigma', '\\phi', '\\omega',
+  '\\partial', '\\nabla', '\\int', '\\sum', '\\prod'
+];
+
+const BARE_TEX_PREFIXES = [
+  '\\frac{', '\\sqrt{', '\\text{', '\\mathbf{', '\\mathbb{', '\\mathcal{', '\\vec{', '\\hat{', '\\bar{'
+];
+
+function findMatchingBrace(str, openPos) {
+  let depth = 0;
+  for (let i = openPos; i < str.length; i++) {
+    if (str[i] === '{' && (i === 0 || str[i - 1] !== '\\')) depth++;
+    else if (str[i] === '}' && (i === 0 || str[i - 1] !== '\\')) {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+function findMatchingEscapedBrace(str, openPos) {
+  let depth = 0;
+  for (let i = openPos; i < str.length - 1; i++) {
+    if (str[i] === '\\' && str[i + 1] === '{') {
+      depth++;
+      i++;
+    } else if (str[i] === '\\' && str[i + 1] === '}') {
+      depth--;
+      i++;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
 function tokenizeInline(text) {
   if (!text || typeof text !== 'string') return [];
   const tokens = [];
@@ -116,7 +156,75 @@ function tokenizeInline(text) {
           textStart = i;
           continue;
         }
+
+        // Check unclosed $\{...\}
+        if (text.startsWith('$\\{', i)) {
+          const closeBrace = findMatchingEscapedBrace(text, i + 1);
+          if (closeBrace !== -1) {
+            flushText(i);
+            tokens.push({ type: 'inline-math', formula: text.substring(mathStart, closeBrace + 1).trim() });
+            i = closeBrace + 1;
+            if (i < text.length && text[i] === '$') i++;
+            textStart = i;
+            continue;
+          }
+        }
       }
+    }
+
+    // Bare TeX set notation: \{ ... \}
+    if (text.startsWith('\\{', i)) {
+      const closeBrace = findMatchingEscapedBrace(text, i);
+      if (closeBrace !== -1) {
+        flushText(i);
+        tokens.push({ type: 'inline-math', formula: text.substring(i, closeBrace + 1).trim() });
+        i = closeBrace + 1;
+        textStart = i;
+        continue;
+      }
+    }
+
+    // Bare TeX prefix functions
+    let matchedPrefix = null;
+    for (const prefix of BARE_TEX_PREFIXES) {
+      if (text.startsWith(prefix, i)) {
+        matchedPrefix = prefix;
+        break;
+      }
+    }
+    if (matchedPrefix) {
+      const firstBraceEnd = findMatchingBrace(text, i + matchedPrefix.length - 1);
+      if (firstBraceEnd !== -1) {
+        let formulaEnd = firstBraceEnd;
+        if (firstBraceEnd + 1 < text.length && text[firstBraceEnd + 1] === '{') {
+          const secondBraceEnd = findMatchingBrace(text, firstBraceEnd + 1);
+          if (secondBraceEnd !== -1) formulaEnd = secondBraceEnd;
+        }
+        flushText(i);
+        tokens.push({ type: 'inline-math', formula: text.substring(i, formulaEnd + 1).trim() });
+        i = formulaEnd + 1;
+        textStart = i;
+        continue;
+      }
+    }
+
+    // Bare TeX isolated symbols
+    let matchedSymbol = null;
+    for (const sym of BARE_TEX_SYMBOLS) {
+      if (text.startsWith(sym, i)) {
+        const after = i + sym.length;
+        if (after >= text.length || !/[a-zA-Z]/.test(text[after])) {
+          matchedSymbol = sym;
+          break;
+        }
+      }
+    }
+    if (matchedSymbol) {
+      flushText(i);
+      tokens.push({ type: 'inline-math', formula: matchedSymbol });
+      i += matchedSymbol.length;
+      textStart = i;
+      continue;
     }
 
     if (text.startsWith('**', i)) {
@@ -197,6 +305,21 @@ test("Tareeka 22.2: User screenshot equations render properly without mangling a
     const html = katex.renderToString(res[1].formula, { throwOnError: false });
     assert.ok(html.includes("katex"));
   }
+
+  // Exact strings from user's linguistic forensics screenshot (media_1793782179302_550c5f67.png)
+  const userItem4 = "Spoken response 'I don't know' fails to evaluate set-builder notation $\\{x \\mid x^2=5\\}.";
+  const res4 = tokenizeInline(userItem4);
+  const mathToken4 = res4.find(t => t.type === "inline-math");
+  assert.ok(mathToken4, "Must identify set-builder math token even if closing dollar is omitted");
+  assert.strictEqual(mathToken4.formula, "\\{x \\mid x^2=5\\}");
+  assert.ok(katex.renderToString(mathToken4.formula, { throwOnError: false }).includes("katex"));
+
+  const userBareEmptyset = "modeling a real-world scenario with \\emptyset.";
+  const resBare = tokenizeInline(userBareEmptyset);
+  const mathBare = resBare.find(t => t.type === "inline-math");
+  assert.ok(mathBare, "Must identify bare \\emptyset symbol");
+  assert.strictEqual(mathBare.formula, "\\emptyset");
+  assert.ok(katex.renderToString(mathBare.formula, { throwOnError: false }).includes("katex"));
 });
 
 test("Tareeka 22.3: Bold markdown and math coexistence without collision", () => {

@@ -190,7 +190,7 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
                     axisLine={false}
                   />
                   <RechartsTooltip 
-                    cursor={false}
+                    cursor={{ fill: 'transparent', stroke: 'none' }}
                     formatter={(val: number) => [`${val} sessions`, 'Frequency']}
                     contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))', backgroundColor: 'hsl(var(--background))', color: 'hsl(var(--foreground))' }}
                   />
@@ -241,7 +241,7 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
                       tick={{ fontSize: 11, fill: 'currentColor' }}
                       tickFormatter={(v) => `${v}%`}
                     />
-                    <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="dot" />} />
+                    <ChartTooltip cursor={{ fill: 'transparent', stroke: 'none' }} content={<ChartTooltipContent indicator="dot" />} />
                     <Bar 
                         dataKey="score" 
                         fill="hsl(var(--primary))" 

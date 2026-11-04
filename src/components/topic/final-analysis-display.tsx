@@ -450,7 +450,7 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
                             tickFormatter={(v) => `${v}%`}
                           />
                           <Tooltip 
-                            cursor={false}
+                            cursor={{ fill: 'transparent', stroke: 'none' }}
                             formatter={(val: number) => [`${val}%`, 'Score']}
                             contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} 
                           />
@@ -514,7 +514,7 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
                             tick={{ fontSize: 11, fill: 'currentColor' }}
                           />
                           <Tooltip 
-                            cursor={false}
+                            cursor={{ fill: 'transparent', stroke: 'none' }}
                             formatter={(val: number) => [`${val} answers`, 'Frequency']}
                             contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }}
                           />
