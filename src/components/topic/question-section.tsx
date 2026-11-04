@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import type { Question } from "@/lib/types";
+import { LatexRenderer } from "@/components/ui/latex-renderer";
 
 interface QuestionDisplayProps {
   question: Question;
@@ -19,7 +20,9 @@ export function QuestionDisplay({ question, answer, onAnswerChange }: QuestionDi
     <div className="space-y-4">
       <div className="space-y-2">
         <p className="text-sm font-medium text-primary">{question.type}</p>
-        <h3 className="text-xl font-semibold">{question.question}</h3>
+        <div className="text-xl font-semibold leading-relaxed">
+          <LatexRenderer content={question.question} />
+        </div>
       </div>
       <Textarea
         placeholder="Type your answer here..."

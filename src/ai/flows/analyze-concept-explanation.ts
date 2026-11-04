@@ -31,9 +31,14 @@ Analyze based on:
 - Technical Terminology: Did they use correct keywords?
 - Conciseness: Was the explanation direct or full of repetition/fluff?
 
-Respond with ONLY a valid JSON object (no markdown):
+CRITICAL FORMATTING RULES:
+1. MATHEMATICAL & SCIENTIFIC FORMULAS: Always convert every formula, equation, or calculation into proper LaTeX ($...$ for inline, $$...$$ for standalone block equations).
+2. NEVER use raw slashes like "$/" or unformatted ASCII math.
+3. Use simple, direct, engaging language with clear sub-points and real-life analogies where appropriate.
+
+Respond with ONLY a valid JSON object (no markdown, pure JSON):
 {
-  "feedback_summary": "<constructive, encouraging critique>",
+  "feedback_summary": "<constructive, encouraging critique with LaTeX equations formatted as $...$ or $$...$$>",
   "radar_chart_data": [
     {"metric": "Conceptual Clarity", "score": <0-100>},
     {"metric": "Examples Used", "score": <0-100>},

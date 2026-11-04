@@ -36,7 +36,7 @@ export async function createBroadcastAction(formData: FormData) {
   await Broadcast.create({
     subject,
     message,
-    fileUrl,
+    fileUrl: fileUrl || undefined,
     expiresAt
   });
 

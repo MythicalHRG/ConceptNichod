@@ -12,6 +12,10 @@ export type Topic = {
   summary?: string;
   questions?: Question[];
   analysis?: FinalAnalysisOutput;
+  practiceStatus?: 'in_progress' | 'completed';
+  summaryViewed?: boolean;
+  savedWrittenAnswers?: string[];
+  savedSpokenAnswers?: string[];
   createdAt: Date;
 };
 

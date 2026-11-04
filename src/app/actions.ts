@@ -9,7 +9,6 @@ import { generateTopicSummary } from "@/ai/flows/generate-topic-summary";
 import { generateQuestionsFlow } from "@/ai/flows/generate-questions";
 import { analyzeAnswersFlow, FinalAnalysisOutput } from "@/ai/flows/analyze-answers";
 import { textToSpeech } from "@/ai/flows/text-to-speech";
-import { createClient } from '@deepgram/sdk';
 
 export async function generateContentAction(topicId: string, topicName:string, classLevel: string) {
   await dbConnect();
@@ -48,70 +47,42 @@ export async function runFinalAnalysisAction(
   if (!mongoose.isValidObjectId(topicId)) throw new Error("Invalid Topic ID");
 
   await dbConnect();
-
   const topicDoc = await Topic.findById(topicId);
   if (!topicDoc) throw new Error("Topic not found");
   if (topicDoc.userId !== sessionUuid) throw new Error("Unauthorized");
 
   const result = await analyzeAnswersFlow({
     topicId,
-    summary,
     topic: topicName,
+    summary,
     classLevel,
     writtenAnswers,
     spokenAnswers,
   });
 
-  const analysis = result.analysis;
-  if (!analysis) {
-    throw new Error("Analysis could not be generated.");
-  }
-  
-  await Topic.findByIdAndUpdate(topicId, { analysis, practiceStatus: 'completed' });
-  
-  revalidatePath(`/dashboard/topic/${topicId}`, 'page');
+  await Topic.findByIdAndUpdate(topicId, {
+    analysis: result.analysis,
+    practiceStatus: 'completed'
+  });
 
-  return { analysis };
+  revalidatePath(`/dashboard/topic/${topicId}`);
+  return result;
 }
 
-export async function textToSpeechAction(text: string) {
-    const result = await textToSpeech(text);
-    return result;
+export async function generateAudioAction(text: string): Promise<string> {
+    const res = await textToSpeech(text);
+    return res.media;
 }
 
 export async function revalidateDashboard() {
   revalidatePath('/dashboard', 'layout');
 }
 
+/**
+ * Kept for backwards compatibility; audio recording now uses native browser Web Speech API
+ */
 export async function getDeepgramSessionKey(): Promise<{ key?: string; error?: string }> {
-  const deepgramApiKey = process.env.DEEPGRAM_API_KEY;
-  const projectId = process.env.DEEPGRAM_PROJECT_ID;
-
-  if (!deepgramApiKey || !projectId) {
-    return { error: "DEEPGRAM_API_KEY or DEEPGRAM_PROJECT_ID is not set in the environment." };
-  }
-
-  const deepgram = createClient(deepgramApiKey);
-
-  const { result, error } = await deepgram.manage.createProjectKey(
-    projectId,
-    {
-      comment: 'Temporary key for speech-to-text',
-      scopes: ['usage:write'],
-      time_to_live_in_seconds: 60 * 10
-    }
-  );
-
-  if (error) {
-    console.error("Deepgram key creation error:", error);
-    return { error: "Could not create Deepgram session key. Check your Deepgram Project ID." };
-  }
-  
-  if (!result || !result.key) {
-    return { error: "Deepgram returned no key." };
-  }
-
-  return { key: result.key };
+  return { error: "Speech recognition migrated to native browser Web Speech API." };
 }
 
 export async function createTopicAction(data: { name: string, subject: string, chapter: string }) {

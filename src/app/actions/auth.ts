@@ -109,18 +109,18 @@ export async function registerAction(formData: FormData) {
             gender,
             dob,
             classLevel,
-            examFocus,
+            examFocus: examFocus || undefined,
             city,
-            futureCollege,
-            snapchat,
-            instagram,
+            futureCollege: futureCollege || undefined,
+            snapchat: snapchat || undefined,
+            instagram: instagram || undefined,
             lastKnownIp: ip
         });
 
         // Delete OTP record after successful registration to prevent reuse (Account Takeover)
         await OtpVerification.deleteOne({ email });
 
-        cookies().set("user_session", newUser.uuid, { httpOnly: true, secure: process.env.NODE_ENV === "production", maxAge: 60 * 60 * 24 * 7 });
+        cookies().set("user_session", uuid, { httpOnly: true, secure: process.env.NODE_ENV === "production", maxAge: 60 * 60 * 24 * 7 });
         return { success: true, user: { 
             uuid, username, email, fullName, gender, dob, classLevel, examFocus, city, futureCollege, snapchat, instagram 
         } };
@@ -131,23 +131,33 @@ export async function registerAction(formData: FormData) {
 
 export async function loginAction(formData: FormData) {
     await dbConnect();
-    const email = (formData.get("email") as string).toLowerCase().trim();
+    const rawInput = ((formData.get("email") as string) || "").trim();
     const password = formData.get("password") as string;
 
     try {
-        if (!email || !password) throw new Error("Missing email or password");
+        if (!rawInput || !password) throw new Error("Missing email or password");
 
         const ip = getIpAddress();
         const isIpBanned = await Blacklist.findOne({ type: "ip", value: ip });
         if (isIpBanned) throw new Error("Access denied: Your IP address is banned.");
 
-        const isEmailBanned = await Blacklist.findOne({ type: "email", value: email });
-        if (isEmailBanned) throw new Error("Access denied: This email address is banned.");
+        const escapeRegex = (string: string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const safeInput = escapeRegex(rawInput);
 
-        const user = await User.findOne({ email });
+        // Find user by either email or username (case-insensitive)
+        const user = await User.findOne({
+            $or: [
+                { email: new RegExp(`^${safeInput}$`, 'i') },
+                { username: new RegExp(`^${safeInput}$`, 'i') }
+            ]
+        });
+
         if (!user) throw new Error("Invalid credentials");
 
-        const isUsernameBanned = await Blacklist.findOne({ type: "username", value: user.username });
+        const isEmailBanned = await Blacklist.findOne({ type: "email", value: user.email.toLowerCase() });
+        if (isEmailBanned) throw new Error("Access denied: This email address is banned.");
+
+        const isUsernameBanned = await Blacklist.findOne({ type: "username", value: user.username.toLowerCase() });
         if (isUsernameBanned) throw new Error("Access denied: This username is banned.");
 
         try {
@@ -224,6 +234,7 @@ export async function updateProfileAction(formData: FormData) {
 
     try {
         const updatedUser = await User.findOneAndUpdate({ uuid: sessionUuid }, updateData, { new: true });
+        if (!updatedUser) throw new Error("User update failed");
         const { password, ...userWithoutPassword } = updatedUser.toObject();
         return { success: true, user: userWithoutPassword };
     } catch (e) {
@@ -293,12 +304,13 @@ export async function confirmEmailChangeAction(newEmail: string, otp: string) {
     if (!sessionUuid) throw new Error("Not authenticated");
 
     const email = newEmail.toLowerCase().trim();
-    if (!email || !otp) throw new Error("Missing email or verification code.");
+    const sanitizedOtp = (otp || "").trim();
+    if (!email || !sanitizedOtp) throw new Error("Missing email or verification code.");
 
     const otpRecord = await OtpVerification.findOne({ email });
     if (!otpRecord) throw new Error("No verification code was requested for this email.");
 
-    if (otpRecord.otp !== otp.trim()) {
+    if (otpRecord.otp !== sanitizedOtp) {
         throw new Error("Invalid verification code. Please check and try again.");
     }
 
@@ -316,6 +328,7 @@ export async function confirmEmailChangeAction(newEmail: string, otp: string) {
         { email },
         { new: true }
     );
+    if (!updatedUser) throw new Error("Email update failed");
 
     await OtpVerification.deleteOne({ email });
 
@@ -393,7 +406,7 @@ export async function deleteAccountAction(formData: FormData) {
     if (!sessionId) throw new Error("Not authenticated");
 
     const email = (formData.get("email") as string).toLowerCase().trim();
-    const otp = formData.get("otp") as string;
+    const otp = (formData.get("otp") as string || "").trim();
 
     if (!email || !otp) throw new Error("Missing email or OTP");
 

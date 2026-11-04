@@ -8,7 +8,16 @@ export type AuthUser = {
   uuid: string;
   username: string;
   email: string;
-  bio?: string;
+  bio?: string | null;
+  fullName?: string | null;
+  gender?: string | null;
+  dob?: string | null;
+  classLevel?: string | null;
+  examFocus?: string | null;
+  city?: string | null;
+  futureCollege?: string | null;
+  snapchat?: string | null;
+  instagram?: string | null;
 };
 
 interface AuthContextType {
@@ -34,7 +43,8 @@ function AuthParamsHandler({ setAuthModalOpen }: { setAuthModalOpen: (open: bool
       // Clean up the URL parameter
       const params = new URLSearchParams(searchParams.toString());
       params.delete("login");
-      const newUrl = pathname + (params.toString() ? `?${params.toString()}` : "");
+      const newQuery = params.toString();
+      const newUrl = newQuery ? `${pathname}?${newQuery}` : pathname;
       router.replace(newUrl, { scroll: false });
     }
   }, [searchParams, pathname, router, setAuthModalOpen]);
@@ -45,34 +55,23 @@ function AuthParamsHandler({ setAuthModalOpen }: { setAuthModalOpen: (open: bool
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isAuthModalOpen, setAuthModalOpen] = useState(false);
-  const router = useRouter();
 
   useEffect(() => {
     meAction().then((res) => {
       if (res.user) {
         setUser(res.user);
-        setAuthModalOpen(false);
-      } else {
-        setAuthModalOpen(true);
       }
-    }).catch((err) => {
-      console.error(err);
-      setAuthModalOpen(true);
     });
   }, []);
 
   const login = (newUser: AuthUser) => {
     setUser(newUser);
-    setAuthModalOpen(false); // Close modal on successful login
-    router.refresh();
+    setAuthModalOpen(false);
   };
 
-  const logout = () => {
-    logoutAction().then(() => {
-      setUser(null);
-      setAuthModalOpen(true);
-      router.push('/');
-    }).catch(console.error);
+  const logout = async () => {
+    await logoutAction();
+    setUser(null);
   };
 
   return (

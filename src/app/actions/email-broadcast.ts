@@ -36,11 +36,20 @@ export async function sendEmailBroadcastAction(formData: FormData) {
     throw new Error("Subject and Body are required.");
   }
 
-  const senderUser = process.env.EMAIL_SERVER_USER || "mythicalhrg@gmail.com";
-  const senderPass = process.env.EMAIL_SERVER_PASSWORD;
+  const senderUser =
+    process.env.EMAIL_SERVER_USER ||
+    process.env.GMAIL_USER ||
+    "mythicalhrg@gmail.com";
 
-  if (!senderUser || !senderPass) {
-    throw new Error("Missing EMAIL_SERVER_USER or EMAIL_SERVER_PASSWORD environment variables.");
+  const senderPass =
+    process.env.EMAIL_SERVER_PASSWORD ||
+    process.env.GMAIL_APP_PASSWORD ||
+    process.env.EMAIL_PASS;
+
+  if (!senderPass) {
+    throw new Error(
+      "Gmail credentials not configured. Please add EMAIL_SERVER_PASSWORD or GMAIL_APP_PASSWORD to your environment variables (generate a 16-character App Password at myaccount.google.com/apppasswords)."
+    );
   }
 
   // Determine recipients
@@ -101,15 +110,21 @@ export async function sendEmailBroadcastAction(formData: FormData) {
     </div>
   `;
 
+  // Privacy protection: If broadcasting to all users, put them in BCC so no one sees other recipients' email addresses
   const mailOptions: any = {
     from: `"Concept Nichod" <${senderUser}>`,
-    to: toRecipients,
     subject,
     html: htmlContent,
   };
 
-  if (ccRecipients.length > 0) mailOptions.cc = ccRecipients;
-  if (bccRecipients.length > 0) mailOptions.bcc = bccRecipients;
+  if (recipientType === "all") {
+    mailOptions.to = senderUser; // To: Concept Nichod <mythicalhrg@gmail.com>
+    mailOptions.bcc = Array.from(new Set([...toRecipients, ...bccRecipients]));
+  } else {
+    mailOptions.to = toRecipients;
+    if (ccRecipients.length > 0) mailOptions.cc = ccRecipients;
+    if (bccRecipients.length > 0) mailOptions.bcc = bccRecipients;
+  }
 
   if (attachmentUrl) {
     mailOptions.attachments = [
@@ -125,9 +140,9 @@ export async function sendEmailBroadcastAction(formData: FormData) {
 
     await EmailBroadcast.create({
       sender: senderUser,
-      to: toRecipients,
+      to: recipientType === "all" ? [senderUser] : toRecipients,
       cc: ccRecipients,
-      bcc: bccRecipients,
+      bcc: recipientType === "all" ? toRecipients : bccRecipients,
       subject,
       body,
       attachmentUrl: attachmentUrl || undefined,
@@ -138,33 +153,38 @@ export async function sendEmailBroadcastAction(formData: FormData) {
 
     return {
       success: true,
-      sentCount: toRecipients.length,
       messageId: info.messageId,
+      recipientCount: toRecipients.length,
+      sentCount: toRecipients.length,
     };
-  } catch (err: any) {
-    console.error("Email broadcast error:", err);
-    await EmailBroadcast.create({
-      sender: senderUser,
-      to: toRecipients,
-      cc: ccRecipients,
-      bcc: bccRecipients,
-      subject,
-      body,
-      attachmentUrl: attachmentUrl || undefined,
-      attachmentName: attachmentUrl ? attachmentName : undefined,
-      sentCount: 0,
-      status: "failed",
-      error: err.message,
-    });
-    throw new Error(`Failed to send email broadcast: ${err.message}`);
+  } catch (error: any) {
+    console.error("Nodemailer broadcast error:", error);
+
+    // Save failed attempt
+    try {
+      await EmailBroadcast.create({
+        sender: senderUser,
+        to: toRecipients,
+        cc: ccRecipients,
+        bcc: bccRecipients,
+        subject,
+        body,
+        attachmentUrl: attachmentUrl || undefined,
+        attachmentName: attachmentUrl ? attachmentName : undefined,
+        sentCount: 0,
+        status: "failed",
+        error: error.message,
+      });
+    } catch {}
+
+    throw new Error(`Email sending failed: ${error.message}`);
   }
 }
 
-export async function getEmailBroadcastHistoryAction() {
+export async function getEmailBroadcastsAction() {
   await verifyAdmin();
-  const history = await EmailBroadcast.find().sort({ sentAt: -1, createdAt: -1 }).limit(50).lean();
-  return {
-    success: true,
-    broadcasts: JSON.parse(JSON.stringify(history)),
-  };
+  const broadcasts = await EmailBroadcast.find({}).sort({ createdAt: -1 }).limit(20).lean();
+  return JSON.parse(JSON.stringify(broadcasts));
 }
+
+export const getEmailBroadcastHistoryAction = getEmailBroadcastsAction;

@@ -15,14 +15,29 @@ type FollowUpInput = {
   conversationHistory: Message[];
 };
 
-export async function askFollowUpAction(input: FollowUpInput): Promise<{ answer: string }> {
-  const { topicName, topicSummary, classLevel, subject, conversationHistory } = input;
+// Maximum number of past conversation messages sent to avoid context window explosion
+const MAX_HISTORY_MESSAGES = 10;
+const MAX_SUMMARY_CHARS = 4000;
 
-  const systemMessage = `You are a friendly, expert teacher helping a ${classLevel} student understand "${topicName}" from ${subject}.
+export async function askFollowUpAction(input: FollowUpInput): Promise<{ answer: string }> {
+  const { topicName, topicSummary, classLevel, subject, conversationHistory = [] } = input;
+
+  const safeTopic = (topicName || 'General Topic').slice(0, 150);
+  const safeClass = (classLevel || 'Standard').slice(0, 50);
+  const safeSubject = (subject || 'General Studies').slice(0, 50);
+  const safeSummary = (topicSummary || '').slice(0, MAX_SUMMARY_CHARS);
+
+  // Sliding window: keep only the latest N messages
+  const recentHistory = conversationHistory.slice(-MAX_HISTORY_MESSAGES).map((m) => ({
+    role: m.role,
+    content: (m.content || '').slice(0, 1500),
+  }));
+
+  const systemMessage = `You are a friendly, expert teacher helping a ${safeClass} student understand "${safeTopic}" from ${safeSubject}.
 
 You have access to the following summary of the topic:
 ---
-${topicSummary}
+${safeSummary}
 ---
 
 Rules:
@@ -35,7 +50,7 @@ Rules:
 
   const messages = [
     { role: 'system' as const, content: systemMessage },
-    ...conversationHistory,
+    ...recentHistory,
   ];
 
   const answer = await callOpenRouter(messages);

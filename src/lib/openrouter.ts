@@ -125,13 +125,59 @@ export async function callOpenRouter(
 }
 
 /**
- * Parse JSON from OpenRouter response — strips markdown fences if present.
+ * Parse JSON from OpenRouter response — robustly handles markdown fences,
+ * conversational preambles ("Here is the JSON:"), postscripts, and formatting quirks.
  */
 export function parseJsonResponse<T>(raw: string): T {
-  let cleaned = raw.trim();
-  if (cleaned.startsWith("```json")) cleaned = cleaned.slice(7);
-  if (cleaned.startsWith("```")) cleaned = cleaned.slice(3);
-  if (cleaned.endsWith("```")) cleaned = cleaned.slice(0, -3);
-  cleaned = cleaned.trim();
-  return JSON.parse(cleaned) as T;
+  if (!raw || typeof raw !== "string") {
+    throw new Error("Invalid response received from AI model: empty or non-string output.");
+  }
+
+  let text = raw.trim();
+
+  // 1. Direct parse attempt if clean JSON
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    // Continue to extractors
+  }
+
+  // 2. Extract from markdown code fences (```json ... ``` or ``` ... ```)
+  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fenceMatch && fenceMatch[1]) {
+    try {
+      return JSON.parse(fenceMatch[1].trim()) as T;
+    } catch {
+      text = fenceMatch[1].trim();
+    }
+  }
+
+  // 3. Extract the widest valid JSON structure (object or array)
+  const firstBrace = text.indexOf("{");
+  const firstBracket = text.indexOf("[");
+  let startIdx = -1;
+  let endIdx = -1;
+
+  if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+    startIdx = firstBrace;
+    endIdx = text.lastIndexOf("}");
+  } else if (firstBracket !== -1) {
+    startIdx = firstBracket;
+    endIdx = text.lastIndexOf("]");
+  }
+
+  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+    const candidate = text.substring(startIdx, endIdx + 1).trim();
+    try {
+      return JSON.parse(candidate) as T;
+    } catch {
+      // Clean up common LLM artifacts like trailing commas before closing braces
+      const sanitized = candidate
+        .replace(/,\s*([}\]])/g, "$1")
+        .replace(/[\u0000-\u001F\u007F-\u009F]/g, (c) => (c === "\n" || c === "\r" || c === "\t" ? c : ""));
+      return JSON.parse(sanitized) as T;
+    }
+  }
+
+  throw new Error(`Failed to parse AI JSON response. Raw output was: ${text.slice(0, 200)}...`);
 }

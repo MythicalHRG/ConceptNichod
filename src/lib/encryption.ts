@@ -143,7 +143,7 @@ export async function encryptData(plaintext: string, password: string): Promise<
     for (let i = 0; i < 50; i++) {
         let curIv = crypto.randomBytes(12);
         ivStack.set(curIv, i * 12);
-        currentBytes = await encryptAesGcm(key, currentBytes, curIv);
+        currentBytes = (await encryptAesGcm(key, currentBytes, curIv)) as any;
     }
 
     const rawCiphertext = new Uint8Array(currentBytes);
@@ -198,7 +198,7 @@ export async function decryptData(inputPayload: string, password: string): Promi
         let currentBytes = rawCiphertext;
         for (let i = 49; i >= 0; i--) {
             let curIv = Buffer.from(ivStack.slice(i * 12, (i + 1) * 12));
-            currentBytes = await decryptAesGcm(decKey, currentBytes, curIv);
+            currentBytes = (await decryptAesGcm(decKey, currentBytes, curIv)) as any;
         }
         const obfBytes = new Uint8Array(currentBytes);
         const plainBytes = deobfuscateBytes(obfBytes, password, salt);
