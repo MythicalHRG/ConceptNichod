@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "./auth-context";
 import { Button } from "@/components/ui/button";
-import { LogOut, User, Settings, Loader2, Palette, Sparkles, Check, Monitor, Volume2, ShieldAlert } from "lucide-react";
+import { LogOut, User, Settings, Loader2, Palette, Sparkles, Check, Monitor, Volume2, ShieldAlert, KeyRound } from "lucide-react";
 import { useTheme } from "next-themes";
 import { THEME_OPTIONS } from "@/components/theme-toggle";
 import {
@@ -314,11 +314,10 @@ export function UserProfileButton() {
               </DialogDescription>
             </DialogHeader>
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-4 mb-4">
+              <TabsList className="grid w-full grid-cols-3 mb-4">
                 <TabsTrigger value="profile">Profile</TabsTrigger>
                 <TabsTrigger value="appearance">Themes</TabsTrigger>
-                <TabsTrigger value="password">Password</TabsTrigger>
-                <TabsTrigger value="delete" className="text-destructive data-[state=active]:bg-destructive/10 data-[state=active]:text-destructive">Danger</TabsTrigger>
+                <TabsTrigger value="delete" className="text-destructive data-[state=active]:bg-destructive/10 data-[state=active]:text-destructive">Danger Zone</TabsTrigger>
               </TabsList>
               
               <TabsContent value="profile">
@@ -485,36 +484,44 @@ export function UserProfileButton() {
                 </div>
               </TabsContent>
               
-              <TabsContent value="password">
-                <form onSubmit={handleChangePassword} className="space-y-4 px-1 pb-2">
-                  <div className="space-y-2 text-sm text-muted-foreground text-center mb-4">
-                    Update your password. You will need your current password to make this change.
+              <TabsContent value="delete" className="space-y-6 max-h-[60vh] overflow-y-auto px-1 pb-2">
+                {/* Change Password Section (Danger Zone) */}
+                <div className="border border-border/80 rounded-lg p-4 bg-muted/20 space-y-3">
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-semibold flex items-center gap-2">
+                      <KeyRound className="w-4 h-4 text-primary" /> Change Password
+                    </h4>
+                    <p className="text-xs text-muted-foreground">
+                      Update your account password. You will need your current password to make this change.
+                    </p>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Current Password</label>
-                    <Input
-                      type="password"
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">New Password</label>
-                    <Input
-                      type="password"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <Button type="submit" className="w-full mt-4" disabled={isLoading}>
-                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Update Password"}
-                  </Button>
-                </form>
-              </TabsContent>
+                  <form onSubmit={handleChangePassword} className="space-y-3">
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium">Current Password</label>
+                      <Input
+                        type="password"
+                        placeholder="Current password"
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium">New Password</label>
+                      <Input
+                        type="password"
+                        placeholder="New password (8+ chars, upper, lower, number, symbol)"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <Button type="submit" size="sm" className="w-full" disabled={isLoading || !currentPassword || !newPassword}>
+                      {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Update Password"}
+                    </Button>
+                  </form>
+                </div>
 
-              <TabsContent value="delete" className="space-y-6">
                 {/* Change Email Section */}
                 <div className="border border-destructive/30 rounded-lg p-4 bg-destructive/5 space-y-3">
                   <h4 className="text-sm font-semibold text-destructive flex items-center gap-2">
