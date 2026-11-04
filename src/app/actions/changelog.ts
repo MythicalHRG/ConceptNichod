@@ -66,6 +66,21 @@ export async function createChangelogAction(formData: FormData) {
 
   const releaseDate = releaseDateStr ? new Date(releaseDateStr) : new Date();
 
+  // If a changelog with this version already exists, update it in-place seamlessly
+  const existingLog = await Changelog.findOne({ version: version.trim() });
+  if (existingLog) {
+    existingLog.title = title.trim();
+    existingLog.category = category as any;
+    existingLog.content = content.trim();
+    existingLog.releaseDate = releaseDate;
+    await existingLog.save();
+    return {
+      success: true,
+      changelog: JSON.parse(JSON.stringify(existingLog)),
+      updated: true,
+    };
+  }
+
   const newLog = await Changelog.create({
     version: version.trim(),
     title: title.trim(),

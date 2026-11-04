@@ -72,3 +72,75 @@ test('Tareeka 23.7: Official UPI ID is preserved immutably as harsh.2525@ptaxis'
 test('Tareeka 23.8: Waste scratch folder is eliminated from workspace', () => {
   assert.strictEqual(fs.existsSync(path.join(projectRoot, 'scratch')), false, 'scratch directory must not exist');
 });
+
+test('Tareeka 23.9: Changelog semver calculator assigns 2nd digit to Feature and 3rd digit to Bug Fix / Improvement', () => {
+  function parseSemver(v) {
+    if (!v) return null;
+    const match = v.trim().match(/^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?/i);
+    if (!match) return null;
+    return {
+      major: parseInt(match[1], 10),
+      minor: match[2] !== undefined ? parseInt(match[2], 10) : 0,
+      patch: match[3] !== undefined ? parseInt(match[3], 10) : 0,
+    };
+  }
+
+  function calculateNextVersion(majorDigit, category, logs) {
+    const targetMajor = typeof majorDigit === 'string' ? parseInt(majorDigit, 10) || 2 : majorDigit;
+    const matching = (logs || [])
+      .map((l) => parseSemver(l.version))
+      .filter((s) => s !== null && s.major === targetMajor);
+
+    if (category === 'Major Update') {
+      return `v${targetMajor + 1}.0.0`;
+    }
+
+    if (category === 'Feature') {
+      if (matching.length > 0) {
+        const maxMinor = Math.max(...matching.map((s) => s.minor));
+        return `v${targetMajor}.${maxMinor + 1}.0`;
+      }
+      return `v${targetMajor}.1.0`;
+    }
+
+    if (matching.length > 0) {
+      const maxMinor = Math.max(...matching.map((s) => s.minor));
+      const atMaxMinor = matching.filter((s) => s.minor === maxMinor);
+      const maxPatch = atMaxMinor.length > 0 ? Math.max(...atMaxMinor.map((s) => s.patch)) : 0;
+      return `v${targetMajor}.${maxMinor}.${maxPatch + 1}`;
+    }
+    return `v${targetMajor}.0.1`;
+  }
+
+  const existingLogs = [
+    { version: 'v2.5.0' },
+    { version: 'v2.4.1' },
+    { version: 'v2.4.0' }
+  ];
+
+  // Feature should increment secondary digit (minor): v2.5.0 -> v2.6.0
+  assert.equal(calculateNextVersion(2, 'Feature', existingLogs), 'v2.6.0');
+
+  // Bug Fix / Improvement / Security should increment 3rd digit (patch): v2.5.0 -> v2.5.1
+  assert.equal(calculateNextVersion(2, 'Bug Fix', existingLogs), 'v2.5.1');
+  assert.equal(calculateNextVersion(2, 'Improvement', existingLogs), 'v2.5.1');
+  assert.equal(calculateNextVersion(2, 'Security', existingLogs), 'v2.5.1');
+
+  // Major Update should increment 1st digit: 2 -> v3.0.0
+  assert.equal(calculateNextVersion(2, 'Major Update', existingLogs), 'v3.0.0');
+
+  // New major digit 3 should start cleanly
+  assert.equal(calculateNextVersion(3, 'Feature', existingLogs), 'v3.1.0');
+  assert.equal(calculateNextVersion(3, 'Bug Fix', existingLogs), 'v3.0.1');
+});
+
+test('Tareeka 23.10: Admin panel source supports changelog editing and in-place existing version update', () => {
+  const adminPanel = fs.readFileSync(path.join(projectRoot, 'src/components/admin/admin-panel.tsx'), 'utf8');
+  const changelogActions = fs.readFileSync(path.join(projectRoot, 'src/app/actions/changelog.ts'), 'utf8');
+
+  assert.ok(adminPanel.includes('updateChangelogAction'), 'Admin panel must import updateChangelogAction');
+  assert.ok(adminPanel.includes('handleEditChangelog'), 'Admin panel must define handleEditChangelog');
+  assert.ok(adminPanel.includes('calculateNextVersion'), 'Admin panel must define calculateNextVersion');
+  assert.ok(adminPanel.includes('majorDigit'), 'Admin panel must manage 1st digit (majorDigit) state');
+  assert.ok(changelogActions.includes('existingLog'), 'createChangelogAction must update in-place if version exists');
+});

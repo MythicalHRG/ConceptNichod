@@ -26,6 +26,7 @@ import {
 import {
   getChangelogsAction,
   createChangelogAction,
+  updateChangelogAction,
   deleteChangelogAction,
 } from "@/app/actions/changelog";
 import { Rupee } from "@/components/ui/rupee-symbol";
@@ -61,10 +62,52 @@ import {
   Radio,
   Heart,
   QrCode,
+  Pencil,
+  Wand2,
+  AlertCircle,
 } from "lucide-react";
 import { UploadButton } from "@/utils/uploadthing";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+
+function parseSemver(v: string) {
+  if (!v) return null;
+  const match = v.trim().match(/^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?/i);
+  if (!match) return null;
+  return {
+    major: parseInt(match[1], 10),
+    minor: match[2] !== undefined ? parseInt(match[2], 10) : 0,
+    patch: match[3] !== undefined ? parseInt(match[3], 10) : 0,
+  };
+}
+
+function calculateNextVersion(majorDigit: number | string, category: string, logs: any[]): string {
+  const targetMajor = typeof majorDigit === "string" ? parseInt(majorDigit, 10) || 2 : majorDigit;
+  const matching = (logs || [])
+    .map((l) => parseSemver(l.version))
+    .filter((s): s is { major: number; minor: number; patch: number } => s !== null && s.major === targetMajor);
+
+  if (category === "Major Update") {
+    return `v${targetMajor + 1}.0.0`;
+  }
+
+  if (category === "Feature") {
+    if (matching.length > 0) {
+      const maxMinor = Math.max(...matching.map((s) => s.minor));
+      return `v${targetMajor}.${maxMinor + 1}.0`;
+    }
+    return `v${targetMajor}.1.0`;
+  }
+
+  // Improvement, Bug Fix, Security -> increment third digit (patch)
+  if (matching.length > 0) {
+    const maxMinor = Math.max(...matching.map((s) => s.minor));
+    const atMaxMinor = matching.filter((s) => s.minor === maxMinor);
+    const maxPatch = atMaxMinor.length > 0 ? Math.max(...atMaxMinor.map((s) => s.patch)) : 0;
+    return `v${targetMajor}.${maxMinor}.${maxPatch + 1}`;
+  }
+  return `v${targetMajor}.0.1`;
+}
 
 export function AdminPanel() {
   const [users, setUsers] = useState<any[]>([]);
@@ -101,6 +144,9 @@ export function AdminPanel() {
   const [changelogCategory, setChangelogCategory] = useState("Feature");
   const [changelogContent, setChangelogContent] = useState("");
   const [changelogLoading, setChangelogLoading] = useState(false);
+  const [majorDigit, setMajorDigit] = useState("2");
+  const [editingChangelogId, setEditingChangelogId] = useState<string | null>(null);
+  const [isAutoVersion, setIsAutoVersion] = useState(true);
 
   // Donation & UPI State
   const [donationSettings, setDonationSettings] = useState({
@@ -153,6 +199,14 @@ export function AdminPanel() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Auto-assign version tag based on 1st digit (major) and category (type)
+  useEffect(() => {
+    if (isAutoVersion && !editingChangelogId) {
+      const nextVer = calculateNextVersion(majorDigit, changelogCategory, changelogs);
+      setChangelogVersion(nextVer);
+    }
+  }, [majorDigit, changelogCategory, changelogs, isAutoVersion, editingChangelogId]);
 
   const handleDeleteUser = async (uuid: string) => {
     if (!confirm("Are you sure you want to permanently delete this user?")) return;
@@ -272,7 +326,7 @@ export function AdminPanel() {
     }
   };
 
-  // Create Changelog
+  // Create or Update Changelog
   const handleCreateChangelog = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!changelogVersion.trim() || !changelogTitle.trim() || !changelogContent.trim()) {
@@ -288,17 +342,53 @@ export function AdminPanel() {
       formData.append("category", changelogCategory);
       formData.append("content", changelogContent);
 
-      await createChangelogAction(formData);
-      toast({ title: "Changelog Published!", description: `${changelogVersion} is now visible on /changelog` });
-      setChangelogVersion("");
+      if (editingChangelogId) {
+        await updateChangelogAction(editingChangelogId, formData);
+        toast({ title: "Changelog Updated!", description: `${changelogVersion} updated successfully.` });
+        setEditingChangelogId(null);
+      } else {
+        const res = await createChangelogAction(formData);
+        toast({ 
+          title: (res as any)?.updated ? "Changelog Updated!" : "Changelog Published!", 
+          description: `${changelogVersion} is live on /changelog` 
+        });
+      }
+
       setChangelogTitle("");
       setChangelogContent("");
+      setIsAutoVersion(true);
       fetchData();
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: e.message });
     } finally {
       setChangelogLoading(false);
     }
+  };
+
+  const handleEditChangelog = (log: any) => {
+    setEditingChangelogId(log._id);
+    setChangelogVersion(log.version);
+    setChangelogCategory(log.category);
+    setChangelogTitle(log.title);
+    setChangelogContent(log.content);
+    setIsAutoVersion(false);
+    const parsed = parseSemver(log.version);
+    if (parsed) {
+      setMajorDigit(String(parsed.major));
+    }
+    const formEl = document.getElementById("changelog-form");
+    if (formEl) {
+      formEl.scrollIntoView({ behavior: "smooth" });
+    }
+  };
+
+  const handleCancelEditChangelog = () => {
+    setEditingChangelogId(null);
+    setChangelogTitle("");
+    setChangelogContent("");
+    setIsAutoVersion(true);
+    const nextVer = calculateNextVersion(majorDigit, changelogCategory, changelogs);
+    setChangelogVersion(nextVer);
   };
 
   const handleSaveDonationSettings = async (e: React.FormEvent) => {
@@ -910,33 +1000,125 @@ export function AdminPanel() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleCreateChangelog} className="space-y-4 max-w-2xl">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Version Tag</label>
-                    <Input
-                      placeholder="e.g. v2.2.0"
-                      value={changelogVersion}
-                      onChange={(e) => setChangelogVersion(e.target.value)}
-                      required
-                    />
+              <form id="changelog-form" onSubmit={handleCreateChangelog} className="space-y-4 max-w-2xl">
+                {editingChangelogId && (
+                  <div className="flex items-center justify-between p-3 rounded-lg border border-primary/40 bg-primary/10 text-xs">
+                    <span className="font-semibold text-primary flex items-center gap-1.5">
+                      <Pencil className="w-3.5 h-3.5" /> Editing Changelog {changelogVersion}
+                    </span>
+                    <Button type="button" variant="ghost" size="sm" onClick={handleCancelEditChangelog} className="h-6 text-xs">
+                      Cancel Edit
+                    </Button>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Category</label>
-                    <Select value={changelogCategory} onValueChange={setChangelogCategory}>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {/* 1st Digit: Major Version */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                      <span>1st Digit (Major)</span>
+                    </label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={99}
+                      value={majorDigit}
+                      onChange={(e) => {
+                        setMajorDigit(e.target.value);
+                        if (!editingChangelogId) setIsAutoVersion(true);
+                      }}
+                      placeholder="e.g. 2"
+                      className="font-mono text-center font-bold text-base"
+                    />
+                    <p className="text-[10px] text-muted-foreground">Sets generation (v{majorDigit || 2}.x.x)</p>
+                  </div>
+
+                  {/* Category: Version Type */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Category (Type)
+                    </label>
+                    <Select 
+                      value={changelogCategory} 
+                      onValueChange={(val) => {
+                        setChangelogCategory(val);
+                        if (!editingChangelogId) setIsAutoVersion(true);
+                      }}
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Major Update">Major Update</SelectItem>
-                        <SelectItem value="Feature">Feature</SelectItem>
-                        <SelectItem value="Improvement">Improvement</SelectItem>
-                        <SelectItem value="Bug Fix">Bug Fix</SelectItem>
-                        <SelectItem value="Security">Security</SelectItem>
+                        <SelectItem value="Major Update">Major Update (Bumps 1st)</SelectItem>
+                        <SelectItem value="Feature">Feature (Bumps 2nd Digit)</SelectItem>
+                        <SelectItem value="Improvement">Improvement (Bumps 3rd)</SelectItem>
+                        <SelectItem value="Bug Fix">Bug Fix (Bumps 3rd Digit)</SelectItem>
+                        <SelectItem value="Security">Security (Bumps 3rd Digit)</SelectItem>
                       </SelectContent>
                     </Select>
+                    <p className="text-[10px] text-muted-foreground">
+                      {changelogCategory === "Major Update" && "Increments 1st digit"}
+                      {changelogCategory === "Feature" && "Assigns 2nd digit (Minor)"}
+                      {(changelogCategory === "Improvement" || changelogCategory === "Bug Fix" || changelogCategory === "Security") && "Assigns 3rd digit (Patch)"}
+                    </p>
+                  </div>
+
+                  {/* Calculated Version Tag */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Version Tag
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAutoVersion(true);
+                          const nextVer = calculateNextVersion(majorDigit, changelogCategory, changelogs);
+                          setChangelogVersion(nextVer);
+                        }}
+                        className="text-[10px] text-primary hover:underline flex items-center gap-0.5"
+                        title="Recompute auto version"
+                      >
+                        <Wand2 className="w-3 h-3" /> Auto
+                      </button>
+                    </div>
+                    <Input
+                      placeholder="e.g. v2.3.0"
+                      value={changelogVersion}
+                      onChange={(e) => {
+                        setChangelogVersion(e.target.value);
+                        setIsAutoVersion(false);
+                      }}
+                      required
+                      className="font-mono font-bold"
+                    />
+                    <p className="text-[10px] text-muted-foreground truncate">
+                      {isAutoVersion ? "✨ Auto-assigned based on category" : "Custom override"}
+                    </p>
                   </div>
                 </div>
+
+                {/* Existing version notice */}
+                {changelogs.some((c) => c.version.toLowerCase().trim() === changelogVersion.toLowerCase().trim() && c._id !== editingChangelogId) && (
+                  <div className="p-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      Version <strong>{changelogVersion}</strong> already exists. Submitting will update the existing entry in-place.
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-6 text-[10px] shrink-0"
+                      onClick={() => {
+                        const existing = changelogs.find((c) => c.version.toLowerCase().trim() === changelogVersion.toLowerCase().trim());
+                        if (existing) handleEditChangelog(existing);
+                      }}
+                    >
+                      Load Details
+                    </Button>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Title</label>
@@ -959,10 +1141,17 @@ export function AdminPanel() {
                   />
                 </div>
 
-                <Button type="submit" disabled={changelogLoading}>
-                  {changelogLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                  Publish Changelog Update
-                </Button>
+                <div className="flex items-center gap-3">
+                  <Button type="submit" disabled={changelogLoading}>
+                    {changelogLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                    {editingChangelogId ? `Save Changes to ${changelogVersion}` : "Publish Changelog Update"}
+                  </Button>
+                  {editingChangelogId && (
+                    <Button type="button" variant="outline" onClick={handleCancelEditChangelog}>
+                      Cancel
+                    </Button>
+                  )}
+                </div>
               </form>
             </CardContent>
           </Card>
@@ -1002,13 +1191,27 @@ export function AdminPanel() {
                             {new Date(c.releaseDate || c.createdAt).toLocaleDateString()}
                           </td>
                           <td className="px-4 py-3 text-right">
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => handleDeleteChangelog(c._id)}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
+                            <div className="flex items-center justify-end gap-1.5">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 px-2.5 text-xs gap-1"
+                                onClick={() => handleEditChangelog(c)}
+                                title="Edit this changelog"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                                <span className="hidden sm:inline">Edit</span>
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                className="h-8 px-2"
+                                onClick={() => handleDeleteChangelog(c._id)}
+                                title="Delete changelog"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
                           </td>
                         </tr>
                       ))
