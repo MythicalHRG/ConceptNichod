@@ -29,8 +29,9 @@ export async function createBroadcastAction(formData: FormData) {
     throw new Error("Missing subject or message");
   }
 
-  // Expires exactly 36 hours from now
-  const expiresAt = new Date(Date.now() + 36 * 60 * 60 * 1000);
+  // Adjustable expiration time (defaults to 36 hours)
+  const expiryHours = parseFloat(formData.get("expiryHours") as string) || 36;
+  const expiresAt = new Date(Date.now() + expiryHours * 60 * 60 * 1000);
 
   await Broadcast.create({
     subject,

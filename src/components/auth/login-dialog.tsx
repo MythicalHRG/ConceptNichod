@@ -182,6 +182,12 @@ export function LoginDialog() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !username || !password || !fullName || !gender || !dob || !classLevel || !city) return;
+
+    const validUsername = /^[a-zA-Z0-9_.]+$/;
+    if (!validUsername.test(username) || username.length < 3 || username.length > 30) {
+      toast({ variant: 'destructive', title: 'Invalid Username', description: 'Usernames can only include letters, numbers, underscores (_), and periods (.). Spaces and symbols are not allowed.' });
+      return;
+    }
     if (!isEmailVerified) {
       toast({ variant: "destructive", title: "Verification Required", description: "Please verify your email using the OTP before registering." });
       return;
@@ -391,7 +397,8 @@ export function LoginDialog() {
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-medium">Username *</label>
-                <Input type="text" placeholder="johndoe123" value={username} onChange={(e) => setUsername(e.target.value)} required />
+                <Input type="text" placeholder="johndoe123" value={username} onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-zA-Z0-9_.]/g, ''))} required />
+                <p className="text-[10px] text-muted-foreground">Only letters, numbers, underscores (_), and periods (.) allowed.</p>
               </div>
               <div className="space-y-2 p-3 bg-secondary/20 rounded-md border border-primary/20">
                 <label className="text-xs font-medium">Email Verification (@gmail.com, @outlook.com/in) *</label>

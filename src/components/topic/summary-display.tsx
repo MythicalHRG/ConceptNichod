@@ -1,27 +1,22 @@
-import { useState, useEffect } from 'react';
+'use client';
+
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from '@/components/ui/button';
 import { Volume2, Square } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { LatexRenderer } from '@/components/ui/latex-renderer';
+import { FollowUpChat } from './follow-up-chat';
 
-export function SummaryDisplay({ summary }: { summary: string }) {
+export function SummaryDisplay({ summary, topic }: { summary: string; topic?: any }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const { toast } = useToast();
 
-  useEffect(() => {
+  React.useEffect(() => {
     return () => {
-      window.speechSynthesis.cancel();
+      window.speechSynthesis?.cancel();
     };
   }, []);
-
-  // Simple formatting to remove markdown and add paragraphs
-  const formattedSummary = summary
-    .replace(/###\s/g, '') // Remove ### headers
-    .replace(/\*\*/g, '')   // Remove bold markers
-    .replace(/[*]/g, '')    // Remove single asterisks
-    .split('\n')
-    .filter(p => p.trim() !== '')
-    .map((paragraph, index) => <p key={index} className="mb-4">{paragraph}</p>);
 
   const handleTextToSpeech = () => {
     if (!('speechSynthesis' in window)) {
@@ -39,23 +34,24 @@ export function SummaryDisplay({ summary }: { summary: string }) {
       return;
     }
 
-    // Clean up summary for reading (remove markdown)
-    const textToRead = summary.replace(/#/g, '').replace(/\*/g, '');
-    const utterance = new SpeechSynthesisUtterance(textToRead);
-    
-    utterance.onend = () => {
-      setIsPlaying(false);
-    };
+    // Strip markdown for speech synthesis
+    const textToRead = summary
+      .replace(/#{1,3}\s/g, '')
+      .replace(/\*\*/g, '')
+      .replace(/\*/g, '')
+      .replace(/\$\$[^$]+\$\$/g, '(mathematical formula)')
+      .replace(/\$[^$]+\$/g, '(formula)');
 
+    const utterance = new SpeechSynthesisUtterance(textToRead);
+    utterance.onend = () => setIsPlaying(false);
     utterance.onerror = (event) => {
       setIsPlaying(false);
-      // Browsers often throw 'interrupted' or 'canceled' when stopping or changing text, which is normal.
       if (event.error !== 'interrupted' && event.error !== 'canceled') {
-          toast({
-            variant: "destructive",
-            title: "Speech Error",
-            description: "Could not play the audio summary properly.",
-          });
+        toast({
+          variant: "destructive",
+          title: "Speech Error",
+          description: "Could not play the audio summary.",
+        });
       }
     };
 
@@ -64,19 +60,27 @@ export function SummaryDisplay({ summary }: { summary: string }) {
   };
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="font-headline">AI-Generated Summary</CardTitle>
-        <Button onClick={handleTextToSpeech} size="sm" variant={isPlaying ? "destructive" : "outline"}>
-          {isPlaying ? <Square className="mr-2" /> : <Volume2 className="mr-2" />}
-          {isPlaying ? "Stop Listening" : "Listen to Summary"}
-        </Button>
-      </CardHeader>
-      <CardContent className="prose prose-lg max-w-none text-foreground">
-        <div className="text-base leading-relaxed">
-           {formattedSummary}
-        </div>
-      </CardContent>
-    </Card>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="font-headline">AI-Generated Summary</CardTitle>
+          <Button onClick={handleTextToSpeech} size="sm" variant={isPlaying ? "destructive" : "outline"}>
+            {isPlaying ? <Square className="mr-2 h-4 w-4" /> : <Volume2 className="mr-2 h-4 w-4" />}
+            {isPlaying ? "Stop Listening" : "Listen to Summary"}
+          </Button>
+        </CardHeader>
+        <CardContent>
+          <LatexRenderer content={summary} />
+        </CardContent>
+      </Card>
+
+      {/* Interactive Doubt-Clearing AI Assistant */}
+      <FollowUpChat 
+        topicName={topic?.name || "Concept"}
+        topicSummary={summary}
+        classLevel={topic?.classLevel || "General"}
+        subject={topic?.subject || "General"}
+      />
+    </div>
   );
 }

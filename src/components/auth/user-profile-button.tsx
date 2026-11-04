@@ -15,7 +15,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { updateProfileAction, changePasswordAction, deleteAccountAction } from "@/app/actions/auth";
+import { updateProfileAction, changePasswordAction, deleteAccountAction, requestEmailChangeOtpAction, confirmEmailChangeAction } from "@/app/actions/auth";
 import { loadCaptchaEnginge, LoadCanvasTemplate, validateCaptcha } from "react-simple-captcha";
 
 export function UserProfileButton() {
@@ -40,6 +40,10 @@ export function UserProfileButton() {
   const [isDeleteEmailVerified, setIsDeleteEmailVerified] = useState(false);
   const [deleteCaptchaValue, setDeleteCaptchaValue] = useState("");
   const [activeTab, setActiveTab] = useState("profile");
+  const [newEmailToChange, setNewEmailToChange] = useState("");
+  const [emailChangeOtp, setEmailChangeOtp] = useState("");
+  const [isEmailChangeOtpSent, setIsEmailChangeOtpSent] = useState(false);
+  const [isEmailChangeLoading, setIsEmailChangeLoading] = useState(false);
 
   useEffect(() => {
     if (activeTab === "delete" && isDeleteEmailVerified) {
@@ -198,6 +202,49 @@ export function UserProfileButton() {
     }
   };
 
+    const handleRequestEmailChangeOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEmailToChange) {
+      toast({ variant: "destructive", title: "Email Required", description: "Please enter your new email address." });
+      return;
+    }
+    setIsEmailChangeLoading(true);
+    try {
+      const res = await requestEmailChangeOtpAction(newEmailToChange);
+      if (res.success) {
+        setIsEmailChangeOtpSent(true);
+        toast({ title: "OTP Sent", description: "Verification code sent to your new email." });
+      }
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Request Failed", description: err.message });
+    } finally {
+      setIsEmailChangeLoading(false);
+    }
+  };
+
+  const handleConfirmEmailChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEmailToChange || !emailChangeOtp) {
+      toast({ variant: "destructive", title: "Error", description: "Please enter the OTP." });
+      return;
+    }
+    setIsEmailChangeLoading(true);
+    try {
+      const res = await confirmEmailChangeAction(newEmailToChange, emailChangeOtp);
+      if (res.success && res.user) {
+        login(res.user);
+        toast({ title: "Email Changed Successfully", description: "Your email has been updated." });
+        setNewEmailToChange("");
+        setEmailChangeOtp("");
+        setIsEmailChangeOtpSent(false);
+      }
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Verification Failed", description: err.message });
+    } finally {
+      setIsEmailChangeLoading(false);
+    }
+  };
+
   if (isLoggedIn && user) {
     return (
       <>
@@ -207,9 +254,16 @@ export function UserProfileButton() {
               <User className="size-4 text-primary" />
             </div>
             <div className="flex flex-col flex-1 overflow-hidden">
-                <span className="text-xs truncate font-medium flex-1">
-                {user.username}
-                </span>
+                <div className="flex items-center gap-1.5 flex-1 overflow-hidden">
+                  <span className="text-xs truncate font-medium">
+                    {user.username}
+                  </span>
+                  {(user.username.toLowerCase() === 'anurag' || user.username.toLowerCase() === 'rohit') && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gradient-to-r from-purple-500 via-pink-500 to-amber-400 text-white shadow-sm flex items-center gap-0.5">
+                      👑 Bade Maalik
+                    </span>
+                  )}
+                </div>
                 <span className="text-[10px] truncate text-muted-foreground flex-1">
                 {user.email}
                 </span>
@@ -274,14 +328,17 @@ export function UserProfileButton() {
                       required
                     />
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Email (Only Gmail/Outlook)</label>
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">Email Address</label>
                     <Input
                       type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
+                      value={user?.email || ""}
+                      disabled
+                      className="bg-muted text-muted-foreground cursor-not-allowed"
                     />
+                    <p className="text-[11px] text-muted-foreground">
+                      To change email, open the <span className="text-destructive font-medium cursor-pointer underline" onClick={() => setActiveTab("delete")}>Danger</span> tab (OTP required).
+                    </p>
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Class / Grade</label>
@@ -381,7 +438,76 @@ export function UserProfileButton() {
                 </form>
               </TabsContent>
 
-              <TabsContent value="delete">
+              <TabsContent value="delete" className="space-y-6">
+                {/* Change Email Section */}
+                <div className="border border-destructive/30 rounded-lg p-4 bg-destructive/5 space-y-3">
+                  <h4 className="text-sm font-semibold text-destructive flex items-center gap-2">
+                    Change Email Address
+                  </h4>
+                  <p className="text-xs text-muted-foreground">
+                    Changing your email requires verifying ownership of your new address via a 6-digit OTP.
+                  </p>
+                  
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium">New Email (@gmail.com, @outlook.com/in)</label>
+                      <div className="flex gap-2">
+                        <Input
+                          type="email"
+                          placeholder="newemail@gmail.com"
+                          value={newEmailToChange}
+                          onChange={(e) => setNewEmailToChange(e.target.value)}
+                          disabled={isEmailChangeOtpSent || isEmailChangeLoading}
+                        />
+                        {!isEmailChangeOtpSent ? (
+                          <Button 
+                            type="button" 
+                            size="sm"
+                            onClick={handleRequestEmailChangeOtp} 
+                            disabled={isEmailChangeLoading || !newEmailToChange}
+                          >
+                            {isEmailChangeLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Send OTP"}
+                          </Button>
+                        ) : (
+                          <Button 
+                            type="button" 
+                            variant="outline" 
+                            size="sm"
+                            onClick={handleRequestEmailChangeOtp}
+                            disabled={isEmailChangeLoading}
+                          >
+                            Resend
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    {isEmailChangeOtpSent && (
+                      <div className="space-y-2 pt-2 border-t">
+                        <label className="text-xs font-medium">Enter OTP Code sent to {newEmailToChange}</label>
+                        <div className="flex gap-2">
+                          <Input
+                            placeholder="6-digit OTP"
+                            maxLength={6}
+                            value={emailChangeOtp}
+                            onChange={(e) => setEmailChangeOtp(e.target.value)}
+                          />
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="destructive"
+                            onClick={handleConfirmEmailChange}
+                            disabled={isEmailChangeLoading || emailChangeOtp.length < 6}
+                          >
+                            {isEmailChangeLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Confirm Change"}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Account Deletion Section */}
                 <form onSubmit={handleDeleteAccount} className="space-y-4 px-1 pb-2">
                   <div className="space-y-2 text-sm text-destructive text-center mb-4 border border-destructive/20 bg-destructive/10 p-3 rounded-md">
                     <strong>Warning:</strong> Deleting your account is permanent. All your generated topics, materials, and data will be permanently erased.

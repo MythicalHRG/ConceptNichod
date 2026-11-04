@@ -24,6 +24,7 @@ export default async function PublicProfilePage({ params }: { params: { username
     : 'U';
     
   const isOwner = user.username.toLowerCase() === 'mythicalhrg';
+  const isBadeMaalik = ['anurag', 'rohit'].includes(user.username.toLowerCase());
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
@@ -35,12 +36,17 @@ export default async function PublicProfilePage({ params }: { params: { username
         
         {/* Profile Header */}
         <div className="flex flex-col md:flex-row items-center md:items-start gap-6 mb-12 animate-in fade-in slide-in-from-top-4 duration-500">
-          <Avatar className="w-32 h-32 border-4 border-background shadow-xl ring-2 ring-primary/20 relative">
-            <AvatarImage src={`https://api.dicebear.com/7.x/${isOwner ? 'micah' : 'notionists'}/svg?seed=${user.username}`} alt={user.username} />
+          <Avatar className={`w-32 h-32 border-4 border-background shadow-xl relative ${isBadeMaalik ? 'ring-4 ring-purple-500 shadow-purple-500/40' : 'ring-2 ring-primary/20'}`}>
+            <AvatarImage src={`https://api.dicebear.com/7.x/${isOwner ? 'micah' : isBadeMaalik ? 'adventurer' : 'notionists'}/svg?seed=${isBadeMaalik ? user.username + '-royal' : user.username}`} alt={user.username} />
             <AvatarFallback className="text-3xl bg-primary text-primary-foreground">{initials}</AvatarFallback>
             {isOwner && (
               <div className="absolute -top-3 -right-3 bg-yellow-500 text-black p-1.5 rounded-full shadow-lg ring-2 ring-background z-10" title="Concept Nichod Owner">
                 <Crown className="w-5 h-5" />
+              </div>
+            )}
+            {isBadeMaalik && (
+              <div className="absolute -top-3 -right-3 bg-gradient-to-r from-purple-600 via-pink-500 to-amber-400 text-white p-1.5 rounded-full shadow-lg ring-2 ring-background z-10" title="Bade Maalik">
+                <Crown className="w-5 h-5 fill-amber-300 text-amber-300" />
               </div>
             )}
           </Avatar>
@@ -52,6 +58,11 @@ export default async function PublicProfilePage({ params }: { params: { username
                 {isOwner && (
                   <Badge variant="default" className="bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-black font-bold uppercase tracking-widest text-[10px] px-2 py-0.5 border-none shadow-sm">
                     Owner
+                  </Badge>
+                )}
+                {isBadeMaalik && (
+                  <Badge className="bg-gradient-to-r from-purple-600 via-pink-500 to-amber-400 text-white font-extrabold uppercase tracking-widest text-[11px] px-3 py-1 border-none shadow-md">
+                    👑 Bade Maalik
                   </Badge>
                 )}
               </div>

@@ -1,157 +1,133 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { createClient, LiveClient, LiveTranscriptionEvents } from '@deepgram/sdk';
-import { useToast } from './use-toast';
-import { getDeepgramSessionKey } from '@/app/actions';
+import { useState, useRef, useEffect, useCallback } from 'react';
 
-export const useAudioRecorder = () => {
+/**
+ * use-audio-recorder.ts
+ * Uses the browser's built-in Web Speech API (SpeechRecognition).
+ * No API keys needed. Works in Chrome, Edge, Safari.
+ * Falls back gracefully if the browser does not support it.
+ */
+
+interface AudioRecorderState {
+  isRecording: boolean;
+  isConnecting: boolean;
+  transcript: string;
+  startRecording: () => void;
+  stopRecording: () => void;
+  resetTranscript: () => void;
+  isSupported: boolean;
+}
+
+export function useAudioRecorder(): AudioRecorderState {
   const [isRecording, setIsRecording] = useState(false);
-  const [isConnecting, setIsConnecting] = useState(true);
-  const [transcript, setTranscript] = useState("");
-  const [finalTranscript, setFinalTranscript] = useState("");
-  
-  const recognitionRef = useRef<LiveClient | null>(null);
-  const microphoneRef = useRef<MediaRecorder | null>(null);
-  const { toast } = useToast();
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [transcript, setTranscript] = useState('');
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const finalTranscriptRef = useRef('');
 
-  const isRecordingRef = useRef(isRecording);
-  isRecordingRef.current = isRecording;
+  const isSupported = typeof window !== 'undefined' &&
+    ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
 
-  const setupDeepgram = useCallback(async () => {
-    try {
-      const sessionKey = await getDeepgramSessionKey();
+  const initRecognition = useCallback(() => {
+    if (!isSupported) return null;
 
-      if (!sessionKey || !sessionKey.key) {
-        throw new Error("Failed to get a session key from the server.");
-      }
-
-      const deepgram = createClient(sessionKey.key);
-      const recognition = deepgram.listen.live({
-        model: 'nova-2',
-        interim_results: true,
-        smart_format: true,
-        language: 'en-US',
-      });
-
-      recognition.on(LiveTranscriptionEvents.Open, () => {
-        setIsConnecting(false);
-      });
-      
-      recognition.on(LiveTranscriptionEvents.Transcript, (data) => {
-        const currentTranscript = data.channel.alternatives[0].transcript;
-        if (currentTranscript) {
-          setTranscript(prev => prev + " " + currentTranscript);
-        }
-        if (data.is_final && currentTranscript.trim()) {
-             setFinalTranscript(prev => (prev + " " + currentTranscript).trim());
-        }
-      });
-      
-       recognition.on(LiveTranscriptionEvents.Close, () => {
-        setIsConnecting(false);
-        if (isRecordingRef.current) {
-            setIsRecording(false);
-        }
-      });
-
-      recognition.on(LiveTranscriptionEvents.Error, (error) => {
-        console.error('Deepgram error:', error);
-        toast({
-            variant: "destructive",
-            title: "Speech Recognition Error",
-            description: "An error occurred with the transcription service."
-        });
-        setIsConnecting(false);
-        setIsRecording(false);
-      });
-
-      recognitionRef.current = recognition;
-
-    } catch (error: any) {
-        console.error("Failed to setup Deepgram:", error);
-        toast({
-            variant: "destructive",
-            title: "Initialization Failed",
-            description: error.message || "Could not connect to the transcription service."
-        });
-        setIsConnecting(false);
-    }
-  }, [toast]);
-  
-  useEffect(() => {
-    setupDeepgram();
+    const SpeechRecognitionAPI =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     
-    return () => {
-        if (recognitionRef.current) {
-            recognitionRef.current.finish();
-        }
-        if (microphoneRef.current) {
-            microphoneRef.current.stop();
-            if (microphoneRef.current.stream) {
-                microphoneRef.current.stream.getTracks().forEach((track: any) => track.stop());
-            }
-        }
-    }
-  }, [setupDeepgram]);
+    const recognition: SpeechRecognition = new SpeechRecognitionAPI();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-IN'; // Indian English for better accuracy
 
-  const setupMicrophone = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const microphone = new MediaRecorder(stream);
-        microphone.ondataavailable = (event) => {
-            if (event.data.size > 0 && recognitionRef.current?.getReadyState() === 1) {
-                recognitionRef.current.send(event.data);
-            }
-        };
-        microphoneRef.current = microphone;
-        return true;
-      } catch (error) {
-        console.error("Microphone access error:", error);
-        toast({
-            variant: "destructive",
-            title: "Microphone Access Denied",
-            description: "Please allow microphone access in your browser settings."
-        });
-        return false;
-      }
-  }
-
-  const startRecording = async () => {
-    if (isRecording) return;
-    
-    if (!recognitionRef.current || recognitionRef.current.getReadyState() > 1) {
-      setIsConnecting(true);
-      await setupDeepgram();
-    }
-
-    const micReady = await setupMicrophone();
-    if (!micReady) return;
-
-    if (microphoneRef.current && recognitionRef.current && recognitionRef.current.getReadyState() === 1) {
-      setTranscript("");
-      setFinalTranscript("");
-      microphoneRef.current.start(500);
+    recognition.onstart = () => {
+      setIsConnecting(false);
       setIsRecording(true);
-    } else {
-      toast({ variant: "destructive", title: "Cannot Record", description: "Transcription service is not ready."});
-    }
-  };
+    };
 
-  const stopRecording = () => {
-    if (!isRecording) return;
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      let interimTranscript = '';
+      let newFinalTranscript = finalTranscriptRef.current;
 
-    if (microphoneRef.current?.state === 'recording') {
-        microphoneRef.current.stop();
-        if (microphoneRef.current.stream) {
-            microphoneRef.current.stream.getTracks().forEach((track: any) => track.stop());
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i];
+        if (result.isFinal) {
+          newFinalTranscript += result[0].transcript + ' ';
+          finalTranscriptRef.current = newFinalTranscript;
+        } else {
+          interimTranscript += result[0].transcript;
         }
+      }
+
+      setTranscript(newFinalTranscript + interimTranscript);
+    };
+
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      console.error('Speech recognition error:', event.error);
+      setIsRecording(false);
+      setIsConnecting(false);
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+      setIsConnecting(false);
+    };
+
+    return recognition;
+  }, [isSupported]);
+
+  const startRecording = useCallback(() => {
+    if (!isSupported) {
+      alert('Speech recognition is not supported in your browser. Please use Chrome or Edge.');
+      return;
     }
-    if (recognitionRef.current?.getReadyState() === 1) {
-        recognitionRef.current.finish();
+
+    finalTranscriptRef.current = '';
+    setTranscript('');
+    setIsConnecting(true);
+
+    const recognition = initRecognition();
+    if (!recognition) return;
+
+    recognitionRef.current = recognition;
+    
+    try {
+      recognition.start();
+    } catch (e) {
+      console.error('Failed to start recognition:', e);
+      setIsConnecting(false);
+    }
+  }, [isSupported, initRecognition]);
+
+  const stopRecording = useCallback(() => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
     }
     setIsRecording(false);
-  };
+  }, []);
 
-  return { isRecording, isConnecting, transcript: finalTranscript, startRecording, stopRecording };
-};
+  const resetTranscript = useCallback(() => {
+    finalTranscriptRef.current = '';
+    setTranscript('');
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, []);
+
+  return {
+    isRecording,
+    isConnecting,
+    transcript,
+    startRecording,
+    stopRecording,
+    resetTranscript,
+    isSupported,
+  };
+}

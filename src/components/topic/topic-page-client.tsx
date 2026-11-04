@@ -335,7 +335,7 @@ export function TopicPageClient({ topicId, initialTopic }: TopicPageClientProps)
              </div>
           )}
 
-          {topic.summary && (timerState !== 'idle' || finalAnalysis) && <SummaryDisplay summary={topic.summary} />}
+          {topic.summary && (timerState !== 'idle' || finalAnalysis) && <SummaryDisplay summary={topic.summary} topic={topic} />}
         </TabsContent>
         <TabsContent value="practice">
           {topic.questions && (

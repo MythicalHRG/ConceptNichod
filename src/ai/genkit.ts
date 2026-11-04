@@ -1,7 +1,5 @@
-import {genkit} from 'genkit';
-import {googleAI} from '@genkit-ai/google-genai';
+import { genkit } from 'genkit';
 
-export const ai = genkit({
-  // Setting apiKey to false tells the plugin to expect an apiKey in the config at call time.
-  plugins: [googleAI({apiKey: false})],
-});
+// Genkit is kept as a minimal stub so any residual imports don't break.
+// All AI calls now go through OpenRouter (src/lib/openrouter.ts).
+export const ai = genkit({ plugins: [] });

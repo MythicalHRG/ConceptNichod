@@ -8,6 +8,7 @@ import { Loader2, ArrowLeft, ArrowRight, BrainCircuit } from "lucide-react";
 import { QuestionDisplay } from "./question-section";
 import { SpeechRecorder } from "./speech-evaluator";
 import { FinalAnalysisDisplay } from "./final-analysis-display";
+import { FollowUpChat } from "./follow-up-chat";
 import type { FinalAnalysisOutput } from "@/ai/flows/analyze-answers";
 import { useToast } from "@/hooks/use-toast";
 
@@ -110,7 +111,17 @@ export function PracticeAndAnalysisSection({ topic, onFinalAnalysis, isAnalyzing
   };
 
   if (finalAnalysis) {
-    return <FinalAnalysisDisplay analysis={finalAnalysis} topicName={topic.name} />;
+    return (
+      <div className="space-y-6">
+        <FinalAnalysisDisplay analysis={finalAnalysis} topicName={topic.name} />
+        <FollowUpChat 
+          topicName={topic.name} 
+          topicSummary={topic.summary || ""} 
+          classLevel={topic.classLevel || "General"} 
+          subject={topic.subject || "General"} 
+        />
+      </div>
+    );
   }
   
   const isWrittenQuestion = currentQuestionIndex < splitIndex;
