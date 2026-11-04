@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { BookCopy, CheckCircle, Clock } from 'lucide-react';
 import type { Topic } from '@/lib/types';
 import { formatDistanceToNow } from 'date-fns';
+import { LatexRenderer } from '@/components/ui/latex-renderer';
 
 interface TopicHistoryProps {
   topics: Topic[];
@@ -39,7 +40,7 @@ function TopicItem({ topic }: { topic: Topic }) {
         <div className="flex items-center gap-4 text-left min-w-0">
           <BookCopy className="w-6 h-6 text-primary shrink-0" />
           <div className='min-w-0'>
-            <p className="font-semibold whitespace-normal">{topic.name}</p>
+            <p className="font-semibold whitespace-normal"><LatexRenderer content={topic.name} /></p>
             <p className="text-sm text-muted-foreground">
               {topic.subject} &bull; {formattedDate}
             </p>

@@ -11,6 +11,7 @@ import {
   Award, Star, Users, ExternalLink, HelpCircle 
 } from "lucide-react";
 import { getDonationInfoAction } from "@/app/actions/donation";
+import { Rupee } from "@/components/ui/rupee-symbol";
 
 interface DonationSettings {
   upiId: string;
@@ -203,8 +204,8 @@ export default function DonatePage() {
                     </CardHeader>
 
                     <CardContent className="p-4 pt-2 space-y-2">
-                      <div className="text-lg font-black text-primary">
-                        ₹{donor.amount.toLocaleString("en-IN")}
+                      <div className="text-lg font-black text-primary flex items-center">
+                        <Rupee amount={donor.amount} />
                       </div>
                       {donor.message && (
                         <p className="text-xs text-muted-foreground italic line-clamp-2">

@@ -28,6 +28,7 @@ import {
   createChangelogAction,
   deleteChangelogAction,
 } from "@/app/actions/changelog";
+import { Rupee } from "@/components/ui/rupee-symbol";
 import {
   Card,
   CardContent,
@@ -1121,8 +1122,8 @@ export function AdminPanel() {
                       </div>
 
                       <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                          Donated Amount (₹)
+                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                          Donated Amount (<Rupee />)
                         </label>
                         <Input
                           type="number"
@@ -1195,7 +1196,7 @@ export function AdminPanel() {
                           <div className="flex items-start justify-between gap-2">
                             <div>
                               <p className="font-bold text-sm text-foreground">@{donor.username}</p>
-                              <p className="text-base font-black text-primary">₹{Number(donor.amount).toLocaleString('en-IN')}</p>
+                              <p className="text-base font-black text-primary"><Rupee amount={Number(donor.amount)} /></p>
                             </div>
                             <div className="flex items-center gap-1.5">
                               <Badge variant="outline" className="text-[10px]">{donor.tier}</Badge>
