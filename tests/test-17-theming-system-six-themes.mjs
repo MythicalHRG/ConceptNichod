@@ -232,3 +232,11 @@ test("Tareeka 17: Static verification - ThemeProvider setup references supported
     "Project must configure ThemeProvider via next-themes"
   );
 });
+
+test("Tareeka 17: Navbar renders ThemeToggle with all 6 themes and does not define rogue ModeToggle", () => {
+  const navbarPath = path.resolve("src/components/dashboard/navbar.tsx");
+  assert.ok(fs.existsSync(navbarPath), "navbar.tsx must exist");
+  const content = fs.readFileSync(navbarPath, "utf-8");
+  assert.ok(content.includes("<ThemeToggle />") || content.includes("<ThemeToggle/>"), "Navbar must render ThemeToggle");
+  assert.ok(!content.includes("function ModeToggle"), "Navbar must not define outdated ModeToggle");
+});
