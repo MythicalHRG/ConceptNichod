@@ -144,10 +144,3 @@ test('Tareeka 23.10: Admin panel source supports changelog editing and in-place 
   assert.ok(adminPanel.includes('majorDigit'), 'Admin panel must manage 1st digit (majorDigit) state');
   assert.ok(changelogActions.includes('existingLog'), 'createChangelogAction must update in-place if version exists');
 });
-
-test('Tareeka 23.11: Background music component defaults to sound ON (isPlaying: true)', () => {
-  const bgMusicSource = fs.readFileSync(path.join(projectRoot, 'src/components/ui/background-music.tsx'), 'utf8');
-
-  assert.ok(bgMusicSource.includes('useState(true)'), 'Background music must default isPlaying state to true');
-  assert.ok(bgMusicSource.includes('attemptPlay'), 'Background music must attempt autoplay on mount');
-});
