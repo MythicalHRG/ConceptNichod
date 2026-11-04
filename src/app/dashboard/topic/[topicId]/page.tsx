@@ -5,6 +5,7 @@ import Topic from "@/models/Topic";
 import mongoose from "mongoose";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { verifySessionCookie } from "@/lib/session";
 
 export default async function TopicPage({ params }: { params: { topicId: string } }) {
   await dbConnect();
@@ -13,8 +14,9 @@ export default async function TopicPage({ params }: { params: { topicId: string 
     return <div>Invalid Topic ID</div>;
   }
 
-  const sessionCookie = cookies().get("user_session");
-  if (!sessionCookie) {
+  const rawSession = cookies().get("user_session")?.value;
+  const sessionUuid = verifySessionCookie(rawSession);
+  if (!sessionUuid) {
     redirect("/?login=true");
   }
 
@@ -41,7 +43,7 @@ export default async function TopicPage({ params }: { params: { topicId: string 
     return <div>Topic not found</div>;
   }
 
-  if (topicDoc.userId !== sessionCookie.value) {
+  if (topicDoc.userId !== sessionUuid) {
     return <div>Unauthorized access to this topic</div>;
   }
 

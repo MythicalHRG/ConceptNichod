@@ -4,6 +4,7 @@ import dbConnect from "@/lib/mongoose";
 import Topic from "@/models/Topic";
 import User from "@/models/User";
 import { cookies } from "next/headers";
+import { verifySessionCookie } from "@/lib/session";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { MapPin, GraduationCap, Target, Instagram } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,8 @@ export default async function DashboardPage() {
   
   try {
     await dbConnect();
-    const sessionUuid = cookies().get("user_session")?.value;
+    const rawSession = cookies().get("user_session")?.value;
+    const sessionUuid = verifySessionCookie(rawSession);
     if (sessionUuid) {
       user = await User.findOne({ uuid: sessionUuid }).lean();
     }

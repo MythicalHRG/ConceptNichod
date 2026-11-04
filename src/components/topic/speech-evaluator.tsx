@@ -16,6 +16,7 @@ interface SpeechRecorderProps {
   timeLimitSeconds?: number;
   customLabel?: string;
   customDescription?: string;
+  isLocked?: boolean;
 }
 
 export function SpeechRecorder({
@@ -25,6 +26,7 @@ export function SpeechRecorder({
   timeLimitSeconds,
   customLabel,
   customDescription,
+  isLocked = false,
 }: SpeechRecorderProps) {
   const [timeLeft, setTimeLeft] = useState(timeLimitSeconds || 0);
   const { toast } = useToast();
@@ -33,22 +35,31 @@ export function SpeechRecorder({
     isRecording,
     isPaused,
     isConnecting,
+    isLocked: recorderIsLocked,
     transcript: liveTranscript,
     errorMessage,
     startRecording,
     pauseRecording,
     resumeRecording,
     stopRecording,
+    lockAndAbort,
     resetTranscript,
     isSupported,
   } = useAudioRecorder();
 
-  // Sync live transcribed speech directly to parent state
+  // Abort and lock audio recording if parent requests lock
   useEffect(() => {
-    if (liveTranscript !== undefined) {
+    if (isLocked) {
+      lockAndAbort();
+    }
+  }, [isLocked, lockAndAbort]);
+
+  // Sync live transcribed speech directly to parent state when not locked
+  useEffect(() => {
+    if (!isLocked && !recorderIsLocked && liveTranscript !== undefined) {
       setTranscript(liveTranscript);
     }
-  }, [liveTranscript, setTranscript]);
+  }, [liveTranscript, setTranscript, isLocked, recorderIsLocked]);
 
   // Countdown timer when recording and not paused
   useEffect(() => {
@@ -141,7 +152,7 @@ export function SpeechRecorder({
           size="lg"
           className="w-full sm:w-auto"
           variant={isRecording ? "destructive" : "default"}
-          disabled={isConnecting}
+          disabled={isConnecting || isLocked || recorderIsLocked}
         >
           {buttonIcon}
           {buttonText}
@@ -154,6 +165,7 @@ export function SpeechRecorder({
             size="lg"
             variant="secondary"
             className="w-full sm:w-auto"
+            disabled={isLocked || recorderIsLocked}
           >
             {isPaused ? "Resume" : "Pause"}
           </Button>
@@ -165,6 +177,7 @@ export function SpeechRecorder({
           size="lg"
           variant="outline"
           className="w-full sm:w-auto"
+          disabled={isLocked || recorderIsLocked}
         >
           Reset
         </Button>

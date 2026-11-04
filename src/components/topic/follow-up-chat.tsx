@@ -104,7 +104,7 @@ export function FollowUpChat({ topicName, topicSummary, classLevel, subject }: F
                 <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   {msg.role === 'user' ? (
                     <div className="max-w-[80%] rounded-2xl rounded-tr-sm bg-primary text-primary-foreground px-4 py-2 text-sm">
-                      {msg.content}
+                      <LatexRenderer content={msg.content} />
                     </div>
                   ) : (
                     <div className="max-w-[90%] rounded-2xl rounded-tl-sm bg-muted px-4 py-2 text-sm">

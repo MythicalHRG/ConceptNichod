@@ -4,12 +4,14 @@ import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
 import Broadcast from "@/models/Broadcast";
 import NotificationRead from "@/models/NotificationRead";
+import { verifySessionCookie } from "@/lib/session";
 
 const ADMIN_USERNAME = "mythicalhrg";
 
 async function verifyAdmin() {
   await dbConnect();
-  const sessionUuid = cookies().get("user_session")?.value;
+  const rawSession = cookies().get("user_session")?.value;
+  const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
 
   const user = await User.findOne({ uuid: sessionUuid }).lean();
@@ -45,7 +47,8 @@ export async function createBroadcastAction(formData: FormData) {
 
 export async function getActiveBroadcastsAction() {
   await dbConnect();
-  const sessionUuid = cookies().get("user_session")?.value;
+  const rawSession = cookies().get("user_session")?.value;
+  const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
 
   // Fetch all broadcasts that have not expired yet
@@ -58,7 +61,8 @@ export async function getActiveBroadcastsAction() {
 
 export async function markBroadcastsAsReadAction() {
   await dbConnect();
-  const sessionUuid = cookies().get("user_session")?.value;
+  const rawSession = cookies().get("user_session")?.value;
+  const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
 
   await NotificationRead.findOneAndUpdate(
@@ -72,7 +76,8 @@ export async function markBroadcastsAsReadAction() {
 
 export async function getUnreadCountAction() {
   await dbConnect();
-  const sessionUuid = cookies().get("user_session")?.value;
+  const rawSession = cookies().get("user_session")?.value;
+  const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) return { success: true, count: 0 };
 
   const readState = await NotificationRead.findOne({ userId: sessionUuid }).lean();

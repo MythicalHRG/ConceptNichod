@@ -18,6 +18,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { LatexRenderer } from "@/components/ui/latex-renderer";
 import {
   Dialog,
   DialogContent,
@@ -332,8 +333,8 @@ export function ChangelogView({ initialChangelogs, isAdmin }: ChangelogViewProps
                       <CardTitle className="text-2xl font-bold font-headline">{log.title}</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      <div className="text-sm leading-relaxed text-foreground/90 whitespace-pre-line prose dark:prose-invert max-w-none">
-                        {log.content}
+                      <div className="text-sm leading-relaxed text-foreground/90 prose dark:prose-invert max-w-none">
+                        <LatexRenderer content={log.content} />
                       </div>
 
                       <div className="pt-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">

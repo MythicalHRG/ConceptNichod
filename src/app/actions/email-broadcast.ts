@@ -40,8 +40,28 @@ export async function sendEmailBroadcastAction(formData: FormData) {
   const bccStr = (formData.get("bcc") as string) || "";
   const subject = formData.get("subject") as string;
   const body = formData.get("body") as string;
-  const attachmentUrl = formData.get("attachmentUrl") as string | null;
+  const rawAttachmentUrl = formData.get("attachmentUrl") as string | null;
   const attachmentName = (formData.get("attachmentName") as string) || "attachment";
+
+  let attachmentUrl: string | null = null;
+  if (rawAttachmentUrl && rawAttachmentUrl.trim().length > 0) {
+    const trimmed = rawAttachmentUrl.trim();
+    try {
+      const parsedUrl = new URL(trimmed);
+      const allowedHosts = ["utfs.io", "uploadthing.com", "ufs.sh"];
+      const isAllowedHost = allowedHosts.some(
+        (host) => parsedUrl.hostname === host || parsedUrl.hostname.endsWith(`.${host}`)
+      );
+      if (parsedUrl.protocol !== "https:" || !isAllowedHost) {
+        throw new Error(
+          "Invalid attachment URL. Only secure HTTPS URLs from authorized storage (utfs.io, uploadthing.com) are permitted."
+        );
+      }
+      attachmentUrl = trimmed;
+    } catch (err: any) {
+      throw new Error(err.message || "Invalid attachment URL provided.");
+    }
+  }
 
   if (!subject || !body) {
     throw new Error("Subject and Body are required.");

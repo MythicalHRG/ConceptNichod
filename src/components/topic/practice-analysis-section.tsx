@@ -10,6 +10,7 @@ import { SpeechRecorder } from "./speech-evaluator";
 import { FinalAnalysisDisplay } from "./final-analysis-display";
 import { FollowUpChat } from "./follow-up-chat";
 import type { FinalAnalysisOutput } from "@/ai/flows/analyze-answers";
+import { LatexRenderer } from "@/components/ui/latex-renderer";
 import { useToast } from "@/hooks/use-toast";
 
 interface PracticeAndAnalysisSectionProps {
@@ -31,6 +32,7 @@ export function PracticeAndAnalysisSection({ topic, onFinalAnalysis, isAnalyzing
   const [writtenAnswers, setWrittenAnswers] = useState<string[]>(() => Array(textQuestions.length).fill(""));
   const [spokenAnswers, setSpokenAnswers] = useState<string[]>(() => Array(voiceQuestions.length).fill(""));
   const [finalSummarySpeech, setFinalSummarySpeech] = useState<string>("");
+  const [isSubmitted, setIsSubmitted] = useState(false);
 
   const totalSteps = questions.length + 1; // +1 for the final overall summary step
   const autoSubmittedRef = useRef(false);
@@ -44,6 +46,7 @@ export function PracticeAndAnalysisSection({ topic, onFinalAnalysis, isAnalyzing
     voiceQuestions,
     finalAnalysis,
     isAnalyzing,
+    isSubmitted,
   });
 
   useEffect(() => {
@@ -55,6 +58,7 @@ export function PracticeAndAnalysisSection({ topic, onFinalAnalysis, isAnalyzing
       voiceQuestions,
       finalAnalysis,
       isAnalyzing,
+      isSubmitted,
     };
   }, [
     writtenAnswers,
@@ -64,6 +68,7 @@ export function PracticeAndAnalysisSection({ topic, onFinalAnalysis, isAnalyzing
     voiceQuestions,
     finalAnalysis,
     isAnalyzing,
+    isSubmitted,
   ]);
 
   // Proctoring & Session Integrity:
@@ -71,10 +76,11 @@ export function PracticeAndAnalysisSection({ topic, onFinalAnalysis, isAnalyzing
   useEffect(() => {
     const handleVisibilityChange = () => {
       const state = stateRef.current;
-      if (state.finalAnalysis || state.isAnalyzing) return;
+      if (state.finalAnalysis || state.isAnalyzing || state.isSubmitted) return;
 
       if (document.hidden && !autoSubmittedRef.current) {
         autoSubmittedRef.current = true;
+        setIsSubmitted(true);
         toast({
           title: "Session Auto-Submitted",
           description: "Window minimization or tab switch detected. Test session has been automatically submitted for evaluation.",
@@ -159,6 +165,8 @@ export function PracticeAndAnalysisSection({ topic, onFinalAnalysis, isAnalyzing
   };
 
   const handleTriggerAnalysis = () => {
+    if (isAnalyzing || isSubmitted) return;
+
     if (finalSummarySpeech.trim().length === 0) {
       toast({
         title: "Answer Required",
@@ -167,6 +175,8 @@ export function PracticeAndAnalysisSection({ topic, onFinalAnalysis, isAnalyzing
       });
       return;
     }
+
+    setIsSubmitted(true);
 
     const formattedWrittenAnswers = textQuestions.map((q, i) => ({
       question: q.question,
@@ -203,7 +213,8 @@ export function PracticeAndAnalysisSection({ topic, onFinalAnalysis, isAnalyzing
   const isVoiceQuestion = currentQuestionIndex >= splitIndex && currentQuestionIndex < questions.length;
   const isFinalStep = currentQuestionIndex === questions.length;
   
-  const isNextDisabled = currentQuestionIndex === totalSteps - 1;
+  const isLocked = isAnalyzing || isSubmitted;
+  const isNextDisabled = currentQuestionIndex === totalSteps - 1 || isLocked;
 
   return (
     <div className="space-y-8">
@@ -230,18 +241,22 @@ export function PracticeAndAnalysisSection({ topic, onFinalAnalysis, isAnalyzing
               question={questions[currentQuestionIndex]}
               answer={writtenAnswers[currentQuestionIndex]}
               onAnswerChange={handleWrittenAnswerChange}
+              disabled={isLocked}
             />
           ) : isVoiceQuestion ? (
              <div className="space-y-4">
                <div className="space-y-2">
                  <p className="text-sm font-medium text-primary">Voice Question</p>
-                 <h3 className="text-xl font-semibold">{questions[currentQuestionIndex].question}</h3>
+                 <div className="text-xl font-semibold">
+                   <LatexRenderer content={questions[currentQuestionIndex].question} />
+                 </div>
                </div>
                <SpeechRecorder 
                  key={`voice-${currentQuestionIndex}`}
                  transcript={spokenAnswers[currentQuestionIndex - splitIndex]} 
                  setTranscript={handleSpokenAnswerChange} 
                  isStandalone={false} 
+                 isLocked={isLocked}
                />
              </div>
           ) : (
@@ -251,6 +266,7 @@ export function PracticeAndAnalysisSection({ topic, onFinalAnalysis, isAnalyzing
                  transcript={finalSummarySpeech} 
                  setTranscript={setFinalSummarySpeech} 
                  isStandalone={false} 
+                 isLocked={isLocked}
                  timeLimitSeconds={120}
                  customLabel="Grab Your Confidence!"
                  customDescription="Speak about the whole topic. Explain whatever you understood continuously for up to 2 minutes. Don't leave this blank!"
@@ -264,9 +280,9 @@ export function PracticeAndAnalysisSection({ topic, onFinalAnalysis, isAnalyzing
               Step {currentQuestionIndex + 1} of {totalSteps}
             </p>
             {isFinalStep ? (
-              <Button onClick={handleTriggerAnalysis} disabled={isAnalyzing}>
-                {isAnalyzing ? <Loader2 className="mr-2 animate-spin" /> : <BrainCircuit className="mr-2" />}
-                {isAnalyzing ? "Analyzing..." : "Analyze My Performance"}
+              <Button onClick={handleTriggerAnalysis} disabled={isLocked}>
+                {isLocked ? <Loader2 className="mr-2 animate-spin" /> : <BrainCircuit className="mr-2" />}
+                {isLocked ? "Analyzing..." : "Analyze My Performance"}
               </Button>
             ) : (
               <Button onClick={handleNext} disabled={isNextDisabled}>

@@ -2,6 +2,7 @@
 
 import { cookies } from 'next/headers';
 import { callOpenRouter, parseJsonResponse } from '@/lib/openrouter';
+import { verifySessionCookie } from '@/lib/session';
 
 export type MasteryReportOutput = {
   feedback_summary: string;
@@ -19,7 +20,8 @@ export type AnalyzeConceptExplanationInput = {
 
 export async function analyzeConceptExplanation(input: AnalyzeConceptExplanationInput): Promise<MasteryReportOutput> {
   // Authentication check to prevent unauthenticated bot AI-scraping and token draining
-  const sessionUuid = cookies().get('user_session')?.value;
+  const rawSession = cookies().get('user_session')?.value;
+  const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) {
     throw new Error('Please log in to analyze your concept explanation.');
   }

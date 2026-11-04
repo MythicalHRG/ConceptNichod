@@ -2,6 +2,7 @@
 
 import { cookies } from 'next/headers';
 import { callOpenRouter, parseJsonResponse } from '@/lib/openrouter';
+import { verifySessionCookie } from '@/lib/session';
 
 export type AuthenticityReport = {
   isNatural: boolean;
@@ -45,7 +46,8 @@ export type AnalyzeAnswersInput = {
 
 export async function analyzeAnswersFlow(input: AnalyzeAnswersInput): Promise<{ analysis: FinalAnalysisOutput }> {
   // Authentication check to prevent unauthenticated bot AI-scraping and token draining
-  const sessionUuid = cookies().get('user_session')?.value;
+  const rawSession = cookies().get('user_session')?.value;
+  const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) {
     throw new Error('Please log in to generate an analysis.');
   }

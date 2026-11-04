@@ -3,13 +3,15 @@ import { cookies } from "next/headers";
 import User from "@/models/User";
 import dbConnect from "@/lib/mongoose";
 import { redirect } from "next/navigation";
+import { verifySessionCookie } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
   await dbConnect();
   
-  const sessionUuid = cookies().get("user_session")?.value;
+  const rawSession = cookies().get("user_session")?.value;
+  const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) {
     redirect("/?login=true");
   }

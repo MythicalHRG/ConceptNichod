@@ -5,6 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button";
 import { Bell, Clock, Paperclip } from "lucide-react";
 import { getActiveBroadcastsAction, getUnreadCountAction, markBroadcastsAsReadAction } from "@/app/actions/broadcast";
+import { LatexRenderer } from "@/components/ui/latex-renderer";
 
 export function NotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0);
@@ -68,7 +69,9 @@ export function NotificationBell() {
                 return (
                   <div key={b._id} className="p-4 border-b last:border-0 hover:bg-muted/10 transition-colors">
                     <h4 className="font-semibold text-sm mb-1">{b.subject}</h4>
-                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">{b.message}</p>
+                    <div className="text-sm text-muted-foreground">
+                      <LatexRenderer content={b.message} />
+                    </div>
                     {b.fileUrl && (
                       <a href={b.fileUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center text-xs font-medium text-primary hover:underline bg-primary/10 px-2 py-1 rounded-md">
                         <Paperclip className="w-3 h-3 mr-1" /> View Attachment

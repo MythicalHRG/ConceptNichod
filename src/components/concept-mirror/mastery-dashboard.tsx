@@ -58,7 +58,7 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="font-headline text-3xl text-primary">Mastery Report</CardTitle>
-                <CardDescription>AI analysis for concept: <strong>{conceptName}</strong></CardDescription>
+                <CardDescription>AI analysis for concept: <strong><LatexRenderer content={conceptName} /></strong></CardDescription>
               </div>
             </div>
         </CardHeader>
@@ -249,6 +249,7 @@ export function ConceptMirrorDashboard() {
     errorMessage, 
     startRecording, 
     stopRecording, 
+    lockAndAbort,
     resetTranscript,
     isSupported 
   } = useAudioRecorder();
@@ -272,10 +273,8 @@ export function ConceptMirrorDashboard() {
         return;
     }
     
-    // Stop recording if active and lock concept name input
-    if (isRecording) {
-      stopRecording();
-    }
+    // Lock audio recorder and concept name input to prevent speech injection during analysis
+    lockAndAbort();
     setIsTopicLocked(true);
     setIsAnalyzing(true);
     setAnalysisReport(null);

@@ -7,9 +7,10 @@ interface QuestionDisplayProps {
   question: Question;
   answer: string;
   onAnswerChange: (answer: string) => void;
+  disabled?: boolean;
 }
 
-export function QuestionDisplay({ question, answer, onAnswerChange }: QuestionDisplayProps) {
+export function QuestionDisplay({ question, answer, onAnswerChange, disabled = false }: QuestionDisplayProps) {
   const [localAnswer, setLocalAnswer] = useState(answer);
 
   useEffect(() => {
@@ -27,10 +28,16 @@ export function QuestionDisplay({ question, answer, onAnswerChange }: QuestionDi
       <Textarea
         placeholder="Type your answer here..."
         value={localAnswer}
-        onChange={(e) => setLocalAnswer(e.target.value)}
+        disabled={disabled}
+        onChange={(e) => {
+          if (disabled) return;
+          const val = e.target.value;
+          setLocalAnswer(val);
+          onAnswerChange(val);
+        }}
         onBlur={() => onAnswerChange(localAnswer)}
         rows={6}
-        className="text-base"
+        className={`text-base ${disabled ? "opacity-60 cursor-not-allowed bg-muted" : ""}`}
       />
     </div>
   );

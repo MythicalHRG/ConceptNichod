@@ -3,6 +3,7 @@ import Script from 'next/script';
 
 import { Toaster } from '@/components/ui/toaster';
 import './globals.css';
+import 'katex/dist/katex.min.css';
 import { ThemeProvider } from '@/components/theme-provider';
 import { AuthProvider } from '@/components/auth/auth-context';
 import { LoginDialog } from '@/components/auth/login-dialog';

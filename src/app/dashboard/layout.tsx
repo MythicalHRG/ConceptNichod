@@ -19,6 +19,7 @@ import { UserProfileButton } from "@/components/auth/user-profile-button";
 
 import { cookies } from "next/headers";
 import User from "@/models/User";
+import { verifySessionCookie } from "@/lib/session";
 
 export default async function DashboardLayout({
   children,
@@ -31,7 +32,8 @@ export default async function DashboardLayout({
 
   try {
     await dbConnect();
-    const userId = cookies().get("user_session")?.value;
+    const rawSession = cookies().get("user_session")?.value;
+    const userId = verifySessionCookie(rawSession);
     if (userId) {
       topicsDocs = await Topic.find({ userId: userId }).sort({ createdAt: -1 }).lean();
       const user = await User.findOne({ uuid: userId }).lean();

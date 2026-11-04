@@ -148,8 +148,9 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
               <CardTitle className="font-headline text-3xl text-primary flex items-center gap-2">
                 <Award className="w-8 h-8 text-primary" /> Performance Diagnostic Analysis
               </CardTitle>
-              <CardDescription className="text-base mt-1">
-                Rigorous evaluation for topic: <strong>{topicName}</strong>
+              <CardDescription className="text-base mt-1 flex items-center gap-1.5 flex-wrap">
+                <span>Rigorous evaluation for topic:</span>
+                <strong className="inline-block"><LatexRenderer content={topicName} /></strong>
               </CardDescription>
             </div>
             {analysis.overallScore !== undefined && (
@@ -209,13 +210,16 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
           </div>
         </CardHeader>
         <CardContent className="space-y-3 pt-0">
-          <p className="text-sm text-foreground/80 leading-relaxed bg-muted/40 p-3 rounded-lg border border-border/40">
-            {auth?.assessmentDetails || (
-              isNatural 
-                ? "Answers exhibit authentic student syntax, natural cognitive hesitations, and genuine concept assimilation without artificial ChatGPT boilerplate."
-                : "Stylistic analysis detected elevated formal uniformity and robotic cadence characteristic of synthetic language models. Please express reasoning in your own spontaneous words."
-            )}
-          </p>
+          <div className="text-sm text-foreground/80 leading-relaxed bg-muted/40 p-3 rounded-lg border border-border/40">
+            <LatexRenderer
+              content={
+                auth?.assessmentDetails ||
+                (isNatural 
+                  ? "Answers exhibit authentic student syntax, natural cognitive hesitations, and genuine concept assimilation without artificial ChatGPT boilerplate."
+                  : "Stylistic analysis detected elevated formal uniformity and robotic cadence characteristic of synthetic language models. Please express reasoning in your own spontaneous words.")
+              }
+            />
+          </div>
 
           {auth?.flaggedAnswers && auth.flaggedAnswers.length > 0 && (
             <div className="mt-2 space-y-1.5 border-t border-border/40 pt-2">
@@ -224,7 +228,10 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
                 {auth.flaggedAnswers.map((flag, idx) => (
                   <div key={idx} className="flex items-start gap-2 text-xs p-2 rounded bg-destructive/5 text-destructive border border-destructive/20">
                     <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                    <span><strong>Question {flag.questionNumber}:</strong> {flag.reason}</span>
+                    <div className="flex-1">
+                      <strong>Question {flag.questionNumber}: </strong>
+                      <LatexRenderer content={flag.reason} />
+                    </div>
                   </div>
                 ))}
               </div>
@@ -262,8 +269,10 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
                       </div>
 
                       <div className="text-xs p-2.5 rounded bg-background border border-border/60">
-                        <span className="font-semibold text-muted-foreground">Your Answer: </span>
-                        <span className="italic">{critique.userAnswer || "[No answer provided]"}</span>
+                        <span className="font-semibold text-muted-foreground block mb-1">Your Answer: </span>
+                        <div className="italic">
+                          <LatexRenderer content={critique.userAnswer || "[No answer provided]"} />
+                        </div>
                       </div>
 
                       <div className="text-sm text-foreground/90">
@@ -401,7 +410,9 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
                     </span>
                   </div>
                   {chart.description && (
-                    <p className="text-xs text-muted-foreground mt-1">{chart.description}</p>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      <LatexRenderer content={chart.description} />
+                    </div>
                   )}
                 </div>
 

@@ -4,12 +4,14 @@ import { cookies } from "next/headers";
 import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
 import Changelog from "@/models/Changelog";
+import { verifySessionCookie } from "@/lib/session";
 
 const ADMIN_USERNAME = "mythicalhrg";
 
 async function verifyAdmin() {
   await dbConnect();
-  const sessionUuid = cookies().get("user_session")?.value;
+  const rawSession = cookies().get("user_session")?.value;
+  const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
 
   const user = await User.findOne({ uuid: sessionUuid }).lean();
@@ -22,7 +24,8 @@ async function verifyAdmin() {
 export async function checkIsAdminAction(): Promise<boolean> {
   try {
     await dbConnect();
-    const sessionUuid = cookies().get("user_session")?.value;
+    const rawSession = cookies().get("user_session")?.value;
+    const sessionUuid = verifySessionCookie(rawSession);
     if (!sessionUuid) return false;
     const user = await User.findOne({ uuid: sessionUuid }).lean();
     return user?.username === ADMIN_USERNAME;

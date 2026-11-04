@@ -2,6 +2,7 @@ import { createUploadthing, type FileRouter } from "uploadthing/next";
 import { cookies } from "next/headers";
 import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
+import { verifySessionCookie } from "@/lib/session";
 
 const f = createUploadthing();
 
@@ -11,7 +12,8 @@ export const ourFileRouter = {
   broadcastAttachment: f({ blob: { maxFileSize: "512MB" } })
     .middleware(async ({ req }) => {
       await dbConnect();
-      const sessionUuid = cookies().get("user_session")?.value;
+      const rawSession = cookies().get("user_session")?.value;
+      const sessionUuid = verifySessionCookie(rawSession);
       if (!sessionUuid) throw new Error("Unauthorized");
 
       const user = await User.findOne({ uuid: sessionUuid }).lean();

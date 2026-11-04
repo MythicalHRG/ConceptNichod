@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 
 /**
  * use-audio-recorder.ts
- * Browser-native Web Speech API with Pause/Resume, Reset, and Audio Chime
+ * Browser-native Web Speech API with Pause/Resume, Reset, Chime, and Lock/Abort defense
  */
 
 // Subtle mic chime when recording begins
@@ -35,12 +35,14 @@ export interface AudioRecorderState {
   isRecording: boolean;
   isPaused: boolean;
   isConnecting: boolean;
+  isLocked: boolean;
   transcript: string;
   errorMessage: string | null;
   startRecording: () => void;
   pauseRecording: () => void;
   resumeRecording: () => void;
   stopRecording: () => void;
+  lockAndAbort: () => void;
   resetTranscript: () => void;
   clearError: () => void;
   isSupported: boolean;
@@ -50,12 +52,14 @@ export function useAudioRecorder(): AudioRecorderState {
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isLocked, setIsLocked] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const recognitionRef = useRef<any>(null);
   const isIntentActiveRef = useRef(false);
   const isPausedRef = useRef(false);
+  const isLockedRef = useRef(false);
   const baseTranscriptRef = useRef('');
   const fullTranscriptRef = useRef('');
 
@@ -64,7 +68,7 @@ export function useAudioRecorder(): AudioRecorderState {
     ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
 
   const initRecognition = useCallback(() => {
-    if (!isSupported || typeof window === 'undefined') return null;
+    if (!isSupported || typeof window === 'undefined' || isLockedRef.current) return null;
 
     const SpeechRecognitionAPI =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -75,6 +79,7 @@ export function useAudioRecorder(): AudioRecorderState {
     recognition.lang = 'en-IN';
 
     recognition.onstart = () => {
+      if (isLockedRef.current) return;
       setIsConnecting(false);
       setIsRecording(true);
       setIsPaused(false);
@@ -83,6 +88,7 @@ export function useAudioRecorder(): AudioRecorderState {
     };
 
     recognition.onresult = (event: any) => {
+      if (isLockedRef.current) return;
       let finalSegment = '';
       let interimSegment = '';
 
@@ -102,6 +108,7 @@ export function useAudioRecorder(): AudioRecorderState {
     };
 
     recognition.onerror = (event: any) => {
+      if (isLockedRef.current) return;
       console.warn('Speech recognition notice:', event.error);
 
       if (event.error === 'not-allowed') {
@@ -120,6 +127,12 @@ export function useAudioRecorder(): AudioRecorderState {
     };
 
     recognition.onend = () => {
+      if (isLockedRef.current) {
+        setIsRecording(false);
+        setIsConnecting(false);
+        return;
+      }
+
       if (isIntentActiveRef.current && !isPausedRef.current) {
         try {
           recognition.start();
@@ -137,6 +150,7 @@ export function useAudioRecorder(): AudioRecorderState {
   }, [isSupported]);
 
   const startRecording = useCallback(() => {
+    if (isLockedRef.current) return;
     setErrorMessage(null);
 
     if (!isSupported) {
@@ -176,7 +190,7 @@ export function useAudioRecorder(): AudioRecorderState {
   }, [isSupported, initRecognition]);
 
   const pauseRecording = useCallback(() => {
-    if (!isRecording || isPaused) return;
+    if (isLockedRef.current || !isRecording || isPaused) return;
     isPausedRef.current = true;
     setIsPaused(true);
     baseTranscriptRef.current = fullTranscriptRef.current;
@@ -188,7 +202,7 @@ export function useAudioRecorder(): AudioRecorderState {
   }, [isRecording, isPaused]);
 
   const resumeRecording = useCallback(() => {
-    if (!isRecording || !isPaused) return;
+    if (isLockedRef.current || !isRecording || !isPaused) return;
     isPausedRef.current = false;
     setIsPaused(false);
     setIsConnecting(true);
@@ -219,7 +233,37 @@ export function useAudioRecorder(): AudioRecorderState {
     setIsConnecting(false);
   }, []);
 
+  const lockAndAbort = useCallback(() => {
+    isLockedRef.current = true;
+    setIsLocked(true);
+    isIntentActiveRef.current = false;
+    isPausedRef.current = false;
+
+    if (recognitionRef.current) {
+      try {
+        const rec = recognitionRef.current;
+        rec.onstart = null;
+        rec.onresult = null;
+        rec.onerror = null;
+        rec.onend = null;
+        if (typeof rec.abort === 'function') {
+          rec.abort();
+        } else if (typeof rec.stop === 'function') {
+          rec.stop();
+        }
+      } catch (err) {
+        console.warn('Speech recognition abort notice:', err);
+      }
+      recognitionRef.current = null;
+    }
+
+    setIsRecording(false);
+    setIsPaused(false);
+    setIsConnecting(false);
+  }, []);
+
   const resetTranscript = useCallback(() => {
+    if (isLockedRef.current) return;
     isIntentActiveRef.current = false;
     isPausedRef.current = false;
     if (recognitionRef.current) {
@@ -244,12 +288,23 @@ export function useAudioRecorder(): AudioRecorderState {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      isLockedRef.current = true;
       isIntentActiveRef.current = false;
       isPausedRef.current = false;
       if (recognitionRef.current) {
         try {
-          recognitionRef.current.stop();
+          const rec = recognitionRef.current;
+          rec.onstart = null;
+          rec.onresult = null;
+          rec.onerror = null;
+          rec.onend = null;
+          if (typeof rec.abort === 'function') {
+            rec.abort();
+          } else if (typeof rec.stop === 'function') {
+            rec.stop();
+          }
         } catch {}
+        recognitionRef.current = null;
       }
     };
   }, []);
@@ -258,12 +313,14 @@ export function useAudioRecorder(): AudioRecorderState {
     isRecording,
     isPaused,
     isConnecting,
+    isLocked,
     transcript,
     errorMessage,
     startRecording,
     pauseRecording,
     resumeRecording,
     stopRecording,
+    lockAndAbort,
     resetTranscript,
     clearError,
     isSupported,

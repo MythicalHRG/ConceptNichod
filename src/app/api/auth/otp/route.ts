@@ -54,6 +54,15 @@ export async function POST(req: Request) {
         );
       }
 
+      // Per-email Rate limiting: 5 requests per 15 minutes
+      const emailRateLimit = checkRateLimit(`otp:email:${email}`, 5, 15 * 60 * 1000);
+      if (!emailRateLimit.success) {
+        return NextResponse.json(
+          { error: 'Too many OTP requests for this email address. Please try again later.' },
+          { status: 429 }
+        );
+      }
+
       // Enforce email domain restriction
       if (!validateEmailDomain(email)) {
         return NextResponse.json(
@@ -132,6 +141,15 @@ export async function POST(req: Request) {
     }
 
     if (action === 'verify') {
+      // IP Rate limiting for verification attempts: 15 attempts per 15 minutes
+      const verifyRateLimit = checkRateLimit(`otp:verify:${ip}`, 15, 15 * 60 * 1000);
+      if (!verifyRateLimit.success) {
+        return NextResponse.json(
+          { error: 'Too many verification attempts from this IP. Please wait a few minutes before trying again.' },
+          { status: 429 }
+        );
+      }
+
       const sanitizedOtp = (otp || '').trim();
       if (!sanitizedOtp) return NextResponse.json({ error: 'OTP is required' }, { status: 400 });
 
