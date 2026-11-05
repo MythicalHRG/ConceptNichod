@@ -1123,7 +1123,7 @@ export function AdminPanel() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Title</label>
                   <Input
-                    placeholder="e.g. OpenRouter Free Migration & Concept Mirror Upgrades"
+                    placeholder="e.g. Intelligent Concept Mirror & Oral Defense Analytics"
                     value={changelogTitle}
                     onChange={(e) => setChangelogTitle(e.target.value)}
                     required

@@ -2,6 +2,7 @@
 import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
 import Topic from "@/models/Topic";
+import ConceptMirror from "@/models/ConceptMirror";
 
 export async function getPublicProfileData(username: string) {
   await dbConnect();
@@ -22,7 +23,7 @@ export async function getPublicProfileData(username: string) {
   const analyzedTopics = topics.filter(t => t.analysis && typeof t.analysis.overallScore === 'number');
   const totalTopics = topics.length;
   
-  // 1. Overall Score Average
+  // 1. Overall Score Average (Concept Nichod Topics)
   let totalScore = 0;
   analyzedTopics.forEach(t => {
       totalScore += t.analysis.overallScore;
@@ -37,7 +38,7 @@ export async function getPublicProfileData(username: string) {
   });
   const subjectDistribution = Array.from(subjectMap.entries()).map(([name, value]) => ({ name, value }));
 
-  // 3. Histogram: Score Distribution (Concept Mirror)
+  // 3. Histogram: Score Distribution (Concept Nichod)
   const scoreBuckets = [
     { name: "0-20", min: 0, max: 20, count: 0 },
     { name: "21-40", min: 21, max: 40, count: 0 },
@@ -56,7 +57,7 @@ export async function getPublicProfileData(username: string) {
   });
   const scoreDistribution = scoreBuckets.map(b => ({ name: b.name, value: b.count }));
 
-  // 4. Bar Chart: Skill Averages (Concept Mirror combined with Concept Nichod generated topics)
+  // 4. Bar Chart: Skill Averages (Concept Nichod generated topics)
   const skillAggregator = new Map<string, { total: number, count: number }>();
   
   analyzedTopics.forEach(t => {
@@ -99,6 +100,74 @@ export async function getPublicProfileData(username: string) {
       score: t.analysis.overallScore
     }));
 
+  // 6. Concept Mirror Analytics (Verbal Oral Defense & Speech Explanations)
+  let conceptMirrorAnalytics = {
+    totalSessions: 0,
+    averageScore: 0,
+    totalDurationSeconds: 0,
+    skillAverages: [] as { name: string; score: number }[],
+    recentSessions: [] as {
+      id: string;
+      conceptName: string;
+      overallScore: number;
+      durationSeconds: number;
+      createdAt: Date;
+    }[],
+  };
+
+  try {
+    const mirrorDocs = await ConceptMirror.find({ userId: userWithId.uuid })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    if (mirrorDocs.length > 0) {
+      let totalMirrorScore = 0;
+      let totalMirrorDuration = 0;
+      const mirrorSkillMap = new Map<string, { total: number; count: number }>();
+
+      mirrorDocs.forEach((doc: any) => {
+        totalMirrorScore += doc.overallScore || 0;
+        totalMirrorDuration += doc.durationSeconds || 0;
+        if (Array.isArray(doc.radarData)) {
+          doc.radarData.forEach((r: any) => {
+            if (r.metric && typeof r.score === 'number') {
+              if (!mirrorSkillMap.has(r.metric)) {
+                mirrorSkillMap.set(r.metric, { total: 0, count: 0 });
+              }
+              const m = mirrorSkillMap.get(r.metric)!;
+              m.total += r.score;
+              m.count++;
+            }
+          });
+        }
+      });
+
+      const avgMirrorScore = Math.round(totalMirrorScore / mirrorDocs.length);
+      const mirrorSkillAverages = Array.from(mirrorSkillMap.entries()).map(([name, m]) => ({
+        name,
+        score: Math.round(m.total / m.count),
+      })).sort((a, b) => b.score - a.score);
+
+      const recentSessions = mirrorDocs.slice(0, 6).map((doc: any) => ({
+        id: doc._id?.toString() || '',
+        conceptName: doc.conceptName,
+        overallScore: doc.overallScore,
+        durationSeconds: doc.durationSeconds || 0,
+        createdAt: doc.createdAt,
+      }));
+
+      conceptMirrorAnalytics = {
+        totalSessions: mirrorDocs.length,
+        averageScore: avgMirrorScore,
+        totalDurationSeconds: totalMirrorDuration,
+        skillAverages: mirrorSkillAverages,
+        recentSessions,
+      };
+    }
+  } catch (err) {
+    console.warn("Could not query ConceptMirror records:", err);
+  }
+
   return {
     user: user.toObject(),
     totalTopics,
@@ -106,6 +175,7 @@ export async function getPublicProfileData(username: string) {
     subjectDistribution,
     scoreDistribution,
     skillAverages,
-    learningProgression
+    learningProgression,
+    conceptMirror: conceptMirrorAnalytics,
   };
 }

@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Mic, MicOff, Wand2, RefreshCw, Lock, AlertCircle, TrendingUp, BarChart2, Compass, PieChart as PieIcon } from 'lucide-react';
+import { Loader2, Mic, MicOff, Wand2, RefreshCw, Lock, AlertCircle, TrendingUp, BarChart2, Compass, PieChart as PieIcon, Timer, RotateCcw } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend as PieLegend, Tooltip as PieTooltip } from 'recharts';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Legend as RadarLegend, Tooltip as RadarTooltip } from 'recharts';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as GeneralTooltip } from 'recharts';
@@ -28,218 +28,221 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
     { metric: "Conciseness", score: 78 }
   ];
 
-  // Filter out any 0 or negative values for pie slices to prevent overlapping labels
-  const rawPie = report.pie_chart_data || [];
-  const validPieData = rawPie.filter(d => typeof d.value === 'number' && d.value > 0);
-  const safePieData = validPieData.length > 0 ? validPieData : [
-    { name: "Fact", value: 60 },
-    { name: "Fluff", value: 15 },
-    { name: "Insight", value: 25 }
-  ];
-
-  const safeBarData = report.bar_chart_data && report.bar_chart_data.length > 0 ? report.bar_chart_data : [
+  const safeBarData = report.bar_chart_data?.length ? report.bar_chart_data : [
     { name: "Definitions", score: 82 },
     { name: "Core Principles", score: 78 },
-    { name: "Application", score: 70 },
-    { name: "Edge Cases", score: 65 },
+    { name: "Application", score: 72 },
+    { name: "Edge Cases", score: 68 }
   ];
 
-  const safePolynomialData = report.polynomial_chart_data && report.polynomial_chart_data.length > 0 ? report.polynomial_chart_data : [
-    { step: "Initial Recall", score: 55 },
-    { step: "Concept Framing", score: 70 },
-    { step: "Analytical Nuance", score: 78 },
+  const safePolyData = report.polynomial_chart_data?.length ? report.polynomial_chart_data : [
+    { step: "Initial Recall", score: 65 },
+    { step: "Concept Framing", score: 74 },
+    { step: "Analytical Nuance", score: 80 },
     { step: "Synthesis & Proof", score: 84 },
-    { step: "Final Mastery", score: 90 },
+    { step: "Final Mastery", score: 88 }
   ];
+
+  const avgClarity = Math.round(
+    safeRadarData.reduce((acc, curr) => acc + curr.score, 0) / safeRadarData.length
+  );
 
   return (
-    <Card className="w-full bg-muted/30">
-        <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="font-headline text-3xl text-primary">Mastery Report</CardTitle>
-                <CardDescription>AI analysis for concept: <strong><LatexRenderer content={conceptName} /></strong></CardDescription>
-              </div>
+    <Card className="w-full">
+      <CardHeader>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <CardTitle className="font-headline text-3xl">Concept Mastery Report</CardTitle>
+            <CardDescription className="text-base mt-1">
+              Oral concept defense for: <span className="font-semibold text-primary">{conceptName}</span>
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="text-right">
+              <span className="text-xs uppercase font-bold tracking-wider text-muted-foreground block">Mastery Score</span>
+              <span className="text-3xl font-extrabold text-primary">{report.overallScore || avgClarity}%</span>
             </div>
-        </CardHeader>
-        <CardContent className="space-y-8">
-            <div>
-                <h3 className="text-xl font-semibold mb-2">Feedback Summary</h3>
-                <div className="text-foreground/90 leading-relaxed bg-background/50 p-4 rounded-lg border border-border/60">
-                  <LatexRenderer content={report.feedback_summary} />
-                </div>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-8">
+        {/* Professor Feedback Section with LaTeX support */}
+        <div className="p-5 rounded-xl border bg-muted/30">
+          <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
+            <span>Feedback & Conceptual Evaluation</span>
+          </h3>
+          <div className="text-sm md:text-base leading-relaxed text-foreground/90 space-y-2">
+            <LatexRenderer content={report.feedback_summary} />
+          </div>
+        </div>
+
+        {/* 4 Distinct Non-Repeating Visual Models */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Chart 1: Spider / Radar Chart (Dimensions) */}
+          <div className="rounded-xl border p-4 bg-background shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-medium text-sm flex items-center gap-2">
+                <Compass className="w-4 h-4 text-primary" /> Delivery & Rigor Dimensions
+              </h4>
+              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-muted text-muted-foreground">Spider / Radar</span>
             </div>
-
-            {/* 4 Distinct, Non-repeating Visual Analytics Cards */}
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold font-headline text-foreground">Multi-Model Cognitive Analytics</h3>
-                <span className="text-xs bg-muted text-muted-foreground px-2.5 py-1 rounded-full font-medium">
-                  4 Unique Visual Models
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
-                {/* 1. Radar Chart: Skill Balance */}
-                <Card className="p-5 bg-background/90 border border-border/80 rounded-xl shadow-sm flex flex-col justify-between">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="text-base font-semibold flex items-center gap-2 text-foreground font-headline">
-                        <Compass className="w-4 h-4 text-purple-500" /> Skill Balance
-                      </h4>
-                      <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-muted text-muted-foreground">Radar</span>
-                    </div>
-                    <div className="w-full h-[280px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                          <RadarChart cx="50%" cy="50%" outerRadius="68%" margin={{ top: 15, right: 30, bottom: 15, left: 30 }} data={safeRadarData}>
-                              <PolarGrid stroke="hsl(var(--border) / 0.6)" />
-                              <PolarAngleAxis dataKey="metric" tick={{ fill: 'currentColor', fontSize: 10, fontWeight: 500 }} />
-                              <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} axisLine={false} />
-                              <Radar name="Your Score" dataKey="score" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.6} />
-                              <RadarTooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }}/>
-                              <RadarLegend verticalAlign="bottom" height={32} />
-                          </RadarChart>
-                      </ResponsiveContainer>
-                    </div>
-                </Card>
-
-                {/* 2. Pie Chart: Knowledge Composition */}
-                <Card className="p-5 bg-background/90 border border-border/80 rounded-xl shadow-sm flex flex-col justify-between">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="text-base font-semibold flex items-center gap-2 text-foreground font-headline">
-                        <PieIcon className="w-4 h-4 text-emerald-500" /> Knowledge Composition
-                      </h4>
-                      <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-muted text-muted-foreground">Pie</span>
-                    </div>
-                    <div className="w-full h-[280px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                           <PieChart margin={{ top: 10, right: 15, bottom: 10, left: 15 }}>
-                              <Pie
-                                  data={safePieData}
-                                  cx="50%"
-                                  cy="46%"
-                                  innerRadius={45}
-                                  outerRadius={75}
-                                  paddingAngle={3}
-                                  labelLine={true}
-                                  fill="#8884d8"
-                                  dataKey="value"
-                                  nameKey="name"
-                                  label={({ name, percent, value }) => {
-                                    if (!percent || percent < 0.05 || value <= 0) return null;
-                                    return `${name}: ${(percent * 100).toFixed(0)}%`;
-                                  }}
-                              >
-                                  {safePieData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={PIE_CHART_COLORS[index % PIE_CHART_COLORS.length]} />
-                                  ))}
-                              </Pie>
-                              <PieTooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }}/>
-                              <PieLegend verticalAlign="bottom" height={32} />
-                          </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-                </Card>
-
-                {/* 3. Bar Chart: Concept Coverage */}
-                <Card className="p-5 bg-background/90 border border-border/80 rounded-xl shadow-sm flex flex-col justify-between">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="text-base font-semibold flex items-center gap-2 text-foreground font-headline">
-                        <BarChart2 className="w-4 h-4 text-primary" /> Concept Coverage
-                      </h4>
-                      <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-muted text-muted-foreground">Bar</span>
-                    </div>
-                    <div className="w-full h-[280px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={safeBarData} margin={{ top: 15, right: 20, bottom: 25, left: -10 }}>
-                          <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
-                          <XAxis 
-                            dataKey="name" 
-                            tickLine={false} 
-                            axisLine={false} 
-                            tick={{ fontSize: 10, fill: 'currentColor' }}
-                            tickMargin={8} 
-                          />
-                          <YAxis 
-                            domain={[0, 100]} 
-                            tickLine={false} 
-                            axisLine={false} 
-                            tick={{ fontSize: 11, fill: 'currentColor' }}
-                            tickFormatter={(v) => `${v}%`}
-                          />
-                          <GeneralTooltip 
-                            cursor={{ fill: 'transparent', stroke: 'none' }}
-                            formatter={(val: number) => [`${val}%`, 'Coverage Score']}
-                            contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }} 
-                          />
-                          <Bar dataKey="score" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} animationDuration={1000} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                </Card>
-
-                {/* 4. Polynomial Curve: Learning Trajectory */}
-                <Card className="p-5 bg-background/90 border border-border/80 rounded-xl shadow-sm flex flex-col justify-between">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="text-base font-semibold flex items-center gap-2 text-foreground font-headline">
-                        <TrendingUp className="w-4 h-4 text-indigo-500" /> Mastery Flow Trajectory
-                      </h4>
-                      <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-muted text-muted-foreground">Polynomial Spline</span>
-                    </div>
-                    <div className="w-full h-[280px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={safePolynomialData} margin={{ top: 15, right: 20, bottom: 25, left: -10 }}>
-                          <defs>
-                            <linearGradient id="mirrorPolyGradient" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="#6366f1" stopOpacity={0.8} />
-                              <stop offset="95%" stopColor="#6366f1" stopOpacity={0.05} />
-                            </linearGradient>
-                          </defs>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border) / 0.5)" />
-                          <XAxis 
-                            dataKey="step" 
-                            tickLine={false} 
-                            axisLine={false} 
-                            tick={{ fontSize: 10, fill: 'currentColor' }}
-                            tickMargin={8} 
-                          />
-                          <YAxis 
-                            domain={[0, 100]} 
-                            tickLine={false} 
-                            axisLine={false} 
-                            tick={{ fontSize: 11, fill: 'currentColor' }}
-                            tickFormatter={(v) => `${v}%`}
-                          />
-                          <GeneralTooltip 
-                            formatter={(val: number) => [`${val}%`, 'Mastery Trajectory']}
-                            contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: '8px' }}
-                          />
-                          <Area 
-                            type="monotone" 
-                            dataKey="score" 
-                            stroke="#6366f1" 
-                            strokeWidth={3} 
-                            fillOpacity={1} 
-                            fill="url(#mirrorPolyGradient)"
-                            dot={{ r: 4, fill: "#6366f1", stroke: "hsl(var(--background))", strokeWidth: 2 }}
-                            activeDot={{ r: 6 }}
-                          />
-                        </AreaChart>
-                      </ResponsiveContainer>
-                    </div>
-                </Card>
-              </div>
+            <p className="text-xs text-muted-foreground mb-4">Multi-axial evaluation of verbal concept explanation.</p>
+            <div className="h-[280px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <RadarChart cx="50%" cy="50%" outerRadius="75%" data={safeRadarData}>
+                  <PolarGrid stroke="hsl(var(--border) / 0.5)" />
+                  <PolarAngleAxis dataKey="metric" tick={{ fill: 'currentColor', fontSize: 11 }} />
+                  <PolarRadiusAxis angle={30} domain={[0, 100]} stroke="hsl(var(--muted-foreground))" />
+                  <Radar name="Student Clarity" dataKey="score" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.4} />
+                  <RadarLegend verticalAlign="bottom" wrapperStyle={{ fontSize: 12 }} />
+                  <RadarTooltip 
+                    contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))', backgroundColor: 'hsl(var(--background))', color: 'hsl(var(--foreground))' }}
+                  />
+                </RadarChart>
+              </ResponsiveContainer>
             </div>
-        </CardContent>
+          </div>
+
+          {/* Chart 2: Pie / Donut Chart (Content Composition) */}
+          <div className="rounded-xl border p-4 bg-background shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-medium text-sm flex items-center gap-2">
+                <PieIcon className="w-4 h-4 text-emerald-500" /> Content Composition
+              </h4>
+              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-muted text-muted-foreground">Pie / Donut</span>
+            </div>
+            <p className="text-xs text-muted-foreground mb-4">Ratio of verifiable scientific fact vs fluff vs insight.</p>
+            <div className="h-[280px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={report.pie_chart_data}
+                    cx="50%"
+                    cy="45%"
+                    innerRadius={55}
+                    outerRadius={85}
+                    paddingAngle={4}
+                    dataKey="value"
+                    labelLine={false}
+                    label={({ name, percent }) => {
+                      if (!percent || percent < 0.05) return null;
+                      return `${name} ${(percent * 100).toFixed(0)}%`;
+                    }}
+                  >
+                    {report.pie_chart_data.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={PIE_CHART_COLORS[index % PIE_CHART_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <PieTooltip 
+                    formatter={(val: number) => [`${val}%`, 'Proportion']}
+                    contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))', backgroundColor: 'hsl(var(--background))', color: 'hsl(var(--foreground))' }}
+                  />
+                  <PieLegend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: 12 }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Chart 3: Bar Chart (Structural Pillars) */}
+          <div className="rounded-xl border p-4 bg-background shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-medium text-sm flex items-center gap-2">
+                <BarChart2 className="w-4 h-4 text-amber-500" /> Structural Knowledge Pillars
+              </h4>
+              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-muted text-muted-foreground">Bar Chart</span>
+            </div>
+            <p className="text-xs text-muted-foreground mb-4">Proficiency breakdown across definitions and edge cases.</p>
+            <div className="h-[280px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={safeBarData} margin={{ top: 20, right: 20, left: -10, bottom: 25 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border) / 0.5)" />
+                  <XAxis 
+                    dataKey="name" 
+                    tick={{ fontSize: 11, fill: 'currentColor' }} 
+                    tickLine={false} 
+                    axisLine={false}
+                  />
+                  <YAxis 
+                    domain={[0, 100]} 
+                    tick={{ fontSize: 11, fill: 'currentColor' }} 
+                    tickLine={false} 
+                    axisLine={false}
+                    tickFormatter={(v) => `${v}%`}
+                  />
+                  <GeneralTooltip 
+                    cursor={{ fill: 'transparent' }}
+                    formatter={(val: number) => [`${val}%`, 'Score']}
+                    contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))', backgroundColor: 'hsl(var(--background))', color: 'hsl(var(--foreground))' }}
+                  />
+                  <Bar dataKey="score" fill="#f59e0b" radius={[4, 4, 0, 0]} animationDuration={1000} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Chart 4: Polynomial Spline Area Chart (Explanation Mastery Curve) */}
+          <div className="rounded-xl border p-4 bg-background shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-medium text-sm flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-indigo-500" /> Mastery Explanation Curve
+              </h4>
+              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-muted text-muted-foreground">Polynomial Spline</span>
+            </div>
+            <p className="text-xs text-muted-foreground mb-4">Progression curve from recall to final concept synthesis.</p>
+            <div className="h-[280px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={safePolyData} margin={{ top: 20, right: 20, left: -10, bottom: 25 }}>
+                  <defs>
+                    <linearGradient id="cmPolyGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#6366f1" stopOpacity={0.8} />
+                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0.05} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border) / 0.5)" />
+                  <XAxis 
+                    dataKey="step" 
+                    tickLine={false} 
+                    axisLine={false} 
+                    tick={{ fontSize: 10, fill: 'currentColor' }} 
+                    tickMargin={10} 
+                  />
+                  <YAxis 
+                    domain={[0, 100]} 
+                    tickLine={false} 
+                    axisLine={false} 
+                    tick={{ fontSize: 11, fill: 'currentColor' }}
+                    tickFormatter={(v) => `${v}%`}
+                  />
+                  <GeneralTooltip 
+                    formatter={(val: number) => [`${val}%`, 'Depth Score']}
+                    contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))', backgroundColor: 'hsl(var(--background))', color: 'hsl(var(--foreground))' }}
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="score" 
+                    stroke="#6366f1" 
+                    strokeWidth={3} 
+                    fillOpacity={1} 
+                    fill="url(#cmPolyGrad)"
+                    dot={{ r: 4, fill: "#6366f1", stroke: "hsl(var(--background))", strokeWidth: 2 }}
+                    activeDot={{ r: 6 }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      </CardContent>
     </Card>
   );
 };
 
-export function ConceptMirrorDashboard() {
+export function MasteryDashboard() {
   const [conceptName, setConceptName] = useState('');
   const [isTopicLocked, setIsTopicLocked] = useState(false);
-  const [manualTranscript, setManualTranscript] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisReport, setAnalysisReport] = useState<MasteryReportOutput | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   const { toast } = useToast();
   const { 
@@ -254,23 +257,61 @@ export function ConceptMirrorDashboard() {
     isSupported 
   } = useAudioRecorder();
 
-  // Sync speech transcript into manualTranscript so user can review/edit
+  // Stopwatch timer when recording
   useEffect(() => {
-    if (transcript) {
-      setManualTranscript(transcript);
+    let interval: NodeJS.Timeout | null = null;
+    if (isRecording) {
+      interval = setInterval(() => {
+        setElapsedSeconds((prev) => prev + 1);
+      }, 1000);
     }
-  }, [transcript]);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isRecording]);
+
+  const formatStopwatch = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const handleStartRecording = () => {
+    if (!conceptName.trim()) {
+      toast({
+        variant: 'destructive',
+        title: 'Concept Name Required',
+        description: 'Please enter the concept name first before speaking.',
+      });
+      return;
+    }
+    if (!isSupported) {
+      toast({
+        variant: 'destructive',
+        title: 'Microphone Notice',
+        description: 'Microphone voice input is optimized for modern browsers (Chrome, Edge, Safari).',
+      });
+      return;
+    }
+    setElapsedSeconds(0);
+    startRecording();
+  };
+
+  const handleResetSpeech = () => {
+    resetTranscript();
+    setElapsedSeconds(0);
+  };
 
   const handleAnalysis = async () => {
-    const finalExplanation = (manualTranscript || transcript).trim();
+    const finalExplanation = transcript.trim();
 
     if (!conceptName.trim()) {
-        toast({ variant: 'destructive', title: 'Error', description: 'Please enter the concept name.' });
-        return;
+      toast({ variant: 'destructive', title: 'Error', description: 'Please enter the concept name.' });
+      return;
     }
     if (!finalExplanation) {
-        toast({ variant: 'destructive', title: 'Error', description: 'Please speak or enter an explanation of the concept first.' });
-        return;
+      toast({ variant: 'destructive', title: 'Explanation Required', description: 'Please speak your explanation of the concept first.' });
+      return;
     }
     
     // Lock audio recorder and concept name input to prevent speech injection during analysis
@@ -280,54 +321,52 @@ export function ConceptMirrorDashboard() {
     setAnalysisReport(null);
 
     try {
-        const report = await analyzeConceptExplanation({ 
-          conceptName: conceptName.trim(), 
-          userTranscript: finalExplanation 
-        });
-        setAnalysisReport(report);
-        toast({ title: 'Analysis Complete!', description: 'Your Mastery Report is ready with LaTeX equations and charts.' });
+      const report = await analyzeConceptExplanation({ 
+        conceptName: conceptName.trim(), 
+        userTranscript: finalExplanation,
+        durationSeconds: elapsedSeconds
+      });
+      setAnalysisReport(report);
+      toast({ title: 'Analysis Complete!', description: 'Your Mastery Report is ready with equations and charts.' });
     } catch (error: any) {
-        console.error("Analysis failed:", error);
-        toast({ variant: 'destructive', title: 'Analysis Failed', description: error.message || 'The AI could not generate a report.' });
-        // Unlock on failure so user can adjust
-        setIsTopicLocked(false);
+      console.error("Analysis failed:", error);
+      toast({ variant: 'destructive', title: 'Analysis Failed', description: error.message || 'The AI could not generate a report.' });
+      setIsTopicLocked(false);
     } finally {
-        setIsAnalyzing(false);
+      setIsAnalyzing(false);
     }
   };
 
   const handleReset = () => {
     setConceptName('');
     setIsTopicLocked(false);
-    setManualTranscript('');
     setAnalysisReport(null);
+    setElapsedSeconds(0);
     resetTranscript();
   };
   
   if (analysisReport) {
-      return (
-          <div className='space-y-6'>
-              <MasteryReportDisplay report={analysisReport} conceptName={conceptName} />
-              
-              {/* Follow-up doubts and queries section */}
-              <FollowUpChat
-                topicName={conceptName}
-                topicSummary={analysisReport.feedback_summary}
-                classLevel="Class 11-12"
-                subject="Concept Mastery"
-              />
+    return (
+      <div className="space-y-6">
+        <MasteryReportDisplay report={analysisReport} conceptName={conceptName} />
+        
+        {/* Follow-up doubts and queries section */}
+        <FollowUpChat
+          topicName={conceptName}
+          topicSummary={analysisReport.feedback_summary}
+          classLevel="Class 11-12"
+          subject="Concept Mastery"
+        />
 
-              <div className="flex justify-center pt-2">
-                  <Button onClick={handleReset} size="lg" variant="outline">
-                      <RefreshCw className="mr-2 w-4 h-4" />
-                      Analyze Another Concept
-                  </Button>
-              </div>
-          </div>
-      )
+        <div className="flex justify-center pt-2">
+          <Button onClick={handleReset} size="lg" variant="outline">
+            <RefreshCw className="mr-2 w-4 h-4" />
+            Analyze Another Concept
+          </Button>
+        </div>
+      </div>
+    );
   }
-
-  const effectiveTranscript = manualTranscript || transcript;
 
   return (
     <Card className="w-full">
@@ -347,87 +386,149 @@ export function ConceptMirrorDashboard() {
         )}
 
         <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="concept-name">Concept Name</Label>
+            {isTopicLocked && (
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <Lock className="w-3 h-3 text-amber-500" /> Topic locked for analysis
+              </span>
+            )}
+          </div>
+          <Input 
+            id="concept-name" 
+            placeholder="e.g., Newton's Third Law, Photosynthesis, Thermodynamics"
+            value={conceptName}
+            onChange={(e) => setConceptName(e.target.value)}
+            disabled={isTopicLocked || isRecording || isAnalyzing}
+            className={isTopicLocked ? "bg-muted cursor-not-allowed text-muted-foreground" : ""}
+          />
+        </div>
+        
+        <div className="space-y-4 rounded-xl border bg-card/60 p-5 shadow-sm">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="text-sm font-semibold flex items-center gap-2">
+                {isConnecting && (
+                  <span className="flex items-center gap-1.5 text-amber-500 font-medium animate-pulse">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Preparing microphone...
+                  </span>
+                )}
+                {!isConnecting && isRecording && (
+                  <span className="flex items-center gap-2 text-emerald-500 font-semibold">
+                    <span className="relative flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                    </span>
+                    Listening Live • Speak your explanation
+                  </span>
+                )}
+                {!isConnecting && !isRecording && (
+                  <span className="text-foreground/90">
+                    {transcript ? 'Explanation Captured' : 'Ready to record your verbal explanation'}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Speak clearly into your microphone. The AI evaluates your conceptual clarity and depth.
+              </p>
+            </div>
+
+            {/* Timer and Action Controls */}
+            <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+              {/* Live Stopwatch Badge */}
+              <div
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-mono text-sm font-bold shadow-inner ${
+                  isRecording
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500'
+                    : elapsedSeconds > 0
+                    ? 'bg-muted/70 border-border text-foreground'
+                    : 'bg-muted/30 border-border/50 text-muted-foreground'
+                }`}
+              >
+                <Timer className={`w-4 h-4 ${isRecording ? 'animate-pulse text-emerald-500' : ''}`} />
+                <span>{formatStopwatch(elapsedSeconds)}</span>
+              </div>
+
+              {/* Primary Mic Toggle */}
+              <Button
+                type="button"
+                onClick={isRecording ? stopRecording : handleStartRecording}
+                disabled={isConnecting || isAnalyzing || isTopicLocked}
+                variant={isRecording ? 'destructive' : 'default'}
+                className="font-medium shadow-sm transition-all"
+              >
+                {isConnecting ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : isRecording ? (
+                  <MicOff className="mr-2 h-4 w-4" />
+                ) : (
+                  <Mic className="mr-2 h-4 w-4" />
+                )}
+                {isConnecting ? 'Starting...' : isRecording ? 'Finish Speaking' : 'Start Speaking'}
+              </Button>
+
+              {/* Reset Button (NO PAUSE BUTTON) */}
+              <Button
+                type="button"
+                onClick={handleResetSpeech}
+                disabled={isConnecting || isAnalyzing || isTopicLocked || (!transcript && elapsedSeconds === 0 && !isRecording)}
+                variant="outline"
+                title="Reset verbal explanation"
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <RotateCcw className="mr-1.5 h-4 w-4" />
+                Reset
+              </Button>
+            </div>
+          </div>
+
+          {/* Live Speech Transcript - Strictly Non-Editable (No manual typing) */}
+          <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <Label htmlFor="concept-name">Concept Name</Label>
-              {isTopicLocked && (
-                <span className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Lock className="w-3 h-3 text-amber-500" /> Topic locked for analysis
+              <Label htmlFor="explanation-box" className="text-xs font-semibold text-muted-foreground">
+                Verbal Explanation
+              </Label>
+              {transcript && (
+                <span className="text-[11px] text-muted-foreground">
+                  {transcript.trim().split(/\s+/).filter(Boolean).length} words spoken
                 </span>
               )}
             </div>
-            <Input 
-                id="concept-name" 
-                placeholder="e.g., Newton's Third Law, Photosynthesis, Thermodynamics"
-                value={conceptName}
-                onChange={(e) => setConceptName(e.target.value)}
-                disabled={isTopicLocked || isRecording || isAnalyzing}
-                className={isTopicLocked ? "bg-muted cursor-not-allowed text-muted-foreground" : ""}
+            <Textarea
+              id="explanation-box"
+              rows={5}
+              placeholder="Tap 'Start Speaking' and articulate your explanation aloud. Your verbal explanation will appear here in real time as you speak..."
+              value={transcript}
+              readOnly
+              disabled={isTopicLocked}
+              className="font-sans leading-relaxed bg-muted/40 cursor-default resize-none focus-visible:ring-0 select-text"
             />
-        </div>
-        
-        <div className="space-y-4 rounded-lg border bg-background p-4">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                 <div>
-                    <p className="text-sm font-medium flex items-center gap-2">
-                        {isConnecting && (
-                          <span className="flex items-center gap-1.5 text-amber-600 font-semibold animate-pulse">
-                            <Loader2 className="w-4 h-4 animate-spin" /> Starting microphone... Please wait 1 second before speaking
-                          </span>
-                        )}
-                        {!isConnecting && isRecording && (
-                          <span className="flex items-center gap-1.5 text-emerald-600 font-bold">
-                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping inline-block" />
-                            Listening now! Speak your explanation clearly.
-                          </span>
-                        )}
-                        {!isConnecting && !isRecording && (
-                          <span>Ready to record speech. Click below to start.</span>
-                        )}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {isSupported
-                        ? 'Native browser Web Speech recognition. No API keys required.'
-                        : 'Web speech not supported in this browser. You can type directly below.'}
-                    </p>
-                 </div>
-                <Button 
-                  type="button"
-                  onClick={isRecording ? stopRecording : startRecording} 
-                  disabled={isConnecting || isAnalyzing || isTopicLocked} 
-                  variant={isRecording ? 'destructive' : 'default'}
-                >
-                    {isConnecting ? <Loader2 className="mr-2 animate-spin" /> : (isRecording ? <MicOff className="mr-2" /> : <Mic className="mr-2" />)}
-                    {isConnecting ? 'Starting Mic...' : (isRecording ? 'Stop Recording' : 'Start Speech Recording')}
-                </Button>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="explanation-box" className="text-xs font-medium text-muted-foreground">
-                Your Explanation (Speech Transcript or Typed)
-              </Label>
-              <Textarea
-                id="explanation-box"
-                rows={5}
-                placeholder="Click 'Start Speech Recording' and speak, or type your concept explanation here..."
-                value={effectiveTranscript}
-                onChange={(e) => setManualTranscript(e.target.value)}
-                disabled={isAnalyzing || isTopicLocked}
-                className="font-sans leading-relaxed"
-              />
-            </div>
+          </div>
         </div>
       </CardContent>
-      <CardFooter>
-          <Button 
-            onClick={handleAnalysis} 
-            disabled={!effectiveTranscript.trim() || !conceptName.trim() || isAnalyzing} 
-            className="w-full" 
-            size="lg"
-          >
-            {isAnalyzing ? <Loader2 className="mr-2 animate-spin" /> : <Wand2 className="mr-2" />}
-            {isAnalyzing ? 'Analyzing with OpenRouter AI...' : 'Analyze My Explanation'}
+      <CardFooter className="pt-2">
+        <Button 
+          onClick={handleAnalysis} 
+          disabled={!transcript.trim() || !conceptName.trim() || isAnalyzing} 
+          className="w-full" 
+          size="lg"
+        >
+          {isAnalyzing ? (
+            <>
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              Evaluating Concept Clarity & Mastery...
+            </>
+          ) : (
+            <>
+              <Wand2 className="mr-2 h-5 w-5" />
+              Analyze Concept Explanation
+            </>
+          )}
         </Button>
       </CardFooter>
     </Card>
   );
 }
+
+export const ConceptMirrorDashboard = MasteryDashboard;
+

@@ -3,6 +3,8 @@
 import { cookies } from 'next/headers';
 import { callOpenRouter, parseJsonResponse } from '@/lib/openrouter';
 import { verifySessionCookie } from '@/lib/session';
+import dbConnect from '@/lib/mongoose';
+import ConceptMirror from '@/models/ConceptMirror';
 
 export type MasteryReportOutput = {
   feedback_summary: string;
@@ -10,12 +12,14 @@ export type MasteryReportOutput = {
   pie_chart_data: { name: string; value: number }[];
   bar_chart_data?: { name: string; score: number }[];
   polynomial_chart_data?: { step: string; score: number }[];
+  overallScore?: number;
 };
 
 export type AnalyzeConceptExplanationInput = {
   conceptName: string;
   userTranscript: string;
   classLevel?: string;
+  durationSeconds?: number;
 };
 
 export async function analyzeConceptExplanation(input: AnalyzeConceptExplanationInput): Promise<MasteryReportOutput> {
@@ -26,7 +30,7 @@ export async function analyzeConceptExplanation(input: AnalyzeConceptExplanation
     throw new Error('Please log in to analyze your concept explanation.');
   }
 
-  const { conceptName, userTranscript, classLevel = 'Unknown' } = input;
+  const { conceptName, userTranscript, classLevel = 'Unknown', durationSeconds = 0 } = input;
 
   const prompt = `You are a strict but encouraging professor analyzing a student's explanation of a concept.
 Provide a detailed mastery report based on their transcribed explanation with comprehensive multi-chart visual analytics.
@@ -104,26 +108,47 @@ CRITICAL: pie_chart_data values MUST sum to exactly 100.`;
     });
   }
 
+  const overallScore = Math.round(
+    output.radar_chart_data.reduce((s, r) => s + r.score, 0) /
+      (output.radar_chart_data.length || 1)
+  );
+  output.overallScore = overallScore;
+
   // Fallback defaults if LLM omitted additional diverse charts
   if (!output.bar_chart_data || output.bar_chart_data.length === 0) {
-    const avgScore = Math.round(output.radar_chart_data.reduce((s, r) => s + r.score, 0) / (output.radar_chart_data.length || 1));
     output.bar_chart_data = [
-      { name: "Definitions", score: Math.min(100, Math.round(avgScore * 1.04)) },
-      { name: "Core Principles", score: Math.round(avgScore) },
-      { name: "Application", score: Math.max(20, Math.round(avgScore * 0.92)) },
-      { name: "Edge Cases", score: Math.max(20, Math.round(avgScore * 0.85)) },
+      { name: "Definitions", score: Math.min(100, Math.round(overallScore * 1.04)) },
+      { name: "Core Principles", score: Math.round(overallScore) },
+      { name: "Application", score: Math.max(20, Math.round(overallScore * 0.92)) },
+      { name: "Edge Cases", score: Math.max(20, Math.round(overallScore * 0.85)) },
     ];
   }
 
   if (!output.polynomial_chart_data || output.polynomial_chart_data.length === 0) {
-    const avgScore = Math.round(output.radar_chart_data.reduce((s, r) => s + r.score, 0) / (output.radar_chart_data.length || 1));
     output.polynomial_chart_data = [
-      { step: "Initial Recall", score: Math.max(15, Math.round(avgScore * 0.7)) },
-      { step: "Concept Framing", score: Math.max(25, Math.round(avgScore * 0.85)) },
-      { step: "Analytical Nuance", score: Math.min(100, Math.round(avgScore * 0.95)) },
-      { step: "Synthesis & Proof", score: Math.round(avgScore) },
-      { step: "Final Mastery", score: Math.min(100, Math.round(avgScore * 1.08)) },
+      { step: "Initial Recall", score: Math.max(15, Math.round(overallScore * 0.7)) },
+      { step: "Concept Framing", score: Math.max(25, Math.round(overallScore * 0.85)) },
+      { step: "Analytical Nuance", score: Math.min(100, Math.round(overallScore * 0.95)) },
+      { step: "Synthesis & Proof", score: Math.round(overallScore) },
+      { step: "Final Mastery", score: Math.min(100, Math.round(overallScore * 1.08)) },
     ];
+  }
+
+  // Persist session to MongoDB for public profile analytics and mastery tracking
+  try {
+    await dbConnect();
+    await ConceptMirror.create({
+      userId: sessionUuid,
+      conceptName: conceptName.trim(),
+      transcript: userTranscript.trim(),
+      durationSeconds: durationSeconds || 0,
+      overallScore,
+      feedbackSummary: output.feedback_summary,
+      radarData: output.radar_chart_data,
+      pieData: output.pie_chart_data,
+    });
+  } catch (dbErr) {
+    console.warn("Could not persist ConceptMirror record:", dbErr);
   }
 
   return output;

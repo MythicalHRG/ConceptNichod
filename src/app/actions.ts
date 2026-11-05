@@ -139,10 +139,10 @@ export async function revalidateDashboard() {
 }
 
 /**
- * Kept for backwards compatibility; audio recording now uses native browser Web Speech API
+ * Kept for backwards compatibility; audio recording is processed directly in the client browser
  */
 export async function getDeepgramSessionKey(): Promise<{ key?: string; error?: string }> {
-  return { error: "Speech recognition migrated to native browser Web Speech API." };
+  return { error: "Voice input is processed directly in your browser." };
 }
 
 export async function createTopicAction(data: { name: string, subject: string, chapter: string }) {

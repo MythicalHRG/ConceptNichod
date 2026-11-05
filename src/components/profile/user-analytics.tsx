@@ -2,22 +2,42 @@
 
 import React, { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { 
   PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, Legend,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, AreaChart, Area
 } from 'recharts';
-import { BookOpen, Target, Trophy, BrainCircuit, TrendingUp, Layers, BarChart2, PieChart as PieIcon } from 'lucide-react';
+import { 
+  BookOpen, Target, Trophy, BrainCircuit, TrendingUp, Layers, BarChart2, 
+  PieChart as PieIcon, Mic, Clock, Sparkles, Award, ArrowUpRight 
+} from 'lucide-react';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import Link from 'next/link';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#ffc658', '#82ca9d', '#a4de6c'];
 
-type AnalyticsData = {
+export type ConceptMirrorSession = {
+  id: string;
+  conceptName: string;
+  overallScore: number;
+  durationSeconds: number;
+  createdAt: Date | string;
+};
+
+export type AnalyticsData = {
   totalTopics: number;
   averageScore?: number;
-  subjectDistribution: { name: string, value: number }[];
-  scoreDistribution: { name: string, value: number }[];
-  skillAverages: { name: string, score: number }[];
-  learningProgression?: { session: string, score: number }[];
+  subjectDistribution: { name: string; value: number }[];
+  scoreDistribution: { name: string; value: number }[];
+  skillAverages: { name: string; score: number }[];
+  learningProgression?: { session: string; score: number }[];
+  conceptMirror?: {
+    totalSessions: number;
+    averageScore: number;
+    totalDurationSeconds: number;
+    skillAverages: { name: string; score: number }[];
+    recentSessions: ConceptMirrorSession[];
+  };
   user: any;
 };
 
@@ -51,25 +71,50 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
     ];
   }, [data.learningProgression, data.averageScore]);
 
+  const mirrorData = data.conceptMirror || {
+    totalSessions: 0,
+    averageScore: 0,
+    totalDurationSeconds: 0,
+    skillAverages: [],
+    recentSessions: [],
+  };
+
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    if (mins === 0) return `${secs}s`;
+    return `${mins}m ${secs}s`;
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
       {/* Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         
+        {/* Card 1: Concept Mirror Oral Defense */}
         <Card className="hover:-translate-y-1 transition-transform border-primary/20 bg-primary/10">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-primary">Concept Mirror Avg.</CardTitle>
+            <CardTitle className="text-sm font-medium text-primary">Concept Mirror Mastery</CardTitle>
             <BrainCircuit className="h-5 w-5 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-extrabold text-primary">{data.averageScore || 0}%</div>
+            <div className="text-3xl font-extrabold text-primary">
+              {mirrorData.totalSessions > 0
+                ? `${mirrorData.averageScore}%`
+                : data.averageScore
+                ? `${data.averageScore}%`
+                : '0%'}
+            </div>
             <p className="text-xs text-muted-foreground mt-1 font-medium">
-              Overall AI performance
+              {mirrorData.totalSessions > 0
+                ? `${mirrorData.totalSessions} oral defense sessions`
+                : 'Verbal delivery & clarity'}
             </p>
           </CardContent>
         </Card>
 
+        {/* Card 2: Concept Nichod Generated */}
         <Card className="hover:-translate-y-1 transition-transform border-primary/10">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Concept Nichod Generated</CardTitle>
@@ -83,19 +128,21 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
           </CardContent>
         </Card>
         
+        {/* Card 3: Written Practice Avg */}
         <Card className="hover:-translate-y-1 transition-transform">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Most Studied Subject</CardTitle>
+            <CardTitle className="text-sm font-medium">Written Practice Score</CardTitle>
             <Trophy className="h-4 w-4 text-yellow-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold truncate">{mostStudiedSubject}</div>
+            <div className="text-2xl font-bold">{data.averageScore || 0}%</div>
             <p className="text-xs text-muted-foreground mt-1">
-              Top subject by volume
+              {mostStudiedSubject !== "N/A" ? `Top: ${mostStudiedSubject}` : 'Topic practice assessments'}
             </p>
           </CardContent>
         </Card>
         
+        {/* Card 4: Class / Grade */}
         <Card className="hover:-translate-y-1 transition-transform">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Class / Grade</CardTitle>
@@ -109,6 +156,123 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
           </CardContent>
         </Card>
       </div>
+
+      {/* Concept Mirror Dedicated Analytics Section */}
+      <Card className="border-border shadow-sm overflow-hidden">
+        <CardHeader className="pb-3 border-b bg-muted/20">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <CardTitle className="text-lg font-bold flex items-center gap-2">
+                <Mic className="w-5 h-5 text-primary" />
+                Concept Mirror: Oral Defense & Verbal Analytics
+              </CardTitle>
+              <CardDescription className="text-xs mt-0.5">
+                Evaluations of verbal concept explanations, conceptual rigor, and oral delivery.
+              </CardDescription>
+            </div>
+            <Link 
+              href="/dashboard/concept-mirror"
+              className="text-xs font-semibold text-primary hover:underline flex items-center gap-1 shrink-0 self-start sm:self-auto"
+            >
+              Open Concept Mirror <ArrowUpRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        </CardHeader>
+        <CardContent className="p-6 space-y-6">
+          {/* Key Oral Defense Metrics */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="p-4 rounded-xl border bg-card/60 flex items-center gap-3">
+              <div className="p-2.5 rounded-lg bg-primary/10 text-primary">
+                <BrainCircuit className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Oral Sessions</p>
+                <p className="text-xl font-extrabold">{mirrorData.totalSessions}</p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-xl border bg-card/60 flex items-center gap-3">
+              <div className="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-500">
+                <Award className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Average Oral Score</p>
+                <p className="text-xl font-extrabold text-emerald-500">{mirrorData.averageScore}%</p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-xl border bg-card/60 flex items-center gap-3">
+              <div className="p-2.5 rounded-lg bg-amber-500/10 text-amber-500">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Time Explaining</p>
+                <p className="text-xl font-extrabold">{formatDuration(mirrorData.totalDurationSeconds)}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Skill Breakdown or Recent Sessions */}
+          {mirrorData.skillAverages.length > 0 && (
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Verbal Competency Breakdown
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                {mirrorData.skillAverages.map((skill) => (
+                  <div key={skill.name} className="p-3 rounded-lg border bg-background flex items-center justify-between">
+                    <span className="text-xs font-medium text-foreground">{skill.name}</span>
+                    <Badge variant="outline" className={`font-mono text-xs font-bold ${
+                      skill.score >= 80 ? 'text-emerald-500 border-emerald-500/30' :
+                      skill.score >= 60 ? 'text-amber-500 border-amber-500/30' : 'text-red-500 border-red-500/30'
+                    }`}>
+                      {skill.score}%
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Recent Mirrored Concepts */}
+          {mirrorData.recentSessions.length > 0 ? (
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Recent Oral Defenses
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                {mirrorData.recentSessions.map((session, idx) => (
+                  <div 
+                    key={session.id || idx}
+                    className="p-3 rounded-lg border bg-background/50 hover:bg-muted/30 transition-colors flex items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold truncate text-foreground">{session.conceptName}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {session.durationSeconds > 0 ? formatDuration(session.durationSeconds) : 'Oral explanation'} • {new Date(session.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <Badge className={`font-mono font-bold text-xs shrink-0 ${
+                      session.overallScore >= 80 ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30' :
+                      session.overallScore >= 60 ? 'bg-amber-500/15 text-amber-500 border-amber-500/30' : 'bg-red-500/15 text-red-500 border-red-500/30'
+                    }`}>
+                      {session.overallScore}%
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="p-6 rounded-xl border border-dashed text-center space-y-2 bg-muted/10">
+              <Sparkles className="w-6 h-6 text-primary mx-auto opacity-80" />
+              <p className="text-sm font-medium text-foreground">No oral defense sessions recorded yet</p>
+              <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                Speak your understanding in Concept Mirror to unlock multi-dimensional verbal clarity scores and fluency analytics.
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* 4 Distinct Non-Repeating Chart Types */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

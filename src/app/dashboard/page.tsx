@@ -28,9 +28,9 @@ export default async function DashboardPage() {
   if (isDbConnecting) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-        <h1 className="text-3xl font-bold font-headline">Waking up the database...</h1>
+        <h1 className="text-3xl font-bold font-headline">Connecting to Workspace...</h1>
         <p className="text-muted-foreground text-center max-w-lg">
-          Since this is a free database, it goes to sleep when unused. Please wait a few seconds and then refresh the page.
+          Connecting to your cloud database cluster. Please wait a moment while your study materials load.
         </p>
         <Button onClick={() => window.location.reload()} className="mt-4">
           Refresh Page
