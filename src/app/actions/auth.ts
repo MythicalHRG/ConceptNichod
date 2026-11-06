@@ -15,8 +15,6 @@ import {
   resetRateLimit,
 } from "@/lib/rate-limiter";
 
-const SECRET_KEY = process.env.ENCRYPTION_SECRET_KEY || "super_secret_default_key_for_encodec_12345!";
-
 function validateEmailDomain(email: string) {
     return email.endsWith("@gmail.com") || email.endsWith("@outlook.com") || email.endsWith("@outlook.in");
 }
