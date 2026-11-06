@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState, Suspense } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState, Suspense } from "react";
 import { meAction, logoutAction } from "@/app/actions/auth";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 
@@ -23,6 +23,7 @@ export type AuthUser = {
 interface AuthContextType {
   user: AuthUser | null;
   isLoggedIn: boolean;
+  isAuthReady: boolean;
   login: (user: AuthUser) => void;
   logout: () => void;
   isAuthModalOpen: boolean;
@@ -54,24 +55,41 @@ function AuthParamsHandler({ setAuthModalOpen }: { setAuthModalOpen: (open: bool
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [isAuthReady, setIsAuthReady] = useState(false);
+  const hasLocalAuthChange = useRef(false);
   const [isAuthModalOpen, setAuthModalOpen] = useState(false);
 
   useEffect(() => {
-    meAction().then((res) => {
-      if (res.user) {
-        setUser(res.user);
-      }
-    });
+    let active = true;
+    meAction()
+      .then((res) => {
+        if (active && !hasLocalAuthChange.current) setUser(res.user ?? null);
+      })
+      .catch((error) => {
+        console.error("Unable to restore the current session:", error);
+        if (active && !hasLocalAuthChange.current) setUser(null);
+      })
+      .finally(() => {
+        if (active) setIsAuthReady(true);
+      });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   const login = (newUser: AuthUser) => {
+    hasLocalAuthChange.current = true;
     setUser(newUser);
+    setIsAuthReady(true);
     setAuthModalOpen(false);
   };
 
   const logout = async () => {
+    hasLocalAuthChange.current = true;
     await logoutAction();
     setUser(null);
+    setIsAuthReady(true);
   };
 
   return (
@@ -79,6 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         user,
         isLoggedIn: !!user,
+        isAuthReady,
         login,
         logout,
         isAuthModalOpen,

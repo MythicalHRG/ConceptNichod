@@ -18,9 +18,9 @@ export default function Home() {
         <FloatingBooks />
         <div className="relative z-10 w-full max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-center">
           <div className="flex flex-col items-center lg:items-start text-center lg:text-left">
-            <div className="flex items-center gap-3 mb-4">
-              <Logo className="h-16 w-16 drop-shadow-lg" />
-              <h1 className="text-4xl md:text-5xl font-headline font-bold text-foreground">
+            <div className="mb-4 flex flex-col items-center gap-2 sm:flex-row sm:gap-3">
+              <Logo className="h-12 w-12 shrink-0 drop-shadow-lg sm:h-16 sm:w-16" />
+              <h1 className="text-3xl font-headline font-bold text-foreground sm:text-4xl md:text-5xl">
                 Concepts Nichod
               </h1>
             </div>

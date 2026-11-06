@@ -9,7 +9,7 @@ import { Loader2, Search, MapPin, GraduationCap, Target, Instagram, Twitter } fr
 import { useAuth } from "@/components/auth/auth-context";
 
 export default function AspirantsConnectPage() {
-    const { isLoggedIn, setAuthModalOpen } = useAuth();
+    const { isLoggedIn, isAuthReady, setAuthModalOpen } = useAuth();
     const [users, setUsers] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(false);
 
@@ -21,10 +21,10 @@ export default function AspirantsConnectPage() {
     });
 
     useEffect(() => {
-        if (isLoggedIn) {
+        if (isAuthReady && isLoggedIn) {
             handleSearch();
         }
-    }, [isLoggedIn]);
+    }, [isAuthReady, isLoggedIn]);
 
     const handleSearch = async () => {
         setIsLoading(true);
@@ -37,6 +37,15 @@ export default function AspirantsConnectPage() {
             setIsLoading(false);
         }
     };
+
+    if (!isAuthReady) {
+        return (
+            <div className="flex min-h-[50vh] items-center justify-center gap-2 text-muted-foreground" role="status">
+                <Loader2 className="size-5 animate-spin" />
+                <span>Restoring your session…</span>
+            </div>
+        );
+    }
 
     if (!isLoggedIn) {
         return (
@@ -51,7 +60,7 @@ export default function AspirantsConnectPage() {
     return (
         <div className="flex flex-col space-y-6 max-w-5xl mx-auto w-full pb-10">
             <div>
-                <h1 className="font-headline text-4xl text-primary mb-2">AspirantsConnect</h1>
+                <h1 className="mb-2 break-words font-headline text-3xl text-primary sm:text-4xl">AspirantsConnect</h1>
                 <p className="text-muted-foreground text-lg">
                     Find and connect with your future study mates. Search by city, class, or goal.
                 </p>

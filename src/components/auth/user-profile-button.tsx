@@ -21,7 +21,7 @@ import { updateProfileAction, changePasswordAction, deleteAccountAction, request
 import { loadCaptchaEnginge, LoadCanvasTemplate, validateCaptcha } from "react-simple-captcha";
 
 export function UserProfileButton() {
-  const { user, isLoggedIn, logout, login, setAuthModalOpen } = useAuth();
+  const { user, isLoggedIn, isAuthReady, logout, login, setAuthModalOpen } = useAuth();
   const { theme, setTheme } = useTheme();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [email, setEmail] = useState("");
@@ -247,6 +247,15 @@ export function UserProfileButton() {
       setIsEmailChangeLoading(false);
     }
   };
+
+  if (!isAuthReady) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border bg-muted/50 p-3 text-sm text-muted-foreground" role="status" aria-label="Restoring session">
+        <Loader2 className="size-4 animate-spin" />
+        <span>Checking session…</span>
+      </div>
+    );
+  }
 
   if (isLoggedIn && user) {
     return (

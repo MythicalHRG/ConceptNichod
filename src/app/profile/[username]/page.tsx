@@ -53,8 +53,8 @@ export default async function PublicProfilePage({ params }: { params: { username
           
           <div className="flex-1 text-center md:text-left space-y-3">
             <div>
-              <div className="flex items-center justify-center md:justify-start gap-2">
-                <h1 className="text-4xl font-extrabold tracking-tight">{user.fullName}</h1>
+              <div className="flex flex-wrap items-center justify-center gap-2 md:justify-start">
+                <h1 className="break-words text-3xl font-extrabold tracking-tight sm:text-4xl">{user.fullName}</h1>
                 {isOwner && (
                   <Badge variant="default" className="bg-gradient-to-r from-yellow-400 to-amber-600 hover:from-yellow-500 hover:to-amber-700 text-black font-bold uppercase tracking-widest text-[10px] px-2 py-0.5 border-none shadow-sm">
                     Owner

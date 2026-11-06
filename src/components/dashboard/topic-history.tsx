@@ -67,7 +67,7 @@ export function TopicHistory({ topics }: TopicHistoryProps) {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <ScrollArea className="h-[calc(100vh-22rem)] w-full">
+        <ScrollArea className="h-[calc(100dvh-16rem)] min-h-64 w-full md:h-[calc(100vh-22rem)]">
           {topics.length > 0 ? (
             <div className="space-y-4">
               {topics.map((topic) => (

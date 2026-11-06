@@ -56,7 +56,7 @@ export function AddTopicButton() {
   const { toast } = useToast();
   const router = useRouter();
   const pathname = usePathname();
-  const { isLoggedIn, setAuthModalOpen } = useAuth();
+  const { isLoggedIn, isAuthReady, setAuthModalOpen } = useAuth();
 
   const form = useForm<z.infer<typeof topicSchema>>({
     resolver: zodResolver(topicSchema),
@@ -116,8 +116,9 @@ export function AddTopicButton() {
     }}>
       <DialogTrigger asChild>
         <Button
-          className="fixed bottom-8 right-8 h-16 w-16 rounded-full shadow-lg"
+          className="fixed bottom-4 right-4 h-14 w-14 rounded-full shadow-lg sm:bottom-8 sm:right-8 sm:h-16 sm:w-16"
           size="icon"
+          disabled={!isAuthReady}
         >
           <Plus className="h-8 w-8" />
           <span className="sr-only">Add new topic</span>

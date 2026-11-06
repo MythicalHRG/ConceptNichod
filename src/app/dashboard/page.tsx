@@ -67,7 +67,7 @@ export default async function DashboardPage() {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
             <div className="space-y-4">
               <div>
-                <h1 className="text-4xl font-headline font-bold text-foreground">
+                  <h1 className="break-words text-3xl font-headline font-bold text-foreground sm:text-4xl">
                   Welcome back, {user.fullName.split(' ')[0]}!
                 </h1>
                 <p className="text-lg text-primary font-medium mt-1">@{user.username}</p>
