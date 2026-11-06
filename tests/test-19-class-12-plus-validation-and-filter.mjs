@@ -116,7 +116,7 @@ test("Tareeka 19: Static contract verification - Four core UI drop-downs define 
   const componentPaths = [
     { name: "login-dialog.tsx", path: path.resolve("src/components/auth/login-dialog.tsx") },
     { name: "user-profile-button.tsx", path: path.resolve("src/components/auth/user-profile-button.tsx") },
-    { name: "aspirants-connect/page.tsx", path: path.resolve("src/app/dashboard/aspirants-connect/page.tsx") },
+    { name: "aspirants-connect-hub.tsx", path: path.resolve("src/components/community/aspirants-connect-hub.tsx") },
     { name: "add-topic-button.tsx", path: path.resolve("src/components/dashboard/add-topic-button.tsx") }
   ];
 

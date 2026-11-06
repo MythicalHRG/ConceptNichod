@@ -75,10 +75,10 @@ test("Tareeka 16: Malformed, truncated, or empty session tokens fail closed", ()
   assert.strictEqual(verifySessionCookie(".."), null, "Dots only should return null");
 });
 
-test("Tareeka 16: Backward compatibility - valid unsigned UUID format is accepted during rolling migration", () => {
+test("Tareeka 16: Unsigned UUID cookies are rejected to prevent account takeover", () => {
   const legacyUuid = "abcdef12-3456-7890-abcd-ef1234567890";
   const verified = verifySessionCookie(legacyUuid);
-  assert.strictEqual(verified, legacyUuid, "Legacy valid UUID format should be verified for zero-downtime migration");
+  assert.strictEqual(verified, null, "Unsigned UUID cookies must not authenticate any account");
 });
 
 test("Tareeka 16: UUID is strictly redacted from Aspirants Connect search payload", () => {

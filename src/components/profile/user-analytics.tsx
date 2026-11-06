@@ -18,7 +18,7 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#ffc658'
 
 export type ConceptMirrorSession = {
   id: string;
-  conceptName: string;
+  session: string;
   overallScore: number;
   durationSeconds: number;
   createdAt: Date | string;
@@ -247,7 +247,7 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
                     className="p-3 rounded-lg border bg-background/50 hover:bg-muted/30 transition-colors flex items-center justify-between gap-3"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold truncate text-foreground">{session.conceptName}</p>
+                      <p className="text-sm font-semibold truncate text-foreground">{session.session}</p>
                       <p className="text-[11px] text-muted-foreground">
                         {session.durationSeconds > 0 ? formatDuration(session.durationSeconds) : 'Oral explanation'} • {new Date(session.createdAt).toLocaleDateString()}
                       </p>

@@ -18,6 +18,11 @@ export type AuthUser = {
   futureCollege?: string | null;
   snapchat?: string | null;
   instagram?: string | null;
+  isDiscoverable?: boolean;
+  shareProgress?: boolean;
+  shareSocialLinks?: boolean;
+  shareLocation?: boolean;
+  allowIncomingMessages?: boolean;
 };
 
 interface AuthContextType {

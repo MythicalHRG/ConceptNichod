@@ -15,6 +15,12 @@ export interface IUser extends Document {
   snapchat?: string;
   instagram?: string;
   bio?: string;
+  isDiscoverable: boolean;
+  shareProgress: boolean;
+  shareSocialLinks: boolean;
+  shareLocation: boolean;
+  allowIncomingMessages: boolean;
+  simplexLinked: boolean;
   role: "user" | "admin";
   firstLoginIp?: string;
   firstLoginAt?: Date;
@@ -39,6 +45,12 @@ const UserSchema: Schema<IUser> = new Schema({
   snapchat: { type: String, required: false },
   instagram: { type: String, required: false },
   bio: { type: String, required: false },
+  isDiscoverable: { type: Boolean, default: false },
+  shareProgress: { type: Boolean, default: false },
+  shareSocialLinks: { type: Boolean, default: false },
+  shareLocation: { type: Boolean, default: false },
+  allowIncomingMessages: { type: Boolean, default: true },
+  simplexLinked: { type: Boolean, default: false },
   role: { type: String, enum: ["user", "admin"], default: "user" },
   firstLoginIp: { type: String, required: false },
   firstLoginAt: { type: Date, required: false },

@@ -141,7 +141,9 @@ export async function registerAction(formData: FormData) {
             maxAge: 60 * 60 * 24 * 7 
         });
         return { success: true, user: { 
-            uuid, username, email, fullName, gender, dob, classLevel, examFocus, city, futureCollege, snapchat, instagram 
+            uuid, username, email, fullName, gender, dob, classLevel, examFocus, city, futureCollege, snapchat, instagram,
+            isDiscoverable: false, shareProgress: false, shareSocialLinks: false, shareLocation: false,
+            allowIncomingMessages: true
         } };
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -224,7 +226,10 @@ export async function loginAction(formData: FormData) {
             uuid: user.uuid, username: user.username, email: user.email, bio: user.bio,
             fullName: user.fullName, gender: user.gender, dob: user.dob, classLevel: user.classLevel,
             examFocus: user.examFocus, city: user.city, futureCollege: user.futureCollege,
-            snapchat: user.snapchat, instagram: user.instagram 
+            snapchat: user.snapchat, instagram: user.instagram,
+            isDiscoverable: user.isDiscoverable, shareProgress: user.shareProgress,
+            shareSocialLinks: user.shareSocialLinks, shareLocation: user.shareLocation,
+            allowIncomingMessages: user.allowIncomingMessages !== false
         } };
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -249,7 +254,10 @@ export async function meAction() {
         uuid: user.uuid, username: user.username, email: user.email, bio: user.bio,
         fullName: user.fullName, gender: user.gender, dob: user.dob, classLevel: user.classLevel,
         examFocus: user.examFocus, city: user.city, futureCollege: user.futureCollege,
-        snapchat: user.snapchat, instagram: user.instagram 
+        snapchat: user.snapchat, instagram: user.instagram,
+        isDiscoverable: user.isDiscoverable, shareProgress: user.shareProgress,
+        shareSocialLinks: user.shareSocialLinks, shareLocation: user.shareLocation,
+        allowIncomingMessages: user.allowIncomingMessages !== false
     } };
 }
 
@@ -267,6 +275,10 @@ export async function updateProfileAction(formData: FormData) {
     const futureCollege = formData.get("futureCollege") as string;
     const snapchat = formData.get("snapchat") as string;
     const instagram = formData.get("instagram") as string;
+    const isDiscoverable = formData.get("isDiscoverable") === "true";
+    const shareProgress = formData.get("shareProgress") === "true";
+    const shareSocialLinks = formData.get("shareSocialLinks") === "true";
+    const shareLocation = formData.get("shareLocation") === "true";
 
     const currentUser = await User.findOne({ uuid: sessionUuid });
     if (!currentUser) throw new Error("User not found");
@@ -295,6 +307,12 @@ export async function updateProfileAction(formData: FormData) {
     if (futureCollege !== null) updateData.futureCollege = futureCollege;
     if (snapchat !== null) updateData.snapchat = snapchat;
     if (instagram !== null) updateData.instagram = instagram;
+    updateData.isDiscoverable = isDiscoverable;
+    updateData.shareProgress = isDiscoverable && shareProgress;
+    updateData.shareSocialLinks = isDiscoverable && shareSocialLinks;
+    updateData.shareLocation = isDiscoverable && shareLocation;
+    const allowIncomingMessages = formData.get("allowIncomingMessages");
+    if (allowIncomingMessages !== null) updateData.allowIncomingMessages = allowIncomingMessages === "true";
 
     try {
         const updatedUser = await User.findOneAndUpdate({ uuid: sessionUuid }, updateData, { new: true });

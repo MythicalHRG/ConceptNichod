@@ -1,16 +1,18 @@
 import crypto from "crypto";
 
-const SECRET =
-  process.env.ENCRYPTION_SECRET_KEY ||
-  "concept-nichod-default-secret-salt-2026";
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
+function getSessionSecret() {
+  const secret = process.env.SESSION_SECRET || process.env.ENCRYPTION_SECRET_KEY;
+  if (secret && secret.length >= 32) return secret;
+  if (process.env.NODE_ENV !== "production") {
+    return "local-development-only-session-secret";
+  }
+  throw new Error("SESSION_SECRET must be configured with at least 32 characters.");
+}
 export function createSignedSessionCookie(uuid: string): string {
   if (!uuid || typeof uuid !== "string") {
     throw new Error("UUID is required to create a session cookie.");
   }
-  const signature = crypto.createHmac("sha256", SECRET).update(uuid).digest("hex");
+  const signature = crypto.createHmac("sha256", getSessionSecret()).update(uuid).digest("hex");
   return `${uuid}.${signature}`;
 }
 
@@ -27,7 +29,7 @@ export function verifySessionCookie(cookieValue?: string | null): string | null 
     const signature = trimmed.substring(dotIndex + 1);
 
     const expectedSignature = crypto
-      .createHmac("sha256", SECRET)
+      .createHmac("sha256", getSessionSecret())
       .update(uuid)
       .digest("hex");
     const sigBuf = Buffer.from(signature);
@@ -39,11 +41,6 @@ export function verifySessionCookie(cookieValue?: string | null): string | null 
     ) {
       return uuid;
     }
-  }
-
-  // Backward compatibility: If an unsigned valid UUID was provided, accept it
-  if (UUID_REGEX.test(trimmed)) {
-    return trimmed;
   }
 
   return null;

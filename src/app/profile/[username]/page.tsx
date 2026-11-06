@@ -115,15 +115,19 @@ export default async function PublicProfilePage({ params }: { params: { username
         </div>
 
         {/* Separator */}
-        <div className="w-full h-px bg-border my-8" />
+        {data.shareProgress && <div className="w-full h-px bg-border my-8" />}
 
-        {/* Analytics Section */}
-        <div className="space-y-4 mb-6">
-          <h2 className="text-2xl font-bold tracking-tight">Progress & Analytics</h2>
-          <p className="text-muted-foreground">Detailed breakdown of topics mastered by {user.fullName.split(' ')[0]}.</p>
-        </div>
-        
-        <UserAnalytics data={data} />
+        {data.shareProgress ? (
+          <>
+            <div className="space-y-4 mb-6">
+              <h2 className="text-2xl font-bold tracking-tight">Progress & Analytics</h2>
+              <p className="text-muted-foreground">Summary of shared study progress.</p>
+            </div>
+            <UserAnalytics data={data} />
+          </>
+        ) : (
+          <p className="rounded-lg border p-4 text-sm text-muted-foreground">This user has not shared study progress.</p>
+        )}
         
       </main>
     </div>

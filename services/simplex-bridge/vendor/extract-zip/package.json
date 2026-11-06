@@ -1,0 +1,14 @@
+{
+  "name": "extract-zip",
+  "version": "2.0.2",
+  "description": "unzip a zip file into a directory using 100% JavaScript (local security-patched compatibility copy)",
+  "main": "index.js",
+  "license": "BSD-2-Clause",
+  "repository": "maxogden/extract-zip",
+  "engines": { "node": ">=10.17.0" },
+  "dependencies": {
+    "debug": "^4.1.1",
+    "get-stream": "^5.1.0",
+    "yauzl": "^2.10.0"
+  }
+}

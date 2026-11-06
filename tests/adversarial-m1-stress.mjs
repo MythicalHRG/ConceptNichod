@@ -93,11 +93,10 @@ test("Challenger 1.4: Malformed, punctuated, and injection cookie values fail cl
   assert.strictEqual(verifySessionCookie("\0nullbyte"), null, "Null byte token must return null");
 });
 
-test("Challenger 1.5: Backward compatibility probe - unsigned UUID behavior", () => {
+test("Challenger 1.5: Unsigned UUID session cookies are rejected", () => {
   const rawUuid = "abcdef12-3456-7890-abcd-ef1234567890";
-  // The system permits valid UUID format for zero-downtime rolling migration
   const result = verifySessionCookie(rawUuid);
-  assert.strictEqual(result, rawUuid, "Unsigned valid UUID is accepted during rolling migration");
+  assert.strictEqual(result, null, "Unsigned UUID must not authenticate an account");
 
   // But invalid UUID strings without dot must fail
   assert.strictEqual(verifySessionCookie("not-a-valid-uuid-format"), null, "Invalid unsigned string must return null");
@@ -300,27 +299,11 @@ test("Challenger 4.1: Public profile data projection never leaks sensitive IP or
   const profileFilePath = path.resolve("src/app/actions/profile.ts");
   const content = fs.readFileSync(profileFilePath, "utf-8");
 
-  // Verify findOne projection includes all negative exclusion selectors
-  const requiredExclusions = [
-    "-password",
-    "-email",
-    "-uuid",
-    "-_id",
-    "-createdAt",
-    "-__v",
-    "-firstLoginIp",
-    "-firstLoginAt",
-    "-lastLoginIp",
-    "-lastLoginAt",
-    "-lastKnownIp"
-  ];
-
-  for (const field of requiredExclusions) {
-    assert.ok(
-      content.includes(field),
-      `Public profile query in src/app/actions/profile.ts MUST explicitly exclude ${field}`
-    );
-  }
+  // The public query uses an allowlist projection, so private fields never load.
+  const projection = content.match(/\.select\("([^"]+)"\)\.lean\(\)/)?.[1]?.split(/\s+/) || [];
+  assert.ok(projection.includes("username") && projection.includes("classLevel"), "Public profile query must allowlist its display fields");
+  const forbiddenFields = ["password", "email", "uuid", "_id", "createdAt", "__v", "firstLoginIp", "firstLoginAt", "lastLoginIp", "lastLoginAt", "lastKnownIp"];
+  for (const field of forbiddenFields) assert.ok(!projection.includes(field), `Public profile projection must not select ${field}`);
 
   // Simulate Mongoose document serialization with sensitive fields
   const mockDbUser = {
@@ -343,12 +326,8 @@ test("Challenger 4.1: Public profile data projection never leaks sensitive IP or
     __v: 0
   };
 
-  // Simulate negative projection applied by Mongoose
-  const projected = { ...mockDbUser };
-  for (const exclusion of requiredExclusions) {
-    const propName = exclusion.replace(/^-/, "");
-    delete projected[propName];
-  }
+  // Simulate the inclusive Mongoose projection used by the public query.
+  const projected = Object.fromEntries(projection.filter((field) => field in mockDbUser).map((field) => [field, mockDbUser[field]]));
 
   // Assert strictly that NONE of the forbidden fields exist on projected object
   const forbiddenKeys = [

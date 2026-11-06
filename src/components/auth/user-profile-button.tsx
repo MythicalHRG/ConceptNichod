@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { updateProfileAction, changePasswordAction, deleteAccountAction, requestEmailChangeOtpAction, confirmEmailChangeAction } from "@/app/actions/auth";
 import { loadCaptchaEnginge, LoadCanvasTemplate, validateCaptcha } from "react-simple-captcha";
@@ -33,6 +34,11 @@ export function UserProfileButton() {
   const [futureCollege, setFutureCollege] = useState("");
   const [snapchat, setSnapchat] = useState("");
   const [instagram, setInstagram] = useState("");
+  const [isDiscoverable, setIsDiscoverable] = useState(false);
+  const [shareProgress, setShareProgress] = useState(false);
+  const [shareSocialLinks, setShareSocialLinks] = useState(false);
+  const [shareLocation, setShareLocation] = useState(false);
+  const [allowIncomingMessages, setAllowIncomingMessages] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -74,6 +80,11 @@ export function UserProfileButton() {
       setFutureCollege((user as any).futureCollege || "");
       setSnapchat((user as any).snapchat || "");
       setInstagram((user as any).instagram || "");
+      setIsDiscoverable(user.isDiscoverable === true);
+      setShareProgress(user.shareProgress === true);
+      setShareSocialLinks(user.shareSocialLinks === true);
+      setShareLocation(user.shareLocation === true);
+      setAllowIncomingMessages(user.allowIncomingMessages !== false);
     }
     setIsSettingsOpen(true);
     setActiveTab("profile");
@@ -93,6 +104,11 @@ export function UserProfileButton() {
       formData.append("futureCollege", futureCollege);
       formData.append("snapchat", snapchat);
       formData.append("instagram", instagram);
+      formData.append("isDiscoverable", String(isDiscoverable));
+      formData.append("shareProgress", String(shareProgress));
+      formData.append("shareSocialLinks", String(shareSocialLinks));
+      formData.append("shareLocation", String(shareLocation));
+      formData.append("allowIncomingMessages", String(allowIncomingMessages));
 
       const res = await updateProfileAction(formData);
       if (res.success && res.user) {
@@ -414,6 +430,33 @@ export function UserProfileButton() {
                       value={instagram}
                       onChange={(e) => setInstagram(e.target.value)}
                     />
+                  </div>
+                  <div className="space-y-4 rounded-lg border p-4">
+                    <div>
+                      <h3 className="font-semibold">Privacy and discoverability</h3>
+                      <p className="text-xs text-muted-foreground">Your topics, summaries, questions, answers, email, birth date, and account identifiers are never shown on your public profile.</p>
+                    </div>
+                    <label className="flex items-center justify-between gap-4 text-sm">
+                      <span>Appear in AspirantsConnect and allow your public profile to open</span>
+                      <Switch checked={isDiscoverable} onCheckedChange={setIsDiscoverable} />
+                    </label>
+                    <label className="flex items-center justify-between gap-4 text-sm">
+                      <span>Share aggregate study progress</span>
+                      <Switch checked={shareProgress} onCheckedChange={setShareProgress} disabled={!isDiscoverable} />
+                    </label>
+                    <label className="flex items-center justify-between gap-4 text-sm">
+                      <span>Show my social links</span>
+                      <Switch checked={shareSocialLinks} onCheckedChange={setShareSocialLinks} disabled={!isDiscoverable} />
+                    </label>
+                    <label className="flex items-center justify-between gap-4 text-sm">
+                      <span>Show my city</span>
+                      <Switch checked={shareLocation} onCheckedChange={setShareLocation} disabled={!isDiscoverable} />
+                    </label>
+                    <p className="text-xs text-muted-foreground">Turning discovery off also hides your public profile and disables the optional profile fields above.</p>
+                    <label className="flex items-center justify-between gap-4 text-sm">
+                      <span>Accept new direct messages from signed-in users</span>
+                      <Switch checked={allowIncomingMessages} onCheckedChange={setAllowIncomingMessages} />
+                    </label>
                   </div>
                   <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Save Changes"}

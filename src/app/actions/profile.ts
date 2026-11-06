@@ -10,14 +10,39 @@ export async function getPublicProfileData(username: string) {
   const escapeRegex = (string: string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const safeUsername = escapeRegex(username);
 
-  const user = await User.findOne({ username: new RegExp(`^${safeUsername}$`, 'i') }).select("-password -email -uuid -_id -createdAt -__v -firstLoginIp -firstLoginAt -lastLoginIp -lastLoginAt -lastKnownIp");
+  const user = await User.findOne({ username: new RegExp(`^${safeUsername}$`, 'i'), isDiscoverable: true })
+    .select("username fullName classLevel examFocus city shareLocation shareProgress shareSocialLinks bio snapchat instagram").lean();
   if (!user) {
     return null;
   }
-  
-  const userWithId = await User.findOne({ username: new RegExp(`^${safeUsername}$`, 'i') }).select("uuid");
+
+  const publicUser = {
+    username: user.username,
+    fullName: user.fullName,
+    classLevel: user.classLevel,
+    examFocus: user.examFocus,
+    city: user.shareLocation ? user.city : undefined,
+    bio: user.bio,
+    snapchat: user.shareSocialLinks ? user.snapchat : undefined,
+    instagram: user.shareSocialLinks ? user.instagram : undefined,
+  };
+
+  if (!user.shareProgress) {
+    return {
+      user: publicUser,
+      shareProgress: false,
+      totalTopics: 0,
+      averageScore: 0,
+      subjectDistribution: [],
+      scoreDistribution: [],
+      skillAverages: [],
+      learningProgression: [],
+      conceptMirror: { totalSessions: 0, averageScore: 0, totalDurationSeconds: 0, skillAverages: [], recentSessions: [] },
+    };
+  }
+
+  const userWithId = await User.findOne({ username: new RegExp(`^${safeUsername}$`, 'i'), isDiscoverable: true }).select("uuid").lean();
   if (!userWithId) return null;
-  
   const topics = await Topic.find({ userId: userWithId.uuid }).lean();
   
   const analyzedTopics = topics.filter(t => t.analysis && typeof t.analysis.overallScore === 'number');
@@ -96,7 +121,7 @@ export async function getPublicProfileData(username: string) {
     .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
     .slice(-7)
     .map((t, idx) => ({
-      session: t.name ? (t.name.length > 14 ? t.name.slice(0, 12) + '..' : t.name) : `Topic ${idx + 1}`,
+      session: `Session ${idx + 1}`,
       score: t.analysis.overallScore
     }));
 
@@ -108,7 +133,7 @@ export async function getPublicProfileData(username: string) {
     skillAverages: [] as { name: string; score: number }[],
     recentSessions: [] as {
       id: string;
-      conceptName: string;
+      session: string;
       overallScore: number;
       durationSeconds: number;
       createdAt: Date;
@@ -148,9 +173,9 @@ export async function getPublicProfileData(username: string) {
         score: Math.round(m.total / m.count),
       })).sort((a, b) => b.score - a.score);
 
-      const recentSessions = mirrorDocs.slice(0, 6).map((doc: any) => ({
+      const recentSessions = mirrorDocs.slice(0, 6).map((doc: any, idx: number) => ({
         id: doc._id?.toString() || '',
-        conceptName: doc.conceptName,
+        session: `Session ${idx + 1}`,
         overallScore: doc.overallScore,
         durationSeconds: doc.durationSeconds || 0,
         createdAt: doc.createdAt,
@@ -169,7 +194,8 @@ export async function getPublicProfileData(username: string) {
   }
 
   return {
-    user: user.toObject(),
+    user: publicUser,
+    shareProgress: true,
     totalTopics,
     averageScore,
     subjectDistribution,
