@@ -20,6 +20,7 @@ import { UserProfileButton } from "@/components/auth/user-profile-button";
 import { cookies } from "next/headers";
 import User from "@/models/User";
 import { verifySessionCookie } from "@/lib/session";
+import { redirect } from "next/navigation";
 
 export default async function DashboardLayout({
   children,
@@ -29,21 +30,32 @@ export default async function DashboardLayout({
   let topicsDocs: any[] = [];
   let isDbWakingUp = false;
   let isAdmin = false;
+  let isAccountMissing = false;
+  const rawSession = cookies().get("user_session")?.value;
+  const userId = verifySessionCookie(rawSession);
+
+  if (!userId) {
+    redirect("/?login=true&next=%2Fdashboard");
+  }
 
   try {
     await dbConnect();
-    const rawSession = cookies().get("user_session")?.value;
-    const userId = verifySessionCookie(rawSession);
-    if (userId) {
+    const user = await User.findOne({ uuid: userId }).lean();
+    if (!user) {
+      isAccountMissing = true;
+    } else {
       topicsDocs = await Topic.find({ userId: userId }).sort({ createdAt: -1 }).lean();
-      const user = await User.findOne({ uuid: userId }).lean();
-      if (user && user.username === "mythicalhrg") {
+      if (user.username === "mythicalhrg") {
         isAdmin = true;
       }
     }
   } catch (error) {
     console.error("Dashboard layout dbConnect error:", error);
     isDbWakingUp = true;
+  }
+
+  if (isAccountMissing) {
+    redirect("/?login=true&next=%2Fdashboard");
   }
 
   if (isDbWakingUp) {

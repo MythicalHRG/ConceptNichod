@@ -273,7 +273,6 @@ export async function updateProfileAction(formData: FormData) {
     const futureCollege = formData.get("futureCollege") as string;
     const snapchat = formData.get("snapchat") as string;
     const instagram = formData.get("instagram") as string;
-    const isDiscoverable = formData.get("isDiscoverable") === "true";
     const shareProgress = formData.get("shareProgress") === "true";
     const shareSocialLinks = formData.get("shareSocialLinks") === "true";
     const shareLocation = formData.get("shareLocation") === "true";
@@ -305,10 +304,9 @@ export async function updateProfileAction(formData: FormData) {
     if (futureCollege !== null) updateData.futureCollege = futureCollege;
     if (snapchat !== null) updateData.snapchat = snapchat;
     if (instagram !== null) updateData.instagram = instagram;
-    updateData.isDiscoverable = isDiscoverable;
-    updateData.shareProgress = isDiscoverable && shareProgress;
-    updateData.shareSocialLinks = isDiscoverable && shareSocialLinks;
-    updateData.shareLocation = isDiscoverable && shareLocation;
+    updateData.shareProgress = shareProgress;
+    updateData.shareSocialLinks = shareSocialLinks;
+    updateData.shareLocation = shareLocation;
     const allowIncomingMessages = formData.get("allowIncomingMessages");
     if (allowIncomingMessages !== null) updateData.allowIncomingMessages = allowIncomingMessages === "true";
 

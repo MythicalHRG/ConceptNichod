@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import Script from 'next/script';
 
 import { Toaster } from '@/components/ui/toaster';
@@ -15,6 +15,12 @@ import NextTopLoader from 'nextjs-toploader';
 export const metadata: Metadata = {
   title: 'Concepts Nichod',
   description: 'AI-powered learning and concept mastery.',
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({

@@ -34,7 +34,6 @@ export function UserProfileButton() {
   const [futureCollege, setFutureCollege] = useState("");
   const [snapchat, setSnapchat] = useState("");
   const [instagram, setInstagram] = useState("");
-  const [isDiscoverable, setIsDiscoverable] = useState(false);
   const [shareProgress, setShareProgress] = useState(false);
   const [shareSocialLinks, setShareSocialLinks] = useState(false);
   const [shareLocation, setShareLocation] = useState(false);
@@ -80,7 +79,6 @@ export function UserProfileButton() {
       setFutureCollege((user as any).futureCollege || "");
       setSnapchat((user as any).snapchat || "");
       setInstagram((user as any).instagram || "");
-      setIsDiscoverable(user.isDiscoverable === true);
       setShareProgress(user.shareProgress === true);
       setShareSocialLinks(user.shareSocialLinks === true);
       setShareLocation(user.shareLocation === true);
@@ -104,7 +102,6 @@ export function UserProfileButton() {
       formData.append("futureCollege", futureCollege);
       formData.append("snapchat", snapchat);
       formData.append("instagram", instagram);
-      formData.append("isDiscoverable", String(isDiscoverable));
       formData.append("shareProgress", String(shareProgress));
       formData.append("shareSocialLinks", String(shareSocialLinks));
       formData.append("shareLocation", String(shareLocation));
@@ -433,26 +430,21 @@ export function UserProfileButton() {
                   </div>
                   <div className="space-y-4 rounded-lg border p-4">
                     <div>
-                      <h3 className="font-semibold">Privacy and discoverability</h3>
-                      <p className="text-xs text-muted-foreground">Your topics, summaries, questions, answers, email, birth date, and account identifiers are never shown on your public profile.</p>
+                      <h3 className="font-semibold">Public profile privacy</h3>
+                      <p className="text-xs text-muted-foreground">Your profile is visible to signed-in students. Your topics, summaries, questions, answers, email, birth date, and account identifiers are never shown.</p>
                     </div>
                     <label className="flex items-center justify-between gap-4 text-sm">
-                      <span>Appear in AspirantsConnect and allow your public profile to open</span>
-                      <Switch checked={isDiscoverable} onCheckedChange={setIsDiscoverable} />
-                    </label>
-                    <label className="flex items-center justify-between gap-4 text-sm">
                       <span>Share aggregate study progress</span>
-                      <Switch checked={shareProgress} onCheckedChange={setShareProgress} disabled={!isDiscoverable} />
+                      <Switch checked={shareProgress} onCheckedChange={setShareProgress} />
                     </label>
                     <label className="flex items-center justify-between gap-4 text-sm">
                       <span>Show my social links</span>
-                      <Switch checked={shareSocialLinks} onCheckedChange={setShareSocialLinks} disabled={!isDiscoverable} />
+                      <Switch checked={shareSocialLinks} onCheckedChange={setShareSocialLinks} />
                     </label>
                     <label className="flex items-center justify-between gap-4 text-sm">
                       <span>Show my city</span>
-                      <Switch checked={shareLocation} onCheckedChange={setShareLocation} disabled={!isDiscoverable} />
+                      <Switch checked={shareLocation} onCheckedChange={setShareLocation} />
                     </label>
-                    <p className="text-xs text-muted-foreground">Turning discovery off also hides your public profile and disables the optional profile fields above.</p>
                     <label className="flex items-center justify-between gap-4 text-sm">
                       <span>Accept new direct messages from signed-in users</span>
                       <Switch checked={allowIncomingMessages} onCheckedChange={setAllowIncomingMessages} />

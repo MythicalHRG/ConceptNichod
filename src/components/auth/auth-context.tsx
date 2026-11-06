@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useRef, useState, Suspense } from "react";
 import { meAction, logoutAction } from "@/app/actions/auth";
-import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 
 export type AuthUser = {
   uuid: string;
@@ -39,26 +39,18 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 function AuthParamsHandler({ setAuthModalOpen }: { setAuthModalOpen: (open: boolean) => void }) {
   const searchParams = useSearchParams();
-  const router = useRouter();
-  const pathname = usePathname();
 
   useEffect(() => {
     if (searchParams.get("login") === "true") {
       setAuthModalOpen(true);
-      
-      // Clean up the URL parameter
-      const params = new URLSearchParams(searchParams.toString());
-      params.delete("login");
-      const newQuery = params.toString();
-      const newUrl = newQuery ? `${pathname}?${newQuery}` : pathname;
-      router.replace(newUrl, { scroll: false });
     }
-  }, [searchParams, pathname, router, setAuthModalOpen]);
+  }, [searchParams, setAuthModalOpen]);
 
   return null;
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const hasLocalAuthChange = useRef(false);
@@ -95,6 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await logoutAction();
     setUser(null);
     setIsAuthReady(true);
+    router.replace("/?login=true");
   };
 
   return (

@@ -78,6 +78,52 @@ export async function joinStudyGroupAction(groupId: string) {
   return { success: true };
 }
 
+export async function searchStudyGroupsAction(searchQuery: string) {
+  const userId = requireSessionUuid();
+  await dbConnect();
+  const queryText = text(searchQuery, 80);
+  const filters: Record<string, any> = { memberIds: { $ne: userId } };
+  if (queryText) {
+    const escaped = queryText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const pattern = { $regex: escaped, $options: "i" };
+    filters.$or = [{ name: pattern }, { subject: pattern }, { description: pattern }, { examFocus: pattern }];
+  }
+  const groups = await StudyGroup.find(filters).sort({ createdAt: -1 }).limit(50).lean();
+  return groups.map((group) => safeGroup(group, userId));
+}
+
+export async function searchGroupInviteesAction(groupId: string, searchQuery: string) {
+  const userId = requireSessionUuid();
+  await dbConnect();
+  if (!mongoose.isValidObjectId(groupId)) throw new Error("Invalid group.");
+  const group = await StudyGroup.findOne({ _id: groupId, ownerId: userId }).select("memberIds").lean();
+  if (!group) throw new Error("Only the group owner can add students.");
+  const queryText = text(searchQuery, 80);
+  if (queryText.length < 2) return [];
+  const escaped = queryText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = { $regex: escaped, $options: "i" };
+  const users = await User.find({
+    uuid: { $nin: [...group.memberIds, userId] },
+    $or: [{ username: pattern }, { fullName: pattern }, { classLevel: pattern }],
+  }).select("username fullName classLevel").sort({ username: 1 }).limit(8).lean();
+  return users.map((user) => ({ username: user.username, fullName: user.fullName, classLevel: user.classLevel }));
+}
+
+export async function inviteStudyGroupMemberAction(groupId: string, username: string) {
+  const userId = requireSessionUuid();
+  await dbConnect();
+  await enforcePersistentRateLimit(`group-invite:${userId}`, 30, 60 * 60 * 1000);
+  if (!mongoose.isValidObjectId(groupId)) throw new Error("Invalid group.");
+  const group = await StudyGroup.findOne({ _id: groupId, ownerId: userId });
+  if (!group) throw new Error("Only the group owner can add students.");
+  const target = await User.findOne({ username: text(username, 30).toLowerCase() }).select("uuid").lean();
+  if (!target) throw new Error("Student not found.");
+  if (group.memberIds.includes(target.uuid)) throw new Error("This student is already in the group.");
+  group.memberIds.push(target.uuid);
+  await group.save();
+  return { success: true };
+}
+
 export async function leaveStudyGroupAction(groupId: string) {
   const userId = requireSessionUuid();
   await dbConnect();

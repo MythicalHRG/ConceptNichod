@@ -17,9 +17,11 @@ import { Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { loadCaptchaEnginge, LoadCanvasTemplate, validateCaptcha } from 'react-simple-captcha';
 import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 export function LoginDialog() {
   const { isAuthModalOpen, setAuthModalOpen, login } = useAuth();
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -40,6 +42,15 @@ export function LoginDialog() {
   const [activeTab, setActiveTab] = useState("login");
   const [newPassword, setNewPassword] = useState("");
   const { toast } = useToast();
+
+  const continueAfterAuth = () => {
+    const requestedPath = new URLSearchParams(window.location.search).get("next");
+    const fallbackPath = window.location.pathname === "/" ? "/dashboard" : window.location.pathname;
+    const destination = requestedPath && requestedPath.startsWith("/") && !requestedPath.startsWith("//") && !requestedPath.includes("\\")
+      ? requestedPath
+      : fallbackPath;
+    router.replace(destination);
+  };
 
   useEffect(() => {
     if (isAuthModalOpen) {
@@ -139,6 +150,7 @@ export function LoginDialog() {
           description: `Logged in as @${res.user.username}`,
         });
         setAuthModalOpen(false);
+        continueAfterAuth();
       }
     } catch (err: any) {
       toast({
@@ -227,6 +239,7 @@ export function LoginDialog() {
           title: "Account created!",
           description: "Welcome to ConceptNichod.",
         });
+        continueAfterAuth();
       }
     } catch (err: any) {
       toast({
@@ -243,9 +256,9 @@ export function LoginDialog() {
     <Dialog open={isAuthModalOpen} onOpenChange={setAuthModalOpen}>
       <DialogContent className="sm:max-w-[425px] [&>button]:hidden" onInteractOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>Authentication Required</DialogTitle>
+          <DialogTitle>Sign in or sign up to continue</DialogTitle>
           <DialogDescription>
-            You need to be signed in to access this feature. Only @gmail.com, @outlook.com, and @outlook.in emails are permitted.
+            You need an account to use ConceptNichod. Only @gmail.com, @outlook.com, and @outlook.in emails are permitted.
           </DialogDescription>
         </DialogHeader>
 
@@ -258,7 +271,7 @@ export function LoginDialog() {
           }}>
           <TabsList className="grid w-full grid-cols-2 mb-4">
             <TabsTrigger value="login">Sign In</TabsTrigger>
-            <TabsTrigger value="register">Register</TabsTrigger>
+            <TabsTrigger value="register">Sign Up</TabsTrigger>
           </TabsList>
           
           <TabsContent value="login">

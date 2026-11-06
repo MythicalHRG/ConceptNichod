@@ -3,18 +3,22 @@ import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
 import Topic from "@/models/Topic";
 import ConceptMirror from "@/models/ConceptMirror";
+import { cookies } from "next/headers";
+import { verifySessionCookie } from "@/lib/session";
 
 export async function getPublicProfileData(username: string) {
+  const viewerId = verifySessionCookie(cookies().get("user_session")?.value);
+  if (!viewerId) return null;
+
   await dbConnect();
   
   const escapeRegex = (string: string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const safeUsername = escapeRegex(username);
 
-  const user = await User.findOne({ username: new RegExp(`^${safeUsername}$`, 'i'), isDiscoverable: true })
-    .select("username fullName classLevel examFocus city shareLocation shareProgress shareSocialLinks bio snapchat instagram").lean();
-  if (!user) {
-    return null;
-  }
+  const user = await User.findOne({ username: new RegExp(`^${safeUsername}$`, 'i') })
+    .select("uuid username fullName classLevel examFocus city shareLocation shareProgress shareSocialLinks bio snapchat instagram").lean();
+  const isOwnProfile = Boolean(user && viewerId === user.uuid);
+  if (!user) return null;
 
   const publicUser = {
     username: user.username,
@@ -30,6 +34,7 @@ export async function getPublicProfileData(username: string) {
   if (!user.shareProgress) {
     return {
       user: publicUser,
+      isOwnProfile,
       shareProgress: false,
       totalTopics: 0,
       averageScore: 0,
@@ -41,9 +46,7 @@ export async function getPublicProfileData(username: string) {
     };
   }
 
-  const userWithId = await User.findOne({ username: new RegExp(`^${safeUsername}$`, 'i'), isDiscoverable: true }).select("uuid").lean();
-  if (!userWithId) return null;
-  const topics = await Topic.find({ userId: userWithId.uuid }).lean();
+  const topics = await Topic.find({ userId: user.uuid }).lean();
   
   const analyzedTopics = topics.filter(t => t.analysis && typeof t.analysis.overallScore === 'number');
   const totalTopics = topics.length;
@@ -141,7 +144,7 @@ export async function getPublicProfileData(username: string) {
   };
 
   try {
-    const mirrorDocs = await ConceptMirror.find({ userId: userWithId.uuid })
+    const mirrorDocs = await ConceptMirror.find({ userId: user.uuid })
       .sort({ createdAt: -1 })
       .lean();
 
@@ -195,6 +198,7 @@ export async function getPublicProfileData(username: string) {
 
   return {
     user: publicUser,
+    isOwnProfile,
     shareProgress: true,
     totalTopics,
     averageScore,

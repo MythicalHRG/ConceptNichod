@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: conceptnichod-simplex-bridge
+    runtime: docker
+    plan: 1c-2g
+    region: singapore
+    dockerfilePath: ./services/simplex-bridge/Dockerfile
+    dockerContext: ./services/simplex-bridge
+    autoDeployTrigger: commit
+    healthCheckPath: /health
+    maxShutdownDelaySeconds: 60
+    buildFilter:
+      paths:
+        - services/simplex-bridge/**
+        - render.yaml
+    disk:
+      name: simplex-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: APP_BASE_URL
+        value: https://conceptnichod.vercel.app
+      - key: SIMPLEX_BRIDGE_SECRET
+        sync: false
+      - key: SIMPLEX_BRIDGE_WEBHOOK_SECRET
+        sync: false
+      - key: BRIDGE_MAPPING_KEY
+        generateValue: true
+      - key: SIMPLEX_DB_ENCRYPTION_KEY
+        generateValue: true
+      - key: BRIDGE_HOST
+        value: 0.0.0.0
+      - key: DATA_DIR
+        value: /data
+      - key: SIMPLEX_BOT_DISPLAY_NAME
+        value: ConceptNichod

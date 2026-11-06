@@ -16,7 +16,9 @@ export async function searchAspirantsAction(filters: SearchFilters) {
     const sessionUuid = verifySessionCookie(rawSession);
     if (!sessionUuid) throw new Error("Not authenticated");
 
-    const query: any = { uuid: { $ne: sessionUuid }, isDiscoverable: true };
+    // Profiles are part of the public student directory for signed-in users.
+    // Keep private account fields out of this result and honor field-level sharing below.
+    const query: any = { uuid: { $ne: sessionUuid } };
 
     const escapeRegex = (string: any) => {
         if (typeof string !== 'string') return '';
@@ -41,7 +43,7 @@ export async function searchAspirantsAction(filters: SearchFilters) {
         query.city = { $regex: safeCity, $options: "i" };
     }
 
-    const users = await User.find(query).select('username fullName classLevel examFocus city shareLocation shareSocialLinks snapchat instagram bio shareProgress').limit(50).lean();
+    const users = await User.find(query).select('username fullName classLevel examFocus city shareLocation shareSocialLinks snapchat instagram bio shareProgress').sort({ createdAt: -1 }).limit(50).lean();
     
     // Ensure we convert _id to string or remove it so it's plain JSON serializable
     return users.map((u: any) => ({

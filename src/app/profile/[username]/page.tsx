@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { UserAnalytics } from '@/components/profile/user-analytics';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { ProfileMessageButton } from "@/components/profile/profile-message-button";
 import { MapPin, Target, GraduationCap, Instagram, Ghost, Crown } from 'lucide-react';
 
 export const metadata = {
@@ -33,7 +34,6 @@ export default async function PublicProfilePage({ params }: { params: { username
       <div className="absolute bottom-[-10%] right-[-10%] w-[30%] h-[30%] bg-blue-500/10 rounded-full blur-[100px] pointer-events-none -z-10" />
 
       <main className="container mx-auto px-4 py-12 max-w-6xl">
-        
         {/* Profile Header */}
         <div className="flex flex-col md:flex-row items-center md:items-start gap-6 mb-12 animate-in fade-in slide-in-from-top-4 duration-500">
           <Avatar className={`w-32 h-32 border-4 border-background shadow-xl relative ${isBadeMaalik ? 'ring-4 ring-purple-500 shadow-purple-500/40' : 'ring-2 ring-primary/20'}`}>
@@ -111,6 +111,7 @@ export default async function PublicProfilePage({ params }: { params: { username
                 "{user.bio}"
               </p>
             )}
+            {!data.isOwnProfile && <ProfileMessageButton username={user.username} />}
           </div>
         </div>
 
