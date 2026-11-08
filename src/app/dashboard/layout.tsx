@@ -18,6 +18,7 @@ import Topic from "@/models/Topic";
 import { UserProfileButton } from "@/components/auth/user-profile-button";
 
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import User from "@/models/User";
 import { verifySessionCookie } from "@/lib/session";
 
@@ -26,20 +27,22 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const rawSession = cookies().get("user_session")?.value;
+  const userId = verifySessionCookie(rawSession);
+  if (!userId) {
+    redirect("/?login=true");
+  }
+
   let topicsDocs: any[] = [];
   let isDbWakingUp = false;
   let isAdmin = false;
 
   try {
     await dbConnect();
-    const rawSession = cookies().get("user_session")?.value;
-    const userId = verifySessionCookie(rawSession);
-    if (userId) {
-      topicsDocs = await Topic.find({ userId: userId }).sort({ createdAt: -1 }).lean();
-      const user = await User.findOne({ uuid: userId }).lean();
-      if (user && user.username === "mythicalhrg") {
-        isAdmin = true;
-      }
+    topicsDocs = await Topic.find({ userId: userId }).sort({ createdAt: -1 }).lean();
+    const user = await User.findOne({ uuid: userId }).lean();
+    if (user && user.username === "mythicalhrg") {
+      isAdmin = true;
     }
   } catch (error) {
     console.error("Dashboard layout dbConnect error:", error);

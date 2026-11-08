@@ -4,22 +4,25 @@ import dbConnect from "@/lib/mongoose";
 import Topic from "@/models/Topic";
 import User from "@/models/User";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { verifySessionCookie } from "@/lib/session";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { MapPin, GraduationCap, Target, Instagram } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default async function DashboardPage() {
+  const rawSession = cookies().get("user_session")?.value;
+  const sessionUuid = verifySessionCookie(rawSession);
+  if (!sessionUuid) {
+    redirect("/?login=true");
+  }
+
   let user = null;
   let isDbConnecting = false;
   
   try {
     await dbConnect();
-    const rawSession = cookies().get("user_session")?.value;
-    const sessionUuid = verifySessionCookie(rawSession);
-    if (sessionUuid) {
-      user = await User.findOne({ uuid: sessionUuid }).lean();
-    }
+    user = await User.findOne({ uuid: sessionUuid }).lean();
   } catch (error) {
     console.error("Database connection error in dashboard:", error);
     isDbConnecting = true;
@@ -40,14 +43,7 @@ export default async function DashboardPage() {
   }
 
   if (!user) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-        <h1 className="text-3xl font-bold font-headline">Welcome to Concepts Nichod!</h1>
-        <p className="text-muted-foreground text-center max-w-lg">
-          Please sign in using the button in the bottom left corner to view your profile and manage your topics.
-        </p>
-      </div>
-    );
+    redirect("/?login=true");
   }
 
   // Fetch only the logged-in user's topics
@@ -67,7 +63,7 @@ export default async function DashboardPage() {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
             <div className="space-y-4">
               <div>
-                  <h1 className="break-words text-3xl font-headline font-bold text-foreground sm:text-4xl">
+                <h1 className="break-words text-3xl font-headline font-bold text-foreground sm:text-4xl">
                   Welcome back, {user.fullName.split(' ')[0]}!
                 </h1>
                 <p className="text-lg text-primary font-medium mt-1">@{user.username}</p>

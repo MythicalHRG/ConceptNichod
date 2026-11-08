@@ -63,11 +63,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let active = true;
     meAction()
       .then((res) => {
-        if (active && !hasLocalAuthChange.current) setUser(res.user ?? null);
+        if (active && !hasLocalAuthChange.current) {
+          const currentUser = res.user ?? null;
+          setUser(currentUser);
+          if (!currentUser) {
+            setAuthModalOpen(true);
+          }
+        }
       })
       .catch((error) => {
         console.error("Unable to restore the current session:", error);
-        if (active && !hasLocalAuthChange.current) setUser(null);
+        if (active && !hasLocalAuthChange.current) {
+          setUser(null);
+          setAuthModalOpen(true);
+        }
       })
       .finally(() => {
         if (active) setIsAuthReady(true);
@@ -77,6 +86,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       active = false;
     };
   }, []);
+
+  // Whenever auth check is ready and there is no authenticated user, enforce modal popup
+  useEffect(() => {
+    if (isAuthReady && !user) {
+      setAuthModalOpen(true);
+    }
+  }, [isAuthReady, user]);
 
   const login = (newUser: AuthUser) => {
     hasLocalAuthChange.current = true;
@@ -90,6 +106,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await logoutAction();
     setUser(null);
     setIsAuthReady(true);
+    setAuthModalOpen(true);
+  };
+
+  const safeSetAuthModalOpen = (open: boolean) => {
+    // If user is not authenticated and auth check is complete, keep modal open
+    if (!open && !user && isAuthReady) {
+      setAuthModalOpen(true);
+      return;
+    }
+    setAuthModalOpen(open);
   };
 
   return (
@@ -101,11 +127,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         logout,
         isAuthModalOpen,
-        setAuthModalOpen,
+        setAuthModalOpen: safeSetAuthModalOpen,
       }}
     >
       <Suspense fallback={null}>
-        <AuthParamsHandler setAuthModalOpen={setAuthModalOpen} />
+        <AuthParamsHandler setAuthModalOpen={safeSetAuthModalOpen} />
       </Suspense>
       {children}
     </AuthContext.Provider>

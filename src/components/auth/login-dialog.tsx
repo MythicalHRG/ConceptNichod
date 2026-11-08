@@ -43,13 +43,24 @@ export function LoginDialog() {
 
   useEffect(() => {
     if (isAuthModalOpen) {
-      setTimeout(() => {
+      const timer1 = setTimeout(() => {
         try {
           loadCaptchaEnginge(6);
         } catch(e) {
           console.error("Captcha failed to load", e);
         }
       }, 200);
+
+      const timer2 = setTimeout(() => {
+        try {
+          loadCaptchaEnginge(6);
+        } catch(e) {}
+      }, 600);
+
+      return () => {
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+      };
     } else {
       // Reset states when closed
       setIsEmailVerified(false);
@@ -243,9 +254,9 @@ export function LoginDialog() {
     <Dialog open={isAuthModalOpen} onOpenChange={setAuthModalOpen}>
       <DialogContent className="sm:max-w-[425px] [&>button]:hidden" onInteractOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>Authentication Required</DialogTitle>
+          <DialogTitle>Welcome to Concepts Nichod</DialogTitle>
           <DialogDescription>
-            You need to be signed in to access this feature. Only @gmail.com, @outlook.com, and @outlook.in emails are permitted.
+            Please sign in or create an account to access our platform. Only @gmail.com, @outlook.com, and @outlook.in emails are permitted.
           </DialogDescription>
         </DialogHeader>
 
