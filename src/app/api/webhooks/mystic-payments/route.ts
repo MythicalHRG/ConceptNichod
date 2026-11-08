@@ -38,18 +38,21 @@ export async function POST(req: NextRequest) {
       status === "SUCCESS" ||
       status === "COMPLETED" ||
       status === "OBSERVED_SUCCESS" ||
+      event === "SUCCESS" ||
       event === "payment.succeeded" ||
       event === "payment.observed";
 
     if (isSuccess && orderId) {
       await dbConnect();
 
-      const donorUsername = (
+      const rawUsername = (
         customer?.name ||
         metadata?.username ||
         customer?.email?.split("@")[0] ||
         "Generous Patron"
-      ).trim();
+      ).toString().trim();
+
+      const donorUsername = rawUsername.replace(/^@+/, "") || "Generous Patron";
 
       const numericAmount = Math.max(1, Math.round(Number(amount) || 100));
 

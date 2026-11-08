@@ -13,6 +13,7 @@ export interface MysticCreateSessionOptions {
   customer?: MysticCustomer;
   metadata?: Record<string, any>;
   returnUrl?: string;
+  method?: string;
 }
 
 export interface MysticSessionResponse {
@@ -158,6 +159,7 @@ export async function createMysticSession(
       options.returnUrl ||
       `${config.appUrl}/donate?status=success&orderId=${encodeURIComponent(options.orderId)}`,
     customer: options.customer,
+    method: options.method || "MANUAL_UPI",
     metadata: {
       ...options.metadata,
       gateway: "MysticPayments",

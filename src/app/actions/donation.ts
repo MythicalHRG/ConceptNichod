@@ -172,3 +172,59 @@ export async function createDonationCheckoutAction(payload: {
   }
 }
 
+/**
+ * Public action to check if current visitor is logged in and retrieve their handle
+ */
+export async function getCurrentUserDonationContextAction() {
+  try {
+    const rawSession = cookies().get("user_session")?.value;
+    const sessionUuid = verifySessionCookie(rawSession);
+    if (!sessionUuid) return { success: false, username: null };
+
+    await dbConnect();
+    const user = await User.findOne({ uuid: sessionUuid }).select("username fullName").lean();
+    if (!user) return { success: false, username: null };
+
+    return {
+      success: true,
+      username: user.username,
+      name: user.fullName || user.username,
+    };
+  } catch {
+    return { success: false, username: null };
+  }
+}
+
+/**
+ * Public action to check if an order's donation has been confirmed in the Hall of Patrons
+ */
+export async function checkDonationStatusAction(orderId: string) {
+  if (!orderId || typeof orderId !== "string") {
+    return { success: false, error: "Order ID is required" };
+  }
+
+  try {
+    await dbConnect();
+    const cleanOrderId = orderId.trim();
+    const donor = await Donor.findOne({ uuid: `mp_${cleanOrderId}` }).lean();
+
+    if (donor) {
+      return {
+        success: true,
+        isConfirmed: true,
+        donor: JSON.parse(JSON.stringify(donor)),
+      };
+    }
+
+    return {
+      success: true,
+      isConfirmed: false,
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error?.message || "Failed to query donation status",
+    };
+  }
+}
+
