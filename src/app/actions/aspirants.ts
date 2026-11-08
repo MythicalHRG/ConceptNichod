@@ -24,8 +24,8 @@ export async function searchAspirantsAction(filters: SearchFilters) {
         return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     };
 
-    if (filters.searchQuery && typeof filters.searchQuery === 'string') {
-        const safeQuery = escapeRegex(filters.searchQuery);
+    if (filters.searchQuery && typeof filters.searchQuery === 'string' && filters.searchQuery.trim().length > 0) {
+        const safeQuery = escapeRegex(filters.searchQuery.trim());
         query.$or = [
             { fullName: { $regex: safeQuery, $options: "i" } },
             { username: { $regex: safeQuery, $options: "i" } },
@@ -39,7 +39,7 @@ export async function searchAspirantsAction(filters: SearchFilters) {
     if (typeof filters.gender === 'string' && filters.gender !== "All") {
         query.gender = filters.gender.trim();
     }
-    if (typeof filters.city === 'string' && filters.city !== "All") {
+    if (typeof filters.city === 'string' && filters.city !== "All" && filters.city.trim().length > 0) {
         const safeCity = escapeRegex(filters.city.trim());
         query.city = { $regex: safeCity, $options: "i" };
     }
