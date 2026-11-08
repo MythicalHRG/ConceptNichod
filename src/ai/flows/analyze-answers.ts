@@ -97,7 +97,18 @@ CRITICAL EXAMINER GUIDELINES — EXTREMELY STRICT & UNFORGIVING SCORING:
      * Nonsense/Filler Signals: Deliberate gibberish, unrelated words, jokes, or evasion.
    - Return a forensic "authenticityReport" with naturalConfidenceScore (0-100%) and verdict ("natural_human", "suspicious_synthetic", "nonsense_or_filler", or "blended").
 
-4. CHART DATA GENERATION:
+4. TIME-LIMITED ORAL DEFENSE & MAXIMUM TIME UTILIZATION (2-MINUTE BENCHMARK):
+   - In spoken answers and verbal defense ("Grab Your Confidence!"), the student had an allocated 2-minute (120-second) window.
+   - STUDENTS MUST NOT BE ABLE TO TRICK THE AI INTO HIGH MARKS BY MERELY SPEAKING FOR 10-15 SECONDS WITH A FEW KEYWORDS!
+   - A student who provides a brief, truncated response of only a few seconds without developing derivations, principles, or examples clearly lacks in-depth mastery.
+   - If spoken answers are brief, superficial, or abruptly ended after a few seconds:
+     * Heavily penalize Overall Score and Delivery & Articulation metrics.
+     * In "performanceSummary", explicitly note that they had up to 2 minutes to explain the concepts thoroughly but failed to utilize their time.
+   - STRICTLY DETECT AND MEASURE FLUFF IN THE GRAPHS:
+     * In the "Knowledge Composition" pie chart, you MUST accurately include a slice for "Fluff / Filler" representing low-value padding, repetitive filler, and hesitation phrases.
+     * In "performanceSummary", state the exact percentage of Fluff/Filler identified in their responses.
+
+5. CHART DATA GENERATION:
    - Ensure the chart numbers align with the strict score! If overallScore is 15, chart scores must reflect low scores (10-25), NOT 80!
 
 Respond with ONLY a valid JSON object (no markdown fences, no surrounding prose):
@@ -145,7 +156,7 @@ Respond with ONLY a valid JSON object (no markdown fences, no surrounding prose)
         "idealDerivationOrAnswer": "<ideal complete rigorous solution with LaTeX $$...$$ equations>"
       }
     ],
-    "chartsData": "[{\"type\":\"bar\",\"title\":\"Cognitive Competencies\",\"data\":[{\"name\":\"Comprehension\",\"score\":<number>},{\"name\":\"Expression\",\"score\":<number>},{\"name\":\"Critical Thinking\",\"score\":<number>},{\"name\":\"Application\",\"score\":<number>}],\"config\":{\"score\":{\"label\":\"Score\",\"color\":\"hsl(var(--primary))\"}}},{\"type\":\"pie\",\"title\":\"Knowledge Composition\",\"data\":[{\"name\":\"Core Theory\",\"value\":<number>,\"fill\":\"#3b82f6\"},{\"name\":\"Applied Logic\",\"value\":<number>,\"fill\":\"#10b981\"},{\"name\":\"Analytical Insights\",\"value\":<number>,\"fill\":\"#f59e0b\"}]},{\"type\":\"histo\",\"title\":\"Response Depth Frequency\",\"data\":[{\"name\":\"0-25% Recall\",\"score\":<number>},{\"name\":\"26-50% Foundational\",\"score\":<number>},{\"name\":\"51-75% Analytical\",\"score\":<number>},{\"name\":\"76-100% Comprehensive\",\"score\":<number>}],\"config\":{\"score\":{\"label\":\"Answers Count\",\"color\":\"#10b981\"}}},{\"type\":\"polynomial\",\"title\":\"Adaptive Mastery Progression Curve\",\"data\":[{\"step\":\"Stage 1: Recall\",\"score\":<number>},{\"step\":\"Stage 2: Conceptual\",\"score\":<number>},{\"step\":\"Stage 3: Application\",\"score\":<number>},{\"step\":\"Stage 4: Synthesis\",\"score\":<number>},{\"step\":\"Stage 5: Peak Mastery\",\"score\":<number>}]},{\"type\":\"radar\",\"title\":\"Delivery & Articulation Matrix\",\"data\":[{\"metric\":\"Clarity\",\"score\":<number>},{\"metric\":\"Conciseness\",\"score\":<number>},{\"metric\":\"Confidence\",\"score\":<number>},{\"metric\":\"Technical Precision\",\"score\":<number>},{\"metric\":\"Structure\",\"score\":<number>}]}]"
+    "chartsData": "[{\"type\":\"bar\",\"title\":\"Cognitive Competencies\",\"data\":[{\"name\":\"Comprehension\",\"score\":<number>},{\"name\":\"Expression\",\"score\":<number>},{\"name\":\"Critical Thinking\",\"score\":<number>},{\"name\":\"Application\",\"score\":<number>}],\"config\":{\"score\":{\"label\":\"Score\",\"color\":\"hsl(var(--primary))\"}}},{\"type\":\"pie\",\"title\":\"Knowledge Composition\",\"data\":[{\"name\":\"Core Theory\",\"value\":<number>,\"fill\":\"#3b82f6\"},{\"name\":\"Applied Logic\",\"value\":<number>,\"fill\":\"#10b981\"},{\"name\":\"Fluff / Filler\",\"value\":<number>,\"fill\":\"#ef4444\"},{\"name\":\"Analytical Insights\",\"value\":<number>,\"fill\":\"#f59e0b\"}]},{\"type\":\"histo\",\"title\":\"Response Depth Frequency\",\"data\":[{\"name\":\"0-25% Recall\",\"score\":<number>},{\"name\":\"26-50% Foundational\",\"score\":<number>},{\"name\":\"51-75% Analytical\",\"score\":<number>},{\"name\":\"76-100% Comprehensive\",\"score\":<number>}],\"config\":{\"score\":{\"label\":\"Answers Count\",\"color\":\"#10b981\"}}},{\"type\":\"polynomial\",\"title\":\"Adaptive Mastery Progression Curve\",\"data\":[{\"step\":\"Stage 1: Recall\",\"score\":<number>},{\"step\":\"Stage 2: Conceptual\",\"score\":<number>},{\"step\":\"Stage 3: Application\",\"score\":<number>},{\"step\":\"Stage 4: Synthesis\",\"score\":<number>},{\"step\":\"Stage 5: Peak Mastery\",\"score\":<number>}]},{\"type\":\"radar\",\"title\":\"Delivery & Articulation Matrix\",\"data\":[{\"metric\":\"Clarity\",\"score\":<number>},{\"metric\":\"Conciseness\",\"score\":<number>},{\"metric\":\"Confidence\",\"score\":<number>},{\"metric\":\"Technical Precision\",\"score\":<number>},{\"metric\":\"Structure\",\"score\":<number>}]}]"
   }
 }`;
 

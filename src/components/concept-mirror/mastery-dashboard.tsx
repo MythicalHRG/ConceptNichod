@@ -47,6 +47,10 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
     safeRadarData.reduce((acc, curr) => acc + curr.score, 0) / safeRadarData.length
   );
 
+  const fluffItem = report.pie_chart_data?.find(item => item.name.toLowerCase() === 'fluff');
+  const fluffPercent = report.fluffPercentage ?? (fluffItem ? fluffItem.value : 0);
+  const timeUtilized = report.durationSeconds ?? 0;
+
   return (
     <Card className="w-full">
       <CardHeader>
@@ -57,7 +61,30 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
               Oral concept defense for: <span className="font-semibold text-primary">{conceptName}</span>
             </CardDescription>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4 flex-wrap">
+            {timeUtilized > 0 && (
+              <div className="text-right border-r pr-4 border-border/60">
+                <span className="text-xs uppercase font-bold tracking-wider text-muted-foreground block">Time Utilized</span>
+                <span className="text-lg font-bold font-mono text-foreground">
+                  {Math.floor(timeUtilized / 60)}:{(timeUtilized % 60).toString().padStart(2, '0')} / 02:00
+                </span>
+                <span className="text-[10px] text-muted-foreground block">
+                  {Math.min(100, Math.round((timeUtilized / 120) * 100))}% of max window
+                </span>
+              </div>
+            )}
+            <div className="text-right border-r pr-4 border-border/60">
+              <span className="text-xs uppercase font-bold tracking-wider text-muted-foreground block">Fluff Content</span>
+              <span className={`text-2xl font-extrabold ${
+                fluffPercent > 35 
+                  ? "text-destructive" 
+                  : fluffPercent > 15 
+                  ? "text-amber-500" 
+                  : "text-emerald-500"
+              }`}>
+                {fluffPercent}%
+              </span>
+            </div>
             <div className="text-right">
               <span className="text-xs uppercase font-bold tracking-wider text-muted-foreground block">Mastery Score</span>
               <span className="text-3xl font-extrabold text-primary">{report.overallScore || avgClarity}%</span>
@@ -103,13 +130,24 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
             </div>
           </div>
 
-          {/* Chart 2: Pie / Donut Chart (Content Composition) */}
+          {/* Chart 2: Pie / Donut Chart (Content Composition & Fluff Ratio) */}
           <div className="rounded-xl border p-4 bg-background shadow-sm flex flex-col justify-between">
             <div className="flex items-center justify-between mb-2">
               <h4 className="font-medium text-sm flex items-center gap-2">
                 <PieIcon className="w-4 h-4 text-emerald-500" /> Content Composition
               </h4>
-              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-muted text-muted-foreground">Pie / Donut</span>
+              <div className="flex items-center gap-1.5">
+                <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${
+                  fluffPercent > 35 
+                    ? "bg-destructive/10 text-destructive border-destructive/30" 
+                    : fluffPercent > 15 
+                    ? "bg-amber-500/10 text-amber-500 border-amber-500/30" 
+                    : "bg-emerald-500/10 text-emerald-500 border-emerald-500/30"
+                }`}>
+                  Fluff: {fluffPercent}%
+                </span>
+                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-muted text-muted-foreground">Pie / Donut</span>
+              </div>
             </div>
             <p className="text-xs text-muted-foreground mb-4">Ratio of verifiable scientific fact vs fluff vs insight.</p>
             <div className="h-[280px] w-full">
@@ -201,32 +239,22 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border) / 0.5)" />
                   <XAxis 
                     dataKey="step" 
+                    tick={{ fontSize: 11, fill: 'currentColor' }} 
                     tickLine={false} 
-                    axisLine={false} 
-                    tick={{ fontSize: 10, fill: 'currentColor' }} 
-                    tickMargin={10} 
+                    axisLine={false}
                   />
                   <YAxis 
                     domain={[0, 100]} 
+                    tick={{ fontSize: 11, fill: 'currentColor' }} 
                     tickLine={false} 
-                    axisLine={false} 
-                    tick={{ fontSize: 11, fill: 'currentColor' }}
+                    axisLine={false}
                     tickFormatter={(v) => `${v}%`}
                   />
                   <GeneralTooltip 
-                    formatter={(val: number) => [`${val}%`, 'Depth Score']}
+                    formatter={(val: number) => [`${val}%`, 'Mastery Index']}
                     contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))', backgroundColor: 'hsl(var(--background))', color: 'hsl(var(--foreground))' }}
                   />
-                  <Area 
-                    type="monotone" 
-                    dataKey="score" 
-                    stroke="#6366f1" 
-                    strokeWidth={3} 
-                    fillOpacity={1} 
-                    fill="url(#cmPolyGrad)"
-                    dot={{ r: 4, fill: "#6366f1", stroke: "hsl(var(--background))", strokeWidth: 2 }}
-                    activeDot={{ r: 6 }}
-                  />
+                  <Area type="monotone" dataKey="score" stroke="#6366f1" strokeWidth={2.5} fillOpacity={1} fill="url(#cmPolyGrad)" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -245,30 +273,41 @@ export function MasteryDashboard() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   const { toast } = useToast();
-  const { 
-    isRecording, 
-    isConnecting, 
-    transcript, 
-    errorMessage, 
-    startRecording, 
-    stopRecording, 
-    lockAndAbort,
+
+  const {
+    isRecording,
+    isConnecting,
+    transcript,
+    errorMessage,
+    startRecording,
+    stopRecording,
     resetTranscript,
-    isSupported 
+    lockAndAbort,
+    isSupported,
   } = useAudioRecorder();
 
-  // Stopwatch timer when recording
+  // Stopwatch timer when recording - enforces 2-minute (120s) limit
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
     if (isRecording) {
       interval = setInterval(() => {
-        setElapsedSeconds((prev) => prev + 1);
+        setElapsedSeconds((prev) => {
+          if (prev >= 120) {
+            stopRecording();
+            toast({
+              title: "Time Limit Reached (2:00)",
+              description: "You have utilized the full 2-minute oral defense window! Ready for analysis.",
+            });
+            return 120;
+          }
+          return prev + 1;
+        });
       }, 1000);
     }
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [isRecording]);
+  }, [isRecording, stopRecording, toast]);
 
   const formatStopwatch = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -446,7 +485,7 @@ export function MasteryDashboard() {
                 }`}
               >
                 <Timer className={`w-4 h-4 ${isRecording ? 'animate-pulse text-emerald-500' : ''}`} />
-                <span>{formatStopwatch(elapsedSeconds)}</span>
+                <span>{formatStopwatch(elapsedSeconds)} / 02:00</span>
               </div>
 
               {/* Primary Mic Toggle */}
@@ -480,6 +519,16 @@ export function MasteryDashboard() {
                 Reset
               </Button>
             </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-xs text-muted-foreground pt-1 px-1 gap-1">
+            <span className="flex items-center gap-1">
+              <Timer className="w-3.5 h-3.5 text-primary" />
+              Maximum Response Window: <strong>2 Minutes (120s)</strong>
+            </span>
+            <span className="text-[11px] text-muted-foreground/80">
+              Utilize maximum time for comprehensive mastery • Fluff & brevity are strictly audited
+            </span>
           </div>
 
           {/* Live Speech Transcript - Strictly Non-Editable (No manual typing) */}
@@ -531,4 +580,3 @@ export function MasteryDashboard() {
 }
 
 export const ConceptMirrorDashboard = MasteryDashboard;
-
