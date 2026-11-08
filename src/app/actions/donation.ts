@@ -6,7 +6,7 @@ import User from "@/models/User";
 import DonationSetting from "@/models/DonationSetting";
 import Donor from "@/models/Donor";
 import { verifySessionCookie } from "@/lib/session";
-import { createMysticSession } from "@/lib/mystic-payments";
+import { createMysticSession, cleanAndValidateUrl, getMysticPaymentStatus } from "@/lib/mystic-payments";
 import crypto from "crypto";
 
 const ADMIN_USERNAME = "mythicalhrg";
@@ -42,7 +42,6 @@ export async function getDonationInfoAction() {
   }
 
   const donors = await Donor.find({ isPublic: true })
-    .select("-uuid")
     .sort({ amount: -1, createdAt: -1 })
     .lean();
 
@@ -99,7 +98,7 @@ export async function addDonorCardAction(payload: {
   // Determine tier automatically if not provided
   let tier = payload.tier;
   if (!tier) {
-    if (payload.amount >= 2000) tier = "Legend";
+    if (payload.amount >= 2500) tier = "Legend";
     else if (payload.amount >= 1000) tier = "Benefactor";
     else if (payload.amount >= 500) tier = "Patron";
     else tier = "Supporter";
@@ -128,7 +127,9 @@ export async function deleteDonorCardAction(uuid: string) {
 }
 
 /**
- * Public action to initiate an authoritative MysticPayments checkout session
+ * Public action to initiate an authoritative MysticPayments checkout session.
+ * Requires user authentication to prevent anonymous impersonation and guarantee
+ * authentic placement on the Hall of Patrons.
  */
 export async function createDonationCheckoutAction(payload: {
   amount: number;
@@ -140,8 +141,21 @@ export async function createDonationCheckoutAction(payload: {
     return { success: false, error: "Please enter a valid amount of at least ₹1." };
   }
 
+  // Authoritatively verify the caller's session
+  const rawSession = cookies().get("user_session")?.value;
+  const sessionUuid = verifySessionCookie(rawSession);
+  if (!sessionUuid) {
+    return { success: false, error: "Authentication required to initiate donation." };
+  }
+
+  await dbConnect();
+  const user = await User.findOne({ uuid: sessionUuid }).select("username fullName").lean();
+  if (!user) {
+    return { success: false, error: "Authenticated user account not found. Please log in again." };
+  }
+
+  const authenticatedUsername = user.username.trim().replace(/^@+/, "");
   const orderId = `cn_ord_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
-  const username = payload.username?.trim().replace(/^@/, "") || "Aspirant";
 
   try {
     const session = await createMysticSession({
@@ -149,17 +163,20 @@ export async function createDonationCheckoutAction(payload: {
       amount: numericAmount,
       currency: "INR",
       customer: {
-        name: username,
+        name: user.fullName || authenticatedUsername,
       },
       metadata: {
-        username,
+        username: authenticatedUsername,
+        userUuid: sessionUuid,
         message: payload.message?.trim() || "ConceptNichod Patron Support",
       },
     });
 
+    const cleanCheckoutUrl = cleanAndValidateUrl(session.checkoutUrl);
+
     return {
       success: true,
-      checkoutUrl: session.checkoutUrl,
+      checkoutUrl: cleanCheckoutUrl,
       orderId: session.orderId,
       paymentId: session.paymentId,
     };
@@ -196,9 +213,10 @@ export async function getCurrentUserDonationContextAction() {
 }
 
 /**
- * Public action to check if an order's donation has been confirmed in the Hall of Patrons
+ * Public action to check if an order's donation has been confirmed in the Hall of Patrons.
+ * Includes authoritative gateway reconciliation fallback if the webhook has not delivered yet.
  */
-export async function checkDonationStatusAction(orderId: string) {
+export async function checkDonationStatusAction(orderId: string, paymentId?: string) {
   if (!orderId || typeof orderId !== "string") {
     return { success: false, error: "Order ID is required" };
   }
@@ -206,7 +224,7 @@ export async function checkDonationStatusAction(orderId: string) {
   try {
     await dbConnect();
     const cleanOrderId = orderId.trim();
-    const donor = await Donor.findOne({ uuid: `mp_${cleanOrderId}` }).lean();
+    let donor = await Donor.findOne({ uuid: `mp_${cleanOrderId}` }).lean();
 
     if (donor) {
       return {
@@ -214,6 +232,53 @@ export async function checkDonationStatusAction(orderId: string) {
         isConfirmed: true,
         donor: JSON.parse(JSON.stringify(donor)),
       };
+    }
+
+    // Fallback reconciliation directly from MysticPayments API if paymentId is known
+    if (paymentId && typeof paymentId === "string") {
+      const paymentData = await getMysticPaymentStatus(paymentId.trim());
+      const isCompleted =
+        paymentData?.status === "SUCCESS" ||
+        paymentData?.status === "COMPLETED" ||
+        paymentData?.status === "OBSERVED_SUCCESS";
+
+      if (isCompleted) {
+        const numAmt = Math.max(1, Math.round(Number(paymentData.amount) || 100));
+        let tier: "Supporter" | "Patron" | "Benefactor" | "Legend" = "Supporter";
+        if (numAmt >= 2500) tier = "Legend";
+        else if (numAmt >= 1000) tier = "Benefactor";
+        else if (numAmt >= 500) tier = "Patron";
+
+        const donorUsername = (
+          paymentData.metadata?.username ||
+          paymentData.customer?.name ||
+          "Generous Patron"
+        ).toString().trim().replace(/^@+/, "") || "Generous Patron";
+
+        donor = await Donor.findOneAndUpdate(
+          { uuid: `mp_${cleanOrderId}` },
+          {
+            $setOnInsert: {
+              uuid: `mp_${cleanOrderId}`,
+              username: donorUsername,
+              amount: numAmt,
+              tier,
+              message: paymentData.metadata?.message || `Supported via MysticPayments (Payment ID: ${paymentData.paymentId || paymentId})`,
+              isPublic: true,
+              donatedAt: new Date(),
+            },
+          },
+          { upsert: true, new: true }
+        ).lean();
+
+        if (donor) {
+          return {
+            success: true,
+            isConfirmed: true,
+            donor: JSON.parse(JSON.stringify(donor)),
+          };
+        }
+      }
     }
 
     return {

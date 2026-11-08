@@ -7,6 +7,8 @@ export {
   verifyMysticSignature as verifyYoupiSignature,
   getStrictMysticConfig,
   StrictCredentialError,
+  cleanAndValidateUrl,
+  getMysticPaymentStatus as getYoupiPaymentStatus,
   type MysticCustomer as YoupiCustomer,
   type MysticCreateSessionOptions as YoupiCreateSessionOptions,
   type MysticSessionResponse as YoupiSessionResponse,

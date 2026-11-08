@@ -14,6 +14,8 @@ export async function POST(req: NextRequest) {
     const rawBody = await req.text();
     const signatureHeader =
       req.headers.get("x-signature-sha256") ||
+      req.headers.get("x-mystic-signature") ||
+      req.headers.get("x-mysticpayments-signature") ||
       req.headers.get("x-youpi-signature") ||
       req.headers.get("x-webhook-signature");
 
@@ -29,7 +31,14 @@ export async function POST(req: NextRequest) {
     }
 
     const payload = JSON.parse(rawBody);
-    const { event, paymentId, orderId, amount, status, customer, metadata } = payload;
+    const data = payload?.data && typeof payload.data === "object" ? payload.data : payload;
+    const event = payload?.event || data?.event;
+    const paymentId = data?.paymentId || data?.payment_id || payload?.paymentId;
+    const orderId = data?.orderId || data?.order_id || payload?.orderId;
+    const amount = data?.amount !== undefined ? data.amount : payload?.amount;
+    const status = data?.status || payload?.status;
+    const customer = data?.customer || payload?.customer;
+    const metadata = data?.metadata || payload?.metadata;
 
     console.log(`[MysticPayments Webhook] Received valid event: ${event || status} for order ${orderId}`);
 

@@ -345,6 +345,7 @@ export function LeaderboardView() {
                       strokeWidth={t.isCurrentUser ? 3 : 2}
                       dot={{ r: 3 }}
                       activeDot={{ r: 6 }}
+                      connectNulls={true}
                     />
                   ))}
                 </LineChart>
@@ -366,7 +367,7 @@ export function LeaderboardView() {
             Complete Rankings & Velocity Metrics
           </CardTitle>
           <CardDescription>
-            Deterministic ranking: Rank Score &gt; Active Streak &gt; Concepts Mastered &gt; Mirror Defense Duration &gt; Seniority.
+            Deterministic ranking: Rank Score &gt; Active Streak &gt; Concepts Mastered &gt; Accuracy &gt; Mirror Defense Duration &gt; Seniority.
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">

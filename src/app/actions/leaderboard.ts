@@ -89,7 +89,7 @@ export async function getLeaderboardDataAction(
     topicQuery.createdAt = { $gte: timeCutoff };
   }
   const topicSessions = await Topic.find(topicQuery)
-    .select("userId name analysis practiceStatus createdAt")
+    .select("userId name analysis practiceStatus savedWrittenAnswers savedSpokenAnswers createdAt")
     .sort({ createdAt: 1 })
     .lean();
 
@@ -100,7 +100,7 @@ export async function getLeaderboardDataAction(
   const todayStr = getIstDateString(now);
   const yesterdayStr = getYesterdayIstDateString(now);
 
-  // Group activities per user
+  // Group activities per user & track authentic oral defense duration
   const userActivities = new Map<
     string,
     Array<{
@@ -110,13 +110,19 @@ export async function getLeaderboardDataAction(
       createdAt: Date;
     }>
   >();
+  const userOralDefenseSeconds = new Map<string, number>();
 
   for (const session of mirrorSessions) {
     const list = userActivities.get(session.userId) || [];
+    const dur = session.durationSeconds || 0;
+    userOralDefenseSeconds.set(
+      session.userId,
+      (userOralDefenseSeconds.get(session.userId) || 0) + dur
+    );
     list.push({
       title: session.conceptName,
       score: Math.min(100, Math.max(0, session.overallScore || 0)),
-      durationSeconds: session.durationSeconds || 0,
+      durationSeconds: dur,
       createdAt: new Date(session.createdAt),
     });
     userActivities.set(session.userId, list);
@@ -127,9 +133,14 @@ export async function getLeaderboardDataAction(
     const hasAnalysisScore = topic.analysis && typeof topic.analysis.overallScore === "number";
     const isCompleted = topic.practiceStatus === "completed";
     const isInProgress = topic.practiceStatus === "in_progress";
+    const hasAnswers =
+      (Array.isArray(topic.savedWrittenAnswers) &&
+        topic.savedWrittenAnswers.some((a: string) => a && a.trim().length > 0)) ||
+      (Array.isArray(topic.savedSpokenAnswers) &&
+        topic.savedSpokenAnswers.some((a: string) => a && a.trim().length > 0));
 
-    // If untouched (not_started without any evaluation), skip counting as mastered activity
-    if (!hasAnalysisScore && !isCompleted && !isInProgress) {
+    // Exclude untouched drafts (not_started without analysis, or in_progress without any answers)
+    if (!hasAnalysisScore && !isCompleted && (!isInProgress || !hasAnswers)) {
       continue;
     }
 
@@ -163,7 +174,7 @@ export async function getLeaderboardDataAction(
     let totalDurationSeconds = 0;
     const trajectory: TrajectoryPoint[] = [];
 
-    // Sums for linear regression: X = index (1..N), Y = score or running average
+    // Sums for linear regression: X = index (1..N), Y = score
     let sumX = 0;
     let sumY = 0;
     let sumXY = 0;
@@ -211,30 +222,58 @@ export async function getLeaderboardDataAction(
     const currentStreak = isStreakActive ? streakDoc.currentStreak : 0;
     const longestStreak = streakDoc ? streakDoc.longestStreak : 0;
 
-    // Composite Rank Score:
-    // Volume of Mastered Concepts (high weight) + Accuracy (scaled by credibility) + Streak + Velocity + Spoken Fluency
-    // Concepts volume: 3.0 points per mastered concept (up to 100 concepts = 300 pts)
-    const conceptsWeight = Math.min(N, 100) * 3.0;
+    // 1. Quality & Mastery-Weighted Volume:
+    // Reward depth of mastery over superficial churning
+    let qualityWeightedVolume = 0;
+    for (const item of rawList) {
+      if (item.score >= 80) qualityWeightedVolume += 3.5;
+      else if (item.score >= 60) qualityWeightedVolume += 2.5;
+      else if (item.score >= 40) qualityWeightedVolume += 1.5;
+      else qualityWeightedVolume += 0.5;
+    }
+    const conceptsWeight = Math.min(qualityWeightedVolume, 300);
 
-    // Performance weight: up to 30 points, confidence-weighted by sample size so 1 single topic cannot outrank 10+ completed topics
-    const credibilityFactor = Math.min(1, N / 3);
-    const performanceWeight = (avgScore * 0.3) * credibilityFactor;
+    // 2. Bayesian / Credibility-Smoothed Performance Weight:
+    // Smooths accuracy by sample size so 1 attempt cannot outrank sustained high performance
+    const credibilityFactor = N / (N + 3);
+    const performanceWeight = (avgScore * 0.4) * credibilityFactor;
 
-    // Consistency: 2.0 points per active streak day
-    const streakWeight = currentStreak * 2.0;
+    // 3. Timeframe-Bounded Consistency (Streak):
+    // Bound streak points to timeframe so historical streaks do not skew weekly/monthly leaderboards
+    let maxTimeframeDays = 100;
+    if (timeframe === "week") maxTimeframeDays = 7;
+    else if (timeframe === "month") maxTimeframeDays = 30;
+    const effectiveStreak = Math.min(currentStreak, maxTimeframeDays);
+    const streakWeight = effectiveStreak * 2.0;
 
-    // Learning progression velocity
-    const velocityWeight = Math.max(-10, Math.min(30, velocity)) * 2.0;
+    // 4. Learning Progression Velocity (with low-sample confidence damping):
+    // Damps volatile low-N slopes (N < 3 has zero slope weight, smoothly phases in)
+    const slopeConfidence = Math.min(1, Math.max(0, (N - 2) / 5));
+    const effectiveVelocity = slope * Math.log10(N + 1) * slopeConfidence;
+    const velocityWeight = Math.max(-10, Math.min(30, effectiveVelocity)) * 2.0;
 
-    // Oral defense bonus from Concept Mirror
-    const oralBonus = Math.min(totalDurationSeconds / 60, 20) * 0.5;
+    // 5. Mastery Plateau Bonus (Solves the Ceiling Effect for Elite Students):
+    // High-performing students (avgScore >= 85%) naturally have near-zero slope because they are already near ceiling.
+    // Award an excellence plateau bonus so elite consistent performers are recognized fairly:
+    let plateauBonus = 0;
+    if (avgScore >= 85 && N >= 3) {
+      plateauBonus = Math.min(25, (avgScore - 80) * 1.5 * Math.min(1, N / 5));
+    }
 
-    const rankScore =
-      N > 0
-        ? Math.round(
-            (conceptsWeight + performanceWeight + streakWeight + velocityWeight + oralBonus) * 100
-          ) / 100
-        : 0;
+    // 6. Oral Defense Bonus from authentic Concept Mirror sessions:
+    const oralSeconds = userOralDefenseSeconds.get(u.uuid) || 0;
+    const oralBonus = Math.min(oralSeconds / 60, 20) * 0.5;
+
+    // Composite Rank Score: guaranteed >= 0, rounded to 2 decimal places
+    const rawRankScore =
+      conceptsWeight +
+      performanceWeight +
+      streakWeight +
+      velocityWeight +
+      plateauBonus +
+      oralBonus;
+
+    const rankScore = N > 0 ? Math.max(0, Math.round(rawRankScore * 100) / 100) : 0;
 
     entries.push({
       rank: 0,
@@ -260,8 +299,9 @@ export async function getLeaderboardDataAction(
   // 1. Composite Rank Score (desc)
   // 2. Current active study streak (desc)
   // 3. Concepts mastered N (desc)
-  // 4. Total Concept Mirror defense seconds (desc)
-  // 5. Earlier user registration timestamp (asc)
+  // 4. Accuracy / Avg Score (desc)
+  // 5. Total Concept Mirror defense seconds (desc)
+  // 6. Earlier user registration timestamp (asc)
   const userMap = new Map(users.map((u) => [u.username.toLowerCase(), u]));
 
   entries.sort((a, b) => {
@@ -273,6 +313,9 @@ export async function getLeaderboardDataAction(
     }
     if (b.conceptsCovered !== a.conceptsCovered) {
       return b.conceptsCovered - a.conceptsCovered;
+    }
+    if (Math.abs((b.avgScore || 0) - (a.avgScore || 0)) > 0.01) {
+      return (b.avgScore || 0) - (a.avgScore || 0);
     }
     if (b.totalDurationSeconds !== a.totalDurationSeconds) {
       return b.totalDurationSeconds - a.totalDurationSeconds;

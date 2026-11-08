@@ -45,6 +45,24 @@ export class StrictCredentialError extends Error {
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
+ * Strips UTF-8 Byte Order Marks (\uFEFF), zero-width spaces (\u200B, \u200C, \u200D),
+ * whitespace, and normalizes protocol slashes to produce a clean, valid URL.
+ */
+export function cleanAndValidateUrl(url: string | null | undefined): string {
+  if (!url || typeof url !== "string") return "";
+  let clean = url.replace(/^[\uFEFF\u200B\u200C\u200D\s]+/, "").trim();
+  // Fix accidental single-slash protocol e.g. "https:/mystic"
+  clean = clean.replace(/^(https?:)\/([^\/])/, "$1//$2");
+  try {
+    const parsed = new URL(clean);
+    if (parsed.protocol === "https:" || parsed.protocol === "http:") {
+      return parsed.toString();
+    }
+  } catch {}
+  return clean;
+}
+
+/**
  * Authoritatively retrieves and strictly validates MysticPayments configuration.
  * In production, fails closed immediately if required cryptographic secrets or identifiers are absent or malformed.
  */
@@ -86,7 +104,9 @@ export function getStrictMysticConfig(): MysticPaymentsConfig {
   const appUrl = (
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.APP_URL ||
-    ""
+    (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "") ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
+    (isProd ? "https://conceptnichod.vercel.app" : "http://localhost:9002")
   ).trim().replace(/\/+$/, "");
 
   // Strict enforcement in production
@@ -189,7 +209,45 @@ export async function createMysticSession(
   }
 
   const responseJson = (await res.json()) as MysticSessionResponse;
+  if (responseJson && responseJson.checkoutUrl) {
+    responseJson.checkoutUrl = cleanAndValidateUrl(responseJson.checkoutUrl);
+  }
   return responseJson;
+}
+
+/**
+ * Authoritatively queries the status of a payment session directly from the MysticPayments API.
+ * Useful for real-time reconciliation and fallback verification.
+ */
+export async function getMysticPaymentStatus(paymentId: string): Promise<any | null> {
+  if (!paymentId || typeof paymentId !== "string") return null;
+
+  try {
+    const config = getStrictMysticConfig();
+    const cleanPaymentId = paymentId.trim();
+
+    const headers: Record<string, string> = {
+      "X-Merchant-Id": config.merchantId,
+    };
+    if (config.apiKey) {
+      headers["X-Merchant-Key"] = config.apiKey;
+    }
+
+    const res = await fetch(`${config.apiUrl}/api/v1/payments/${encodeURIComponent(cleanPaymentId)}`, {
+      method: "GET",
+      headers,
+      cache: "no-store",
+    });
+
+    if (!res.ok) {
+      return null;
+    }
+
+    return await res.json();
+  } catch (error) {
+    console.error("[getMysticPaymentStatus error]:", error);
+    return null;
+  }
 }
 
 /**

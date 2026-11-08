@@ -115,20 +115,22 @@ function DonatePageContent() {
       .finally(() => setIsLoading(false));
   }, []);
 
-  // Handle return from MysticPayments checkout (?status=success&orderId=...)
+  // Handle return from MysticPayments checkout (?status=success&orderId=...&paymentId=...)
   useEffect(() => {
     const statusParam = searchParams.get("status");
     const orderIdParam = searchParams.get("orderId");
+    const paymentIdParam = searchParams.get("paymentId");
 
-    if (statusParam === "success" && orderIdParam) {
-      setSuccessOrderId(orderIdParam);
+    if (statusParam === "success" && (orderIdParam || paymentIdParam)) {
+      const orderKey = orderIdParam || paymentIdParam || "";
+      setSuccessOrderId(orderKey);
       toast({
         title: "🎉 Payment Successful!",
         description: "Your patronage is verified and immortalized in the Hall of Patrons.",
       });
 
-      // Probe donation status to immediately confirm donor appearance
-      checkDonationStatusAction(orderIdParam).then((res) => {
+      // Probe donation status with gateway reconciliation fallback
+      checkDonationStatusAction(orderKey, paymentIdParam || undefined).then((res) => {
         if (res.success && res.isConfirmed && res.donor) {
           setConfirmedDonor(res.donor);
         }
@@ -197,11 +199,24 @@ function DonatePageContent() {
       });
 
       if (res.success && res.checkoutUrl) {
+        // Strip BOM and whitespace, ensuring clean absolute URL navigation
+        const cleanUrl = res.checkoutUrl.replace(/^[\uFEFF\u200B\u200C\u200D\s]+/, "").trim();
+
+        if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
+          toast({
+            title: "Checkout Redirection Error",
+            description: "Received an invalid checkout URL format from gateway.",
+            variant: "destructive",
+          });
+          setIsSubmitting(false);
+          return;
+        }
+
         toast({
           title: "Redirecting to MysticPayments...",
           description: "Opening sovereign UPI checkout portal.",
         });
-        window.location.href = res.checkoutUrl;
+        window.location.assign(cleanUrl);
       } else {
         toast({
           title: "Payment Initialization Failed",
