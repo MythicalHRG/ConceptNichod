@@ -6,6 +6,7 @@ import User from "@/models/User";
 import DonationSetting from "@/models/DonationSetting";
 import Donor from "@/models/Donor";
 import { verifySessionCookie } from "@/lib/session";
+import { createMysticSession } from "@/lib/mystic-payments";
 import crypto from "crypto";
 
 const ADMIN_USERNAME = "mythicalhrg";
@@ -125,3 +126,49 @@ export async function deleteDonorCardAction(uuid: string) {
   await Donor.deleteOne({ uuid });
   return { success: true };
 }
+
+/**
+ * Public action to initiate an authoritative MysticPayments checkout session
+ */
+export async function createDonationCheckoutAction(payload: {
+  amount: number;
+  username?: string;
+  message?: string;
+}) {
+  const numericAmount = Number(payload.amount);
+  if (!Number.isFinite(numericAmount) || numericAmount < 1) {
+    return { success: false, error: "Please enter a valid amount of at least ₹1." };
+  }
+
+  const orderId = `cn_ord_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
+  const username = payload.username?.trim().replace(/^@/, "") || "Aspirant";
+
+  try {
+    const session = await createMysticSession({
+      orderId,
+      amount: numericAmount,
+      currency: "INR",
+      customer: {
+        name: username,
+      },
+      metadata: {
+        username,
+        message: payload.message?.trim() || "ConceptNichod Patron Support",
+      },
+    });
+
+    return {
+      success: true,
+      checkoutUrl: session.checkoutUrl,
+      orderId: session.orderId,
+      paymentId: session.paymentId,
+    };
+  } catch (error: any) {
+    console.error("[createDonationCheckoutAction error]:", error);
+    return {
+      success: false,
+      error: error?.message || "Failed to initialize MysticPayments checkout session.",
+    };
+  }
+}
+
