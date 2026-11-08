@@ -9,7 +9,7 @@ import {
   SidebarGroup,
   SidebarGroupLabel,
 } from "@/components/ui/sidebar";
-import { BookCopy, Home, BrainCircuit, Users, ShieldAlert, Sparkles, Heart, Trophy, MessageSquare } from "lucide-react";
+import { BookCopy, Home, BrainCircuit, Users, ShieldAlert, Sparkles, Heart, Trophy, MessageSquare, BookMarked } from "lucide-react";
 
 export function SidebarNav({ topics, isAdmin }: { topics: any[], isAdmin?: boolean }) {
   const pathname = usePathname();
@@ -17,6 +17,7 @@ export function SidebarNav({ topics, isAdmin }: { topics: any[], isAdmin?: boole
   const mainNav = [
     { name: "Home", href: "/dashboard", icon: Home, isActive: pathname === "/dashboard" },
     { name: "Leaderboard", href: "/dashboard/leaderboard", icon: Trophy, isActive: pathname === "/dashboard/leaderboard" },
+    { name: "Mistake Notebook", href: "/dashboard/mistakes", icon: BookMarked, isActive: pathname === "/dashboard/mistakes" },
     { name: "Concept Mirror", href: "/dashboard/concept-mirror", icon: BrainCircuit, isActive: pathname === "/dashboard/concept-mirror" },
     { name: "Study Groups & Chat", href: "/dashboard/study-groups", icon: MessageSquare, isActive: pathname === "/dashboard/study-groups" },
     { name: "AspirantsConnect", href: "/dashboard/aspirants-connect", icon: Users, isActive: pathname === "/dashboard/aspirants-connect" },
