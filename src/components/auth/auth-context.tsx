@@ -55,9 +55,14 @@ function AuthParamsHandler({ setAuthModalOpen }: { setAuthModalOpen: (open: bool
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const userRef = useRef<AuthUser | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const hasLocalAuthChange = useRef(false);
   const [isAuthModalOpen, setAuthModalOpen] = useState(false);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   useEffect(() => {
     let active = true;
@@ -65,6 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .then((res) => {
         if (active && !hasLocalAuthChange.current) {
           const currentUser = res.user ?? null;
+          userRef.current = currentUser;
           setUser(currentUser);
           if (!currentUser) {
             setAuthModalOpen(true);
@@ -74,6 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .catch((error) => {
         console.error("Unable to restore the current session:", error);
         if (active && !hasLocalAuthChange.current) {
+          userRef.current = null;
           setUser(null);
           setAuthModalOpen(true);
         }
@@ -89,13 +96,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Whenever auth check is ready and there is no authenticated user, enforce modal popup
   useEffect(() => {
-    if (isAuthReady && !user) {
+    if (isAuthReady && !userRef.current) {
       setAuthModalOpen(true);
     }
   }, [isAuthReady, user]);
 
   const login = (newUser: AuthUser) => {
     hasLocalAuthChange.current = true;
+    userRef.current = newUser;
     setUser(newUser);
     setIsAuthReady(true);
     setAuthModalOpen(false);
@@ -103,6 +111,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     hasLocalAuthChange.current = true;
+    userRef.current = null;
     await logoutAction();
     setUser(null);
     setIsAuthReady(true);
@@ -111,7 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const safeSetAuthModalOpen = (open: boolean) => {
     // If user is not authenticated and auth check is complete, keep modal open
-    if (!open && !user && isAuthReady) {
+    if (!open && !userRef.current && isAuthReady) {
       setAuthModalOpen(true);
       return;
     }

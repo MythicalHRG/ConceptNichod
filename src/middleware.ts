@@ -16,10 +16,23 @@ function addSecurityHeaders(response: NextResponse): NextResponse {
   return response;
 }
 
+const PROTECTED_PREFIXES = [
+  '/dashboard',
+  '/aspirants-connect',
+  '/profile',
+  '/study-groups',
+  '/leaderboard',
+];
+
 export function middleware(request: NextRequest) {
   const sessionCookie = request.cookies.get('user_session')?.value;
+  const { pathname } = request.nextUrl;
 
-  if (!sessionCookie && request.nextUrl.pathname.startsWith('/dashboard')) {
+  const isProtected = PROTECTED_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+  );
+
+  if (!sessionCookie && isProtected) {
     const url = request.nextUrl.clone();
     url.pathname = '/';
     url.searchParams.set('login', 'true');
@@ -28,7 +41,7 @@ export function middleware(request: NextRequest) {
   }
 
   // Redirect logged in users away from auth pages
-  if (sessionCookie && request.nextUrl.pathname.startsWith('/auth')) {
+  if (sessionCookie && pathname.startsWith('/auth')) {
     const redirectResponse = NextResponse.redirect(
       new URL('/dashboard', request.url)
     );
@@ -40,5 +53,16 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*'],
+  matcher: [
+    '/dashboard',
+    '/dashboard/:path*',
+    '/aspirants-connect',
+    '/aspirants-connect/:path*',
+    '/profile/:path*',
+    '/study-groups',
+    '/study-groups/:path*',
+    '/leaderboard',
+    '/leaderboard/:path*',
+    '/auth/:path*',
+  ],
 };

@@ -152,8 +152,7 @@ export function LoginDialog() {
           description: `Logged in as @${res.user.username}`,
         });
         setAuthModalOpen(false);
-        router.push("/dashboard");
-        router.refresh();
+        window.location.href = "/dashboard";
       }
     } catch (err: any) {
       toast({
@@ -243,8 +242,7 @@ export function LoginDialog() {
           description: "Welcome to ConceptNichod.",
         });
         setAuthModalOpen(false);
-        router.push("/dashboard");
-        router.refresh();
+        window.location.href = "/dashboard";
       }
     } catch (err: any) {
       toast({
