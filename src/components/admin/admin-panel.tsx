@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import {
   getAllUsersAction,
   deleteUserAction,
+  updateUserCredentialsAction,
   getBansAction,
   banEntityAction,
   unbanEntityAction,
@@ -37,6 +38,14 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -121,6 +130,12 @@ export function AdminPanel() {
   const [banType, setBanType] = useState<"ip" | "email" | "username">("email");
   const [banValue, setBanValue] = useState("");
   const [banReason, setBanReason] = useState("");
+
+  // Edit Credentials Dialog state (Platform Owner only)
+  const [editingUser, setEditingUser] = useState<{ uuid: string; username: string; email: string; fullName: string } | null>(null);
+  const [editUsername, setEditUsername] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [isSavingCredentials, setIsSavingCredentials] = useState(false);
 
   // In-app Broadcast state
   const [broadcastLoading, setBroadcastLoading] = useState(false);
@@ -216,6 +231,56 @@ export function AdminPanel() {
       setUsers(users.filter((u) => u.uuid !== uuid));
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
+  };
+
+  const handleOpenEditUser = (u: any) => {
+    setEditingUser(u);
+    setEditUsername(u.username || "");
+    setEditEmail(u.email || "");
+  };
+
+  const handleSaveCredentials = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+
+    if (!editUsername.trim() || !editEmail.trim()) {
+      toast({ variant: "destructive", title: "Error", description: "Username and email cannot be empty." });
+      return;
+    }
+
+    setIsSavingCredentials(true);
+    try {
+      const res = await updateUserCredentialsAction({
+        targetUuid: editingUser.uuid,
+        newUsername: editUsername.trim(),
+        newEmail: editEmail.trim(),
+      });
+
+      if (res.success && res.user) {
+        toast({
+          title: "Credentials Updated",
+          description: `Updated @${res.user.username} (${res.user.email})`,
+        });
+
+        setUsers((prevUsers) =>
+          prevUsers.map((u) =>
+            u.uuid === editingUser.uuid
+              ? { ...u, username: res.user!.username, email: res.user!.email }
+              : u
+          )
+        );
+
+        setEditingUser(null);
+      }
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Update Failed",
+        description: err.message || "Could not update credentials",
+      });
+    } finally {
+      setIsSavingCredentials(false);
     }
   };
 
@@ -562,14 +627,25 @@ export function AdminPanel() {
                           </td>
                           <td className="px-4 py-3">{new Date(u.createdAt).toLocaleDateString()}</td>
                           <td className="px-4 py-3 text-right">
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => handleDeleteUser(u.uuid)}
-                              disabled={u.username === "mythicalhrg"}
-                            >
-                              <Trash2 className="w-4 h-4 mr-2" /> Delete
-                            </Button>
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleOpenEditUser(u)}
+                                className="h-8 px-2.5 text-xs flex items-center gap-1.5 border-primary/30 hover:bg-primary/10"
+                              >
+                                <Pencil className="w-3.5 h-3.5 text-primary" /> Edit
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => handleDeleteUser(u.uuid)}
+                                disabled={u.username === "mythicalhrg"}
+                                className="h-8 px-2.5 text-xs flex items-center gap-1.5"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" /> Delete
+                              </Button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -1426,6 +1502,77 @@ export function AdminPanel() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Edit User Credentials Dialog (Platform Owner @mythicalhrg Only) */}
+      <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
+        <DialogContent className="sm:max-w-[460px]">
+          <form onSubmit={handleSaveCredentials}>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Pencil className="w-5 h-5 text-primary" /> Edit User Credentials
+              </DialogTitle>
+              <DialogDescription>
+                Modify username and email for <strong>{editingUser?.fullName || "User"}</strong> (@{editingUser?.username}).
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-4 text-xs">
+              <div className="space-y-1.5">
+                <label className="font-semibold text-foreground">Username</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-muted-foreground font-mono">@</span>
+                  <Input
+                    required
+                    value={editUsername}
+                    onChange={(e) => setEditUsername(e.target.value)}
+                    className="pl-7 h-9 text-xs font-mono"
+                    placeholder="new_username"
+                    maxLength={30}
+                  />
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  3-30 characters: letters, numbers, underscores (_), and periods (.).
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="font-semibold text-foreground">Email Address</label>
+                <Input
+                  required
+                  type="email"
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  className="h-9 text-xs"
+                  placeholder="user@gmail.com"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Must be a valid, unique email address.
+                </p>
+              </div>
+
+              <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300">
+                🔒 Security Note: Only platform owner @mythicalhrg is authorized to modify user credentials.
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setEditingUser(null)}
+                disabled={isSavingCredentials}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" size="sm" disabled={isSavingCredentials}>
+                {isSavingCredentials ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : null}
+                Save Credentials
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
