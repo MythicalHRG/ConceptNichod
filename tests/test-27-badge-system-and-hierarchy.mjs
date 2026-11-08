@@ -26,35 +26,34 @@ test('Badge Hierarchy: Level 5 badges sort above Level 4, 3, 2, 1', () => {
   assert.equal(sorted[3].level, 2);
 });
 
-test('Platform Distinction: mythicalhrg gets Platform Owner (Level 5), no Admin badge exists', () => {
-  function getDistinctionBadge(username) {
+test('Platform Distinction: Handled in header tag, no Admin badge exists anywhere', () => {
+  function getDistinctionTag(username) {
     const clean = username.trim().toLowerCase();
     if (clean === 'mythicalhrg') {
-      return { id: 'platform-owner', level: 5, priorityWeight: 10000, name: 'Platform Owner' };
+      return { tag: 'Owner', isOwner: true };
     }
     if (['anurag', 'rohit'].includes(clean)) {
-      return { id: 'bade-maalik', level: 5, priorityWeight: 9800, name: 'Bade Maalik' };
+      return { tag: 'Bade Maalik', isBadeMaalik: true };
     }
     return null;
   }
 
-  const ownerBadge = getDistinctionBadge('mythicalhrg');
-  assert.ok(ownerBadge);
-  assert.equal(ownerBadge.name, 'Platform Owner');
-  assert.equal(ownerBadge.level, 5);
-  assert.ok(ownerBadge.priorityWeight >= 10000);
+  const ownerTag = getDistinctionTag('mythicalhrg');
+  assert.ok(ownerTag);
+  assert.equal(ownerTag.tag, 'Owner');
+  assert.equal(ownerTag.isOwner, true);
 
-  const patronBadge = getDistinctionBadge('anurag');
-  assert.ok(patronBadge);
-  assert.equal(patronBadge.name, 'Bade Maalik');
-  assert.equal(patronBadge.level, 5);
+  const patronTag = getDistinctionTag('anurag');
+  assert.ok(patronTag);
+  assert.equal(patronTag.tag, 'Bade Maalik');
+  assert.equal(patronTag.isBadeMaalik, true);
 
-  // Normal or admin usernames do NOT receive an admin badge
-  const normalBadge = getDistinctionBadge('normalUser');
-  assert.equal(normalBadge, null);
+  // Normal or admin usernames do NOT receive an admin tag or badge
+  const normalTag = getDistinctionTag('normalUser');
+  assert.equal(normalTag, null);
 
-  const adminQueryBadge = getDistinctionBadge('admin');
-  assert.equal(adminQueryBadge, null);
+  const adminQueryTag = getDistinctionTag('admin');
+  assert.equal(adminQueryTag, null);
 });
 
 test('Weekly Expiration & Dynamic Revocation: Downgrades when rank slips', () => {
@@ -124,7 +123,7 @@ test('Velocity & Socratic Defense Badges emit correct levels', () => {
   function evaluateVelocityBadge(slope, N) {
     if (N < 3) return null;
     if (slope >= 10.0) return { id: 'velocity-hypersonic', level: 3, name: 'Hyper-Sonic Learner' };
-    if (slope >= 5.0) return { id: 'velocity-accelerated', level: 2, name: 'Accelerated Mastery' };
+    if (slope >= 5.0) return { id: 'velocity-accelerated', level: 2, name: 'Fast Learner' };
     return null;
   }
 
