@@ -12,15 +12,16 @@ import { useToast } from "@/hooks/use-toast";
 import { 
   Heart, Copy, Check, ArrowLeft, QrCode, Sparkles, ShieldCheck, 
   Award, Star, Users, ExternalLink, ArrowRight, Loader2, Zap,
-  CheckCircle2, Info, ChevronDown, ChevronUp
+  CheckCircle2, Info, ChevronDown, ChevronUp, Lock, UserCheck, LogIn
 } from "lucide-react";
+import { IndianRupee } from "lucide-react";
+import { Rupee } from "@/components/ui/rupee-symbol";
 import { 
   getDonationInfoAction, 
   createDonationCheckoutAction,
   getCurrentUserDonationContextAction,
   checkDonationStatusAction
 } from "@/app/actions/donation";
-import { Rupee } from "@/components/ui/rupee-symbol";
 
 interface DonationSettings {
   upiId: string;
@@ -82,7 +83,6 @@ function DonatePageContent() {
   const [selectedAmount, setSelectedAmount] = useState<number | null>(100);
   const [customAmount, setCustomAmount] = useState<string>("");
   const [username, setUsername] = useState<string>("");
-  const [message, setMessage] = useState<string>("");
   const [isLoggedInUser, setIsLoggedInUser] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -107,6 +107,8 @@ function DonatePageContent() {
         if (userRes.success && userRes.username) {
           setUsername(userRes.username);
           setIsLoggedInUser(true);
+        } else {
+          setIsLoggedInUser(false);
         }
       })
       .catch((err) => console.error("Failed to load donation context:", err))
@@ -122,7 +124,7 @@ function DonatePageContent() {
       setSuccessOrderId(orderIdParam);
       toast({
         title: "🎉 Payment Successful!",
-        description: "Your patronage is being verified and immortalized in the Hall of Patrons.",
+        description: "Your patronage is verified and immortalized in the Hall of Patrons.",
       });
 
       // Probe donation status to immediately confirm donor appearance
@@ -169,6 +171,15 @@ function DonatePageContent() {
   const handleProceedToPayment = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!isLoggedInUser || !username) {
+      toast({
+        title: "Sign In Required",
+        description: "Please sign in with your account to make a donation.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (activeAmount < 1) {
       toast({
         title: "Invalid Amount",
@@ -178,22 +189,11 @@ function DonatePageContent() {
       return;
     }
 
-    const cleanUsername = username.trim().replace(/^@+/, "");
-    if (!cleanUsername) {
-      toast({
-        title: "Username Required",
-        description: "Please enter a username or handle so we can feature you on the Hall of Patrons.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setIsSubmitting(true);
     try {
       const res = await createDonationCheckoutAction({
         amount: activeAmount,
-        username: cleanUsername,
-        message: message.trim() || undefined,
+        username: username.trim().replace(/^@+/, ""),
       });
 
       if (res.success && res.checkoutUrl) {
@@ -244,7 +244,7 @@ function DonatePageContent() {
 
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="px-3 py-1 text-xs border-primary/30 bg-primary/5 text-primary flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5" /> Sovereign Direct Community Driven
+              <ShieldCheck className="w-3.5 h-3.5" /> Direct Community Driven
             </Badge>
           </div>
         </div>
@@ -303,7 +303,7 @@ function DonatePageContent() {
               <CardContent className="space-y-5">
                 <form onSubmit={handleProceedToPayment} className="space-y-5">
                   
-                  {/* Preset Amount Chips */}
+                  {/* Preset Amount Chips with SVG Indian Rupee */}
                   <div className="space-y-2">
                     <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                       Select Contribution Amount
@@ -316,16 +316,17 @@ function DonatePageContent() {
                             key={preset.value}
                             type="button"
                             onClick={() => handleSelectPreset(preset.value)}
-                            className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl border text-xs font-bold transition-all ${
+                            className={`flex flex-col items-center justify-center py-2.5 px-1 rounded-xl border text-xs font-bold transition-all ${
                               isSelected
                                 ? "border-primary bg-primary text-primary-foreground shadow-md ring-2 ring-primary/20 scale-[1.02]"
                                 : "border-border/80 bg-muted/40 hover:bg-muted text-foreground"
                             }`}
                           >
-                            <span className="text-sm flex items-center">
-                              ₹{preset.value}
+                            <span className="text-sm font-black flex items-center gap-0.5">
+                              <IndianRupee className="w-3.5 h-3.5 stroke-[2.6]" />
+                              <span>{preset.value}</span>
                             </span>
-                            <span className={`text-[9px] font-normal opacity-80 ${isSelected ? "text-primary-foreground" : "text-muted-foreground"}`}>
+                            <span className={`text-[9px] font-normal opacity-85 ${isSelected ? "text-primary-foreground" : "text-muted-foreground"}`}>
                               {preset.tier}
                             </span>
                           </button>
@@ -334,11 +335,14 @@ function DonatePageContent() {
                     </div>
                   </div>
 
-                  {/* Custom Amount Input */}
+                  {/* Custom Amount Input with SVG Indian Rupee */}
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between text-xs">
-                      <Label htmlFor="custom-amount" className="font-semibold text-muted-foreground">
-                        Or Custom Amount (₹)
+                      <Label htmlFor="custom-amount" className="font-semibold text-muted-foreground flex items-center gap-1">
+                        <span>Or Custom Amount</span>
+                        <span className="inline-flex items-center text-xs text-muted-foreground">
+                          (<IndianRupee className="w-3 h-3 inline stroke-[2]" />)
+                        </span>
                       </Label>
                       {activeAmount > 0 && (
                         <span className="text-muted-foreground">
@@ -347,9 +351,7 @@ function DonatePageContent() {
                       )}
                     </div>
                     <div className="relative">
-                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground font-semibold">
-                        ₹
-                      </span>
+                      <IndianRupee className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground stroke-[2.4]" />
                       <Input
                         id="custom-amount"
                         type="text"
@@ -362,57 +364,55 @@ function DonatePageContent() {
                     </div>
                   </div>
 
-                  {/* Username / Handle Field */}
+                  {/* Username Field — STRICTLY UNEDITABLE & LOCKED */}
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between text-xs">
-                      <Label htmlFor="donor-username" className="font-semibold text-muted-foreground">
-                        Your Patron Handle / Username
+                      <Label className="font-semibold text-muted-foreground flex items-center gap-1.5">
+                        <Lock className="w-3.5 h-3.5 text-primary" /> Patron Account Handle
                       </Label>
                       {isLoggedInUser && (
-                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
-                          ✓ Auto-filled from account
+                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
+                          <Check className="w-3 h-3" /> Verified Profile
                         </span>
                       )}
                     </div>
-                    <div className="relative">
-                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground font-mono">
-                        @
-                      </span>
-                      <Input
-                        id="donor-username"
-                        type="text"
-                        placeholder="username"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                        required
-                        className="pl-8 font-mono"
-                      />
-                    </div>
-                    <p className="text-[11px] text-muted-foreground">
-                      Will be celebrated on the public Hall of Patrons leaderboard.
-                    </p>
+
+                    {isLoggedInUser ? (
+                      <div className="flex items-center justify-between gap-3 p-3 bg-muted/60 rounded-xl border border-border/80">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center font-black text-xs shrink-0">
+                            @
+                          </span>
+                          <span className="font-mono text-sm font-bold text-foreground truncate">
+                            {username}
+                          </span>
+                        </div>
+                        <Badge variant="outline" className="text-[10px] gap-1 shrink-0 bg-background/80 font-mono text-muted-foreground">
+                          <Lock className="w-2.5 h-2.5" /> Fixed
+                        </Badge>
+                      </div>
+                    ) : (
+                      <div className="p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-2.5">
+                        <div className="flex items-center gap-2 text-xs font-semibold text-amber-600 dark:text-amber-400">
+                          <Info className="w-4 h-4 shrink-0" />
+                          <span>Sign in required to donate</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                          To ensure every spot on the Hall of Patrons belongs to an authentic student, you must be signed in with your account.
+                        </p>
+                        <Link href="/login?redirect=/donate" className="block">
+                          <Button type="button" variant="outline" size="sm" className="w-full gap-2 text-xs h-8">
+                            <LogIn className="w-3.5 h-3.5" /> Sign In with Your Account
+                          </Button>
+                        </Link>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Message / Encouragement Note */}
-                  <div className="space-y-1.5">
-                    <Label htmlFor="donor-message" className="text-xs font-semibold text-muted-foreground">
-                      Inspirational Note for Aspirants (Optional)
-                    </Label>
-                    <Input
-                      id="donor-message"
-                      type="text"
-                      maxLength={120}
-                      placeholder="e.g. Keep pushing hard for JEE/NEET/UPSC!"
-                      value={message}
-                      onChange={(e) => setMessage(e.target.value)}
-                      className="text-xs"
-                    />
-                  </div>
-
-                  {/* Submit CTA Button */}
+                  {/* Submit CTA Button with SVG Indian Rupee */}
                   <Button
                     type="submit"
-                    disabled={isSubmitting || activeAmount < 1}
+                    disabled={isSubmitting || activeAmount < 1 || !isLoggedInUser}
                     className="w-full h-11 text-sm font-bold bg-gradient-to-r from-rose-500 via-amber-500 to-primary hover:opacity-95 shadow-lg shadow-primary/20 gap-2"
                   >
                     {isSubmitting ? (
@@ -420,16 +420,25 @@ function DonatePageContent() {
                         <Loader2 className="w-4 h-4 animate-spin" />
                         Initiating MysticPayments Checkout...
                       </>
+                    ) : !isLoggedInUser ? (
+                      <>
+                        <Lock className="w-4 h-4" />
+                        Sign In to Donate
+                      </>
                     ) : (
                       <>
-                        Proceed to Pay via UPI • ₹{activeAmount.toLocaleString("en-IN")}
+                        <span>Proceed to Pay via UPI •</span>
+                        <span className="inline-flex items-center gap-0.5">
+                          <IndianRupee className="w-3.5 h-3.5 stroke-[2.6]" />
+                          <span>{activeAmount.toLocaleString("en-IN")}</span>
+                        </span>
                         <ArrowRight className="w-4 h-4" />
                       </>
                     )}
                   </Button>
 
                   {/* Security Assurance */}
-                  <div className="pt-2 flex items-center justify-center gap-2 text-[11px] text-muted-foreground">
+                  <div className="pt-1 flex items-center justify-center gap-2 text-[11px] text-muted-foreground">
                     <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
                     <span>256-Bit Bank Encryption • Powered by MysticPayments</span>
                   </div>
@@ -540,8 +549,8 @@ function DonatePageContent() {
                     </CardHeader>
 
                     <CardContent className="p-4 pt-2 space-y-2">
-                      <div className="text-lg font-black text-primary flex items-center">
-                        <Rupee amount={donor.amount} />
+                      <div className="text-lg font-black text-primary flex items-center gap-1">
+                        <Rupee amount={donor.amount} className="w-4 h-4 stroke-[2.8]" />
                       </div>
                       {donor.message && (
                         <p className="text-xs text-muted-foreground italic line-clamp-2">
