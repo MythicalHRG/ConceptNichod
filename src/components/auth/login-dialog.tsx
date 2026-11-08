@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -19,6 +20,7 @@ import { loadCaptchaEnginge, LoadCanvasTemplate, validateCaptcha } from 'react-s
 import { useEffect } from "react";
 
 export function LoginDialog() {
+  const router = useRouter();
   const { isAuthModalOpen, setAuthModalOpen, login } = useAuth();
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
@@ -150,6 +152,8 @@ export function LoginDialog() {
           description: `Logged in as @${res.user.username}`,
         });
         setAuthModalOpen(false);
+        router.push("/dashboard");
+        router.refresh();
       }
     } catch (err: any) {
       toast({
@@ -238,6 +242,9 @@ export function LoginDialog() {
           title: "Account created!",
           description: "Welcome to ConceptNichod.",
         });
+        setAuthModalOpen(false);
+        router.push("/dashboard");
+        router.refresh();
       }
     } catch (err: any) {
       toast({
