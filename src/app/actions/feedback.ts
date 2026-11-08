@@ -4,6 +4,8 @@ import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
 import { sendEmail } from "@/services/email";
 import { verifySessionCookie } from "@/lib/session";
+import { getClientIp } from "@/lib/ip";
+import { checkRateLimit } from "@/lib/rate-limiter";
 
 function escapeHtml(str: string): string {
   return (str || "")
@@ -15,8 +17,6 @@ function escapeHtml(str: string): string {
 }
 
 export async function submitFeedbackAction(formData: FormData) {
-  await dbConnect();
-  
   const type = formData.get("type") as string;
   const message = formData.get("message") as string;
   
@@ -24,10 +24,19 @@ export async function submitFeedbackAction(formData: FormData) {
     throw new Error("Missing required fields");
   }
 
+  // Rate limiting: 3 submissions per 15 minutes per IP
+  const ip = getClientIp();
   const rawSession = cookies().get("user_session")?.value;
   const sessionUuid = verifySessionCookie(rawSession);
-  let userInfo = "Anonymous User";
+  const rateLimitKey = `feedback:${sessionUuid || ip}`;
+  const rateCheck = checkRateLimit(rateLimitKey, 3, 15 * 60 * 1000);
+  if (!rateCheck.success) {
+    throw new Error("Too many feedback submissions. Please wait a few minutes before submitting again.");
+  }
+
+  await dbConnect();
   
+  let userInfo = "Anonymous User";
   if (sessionUuid) {
     const user = await User.findOne({ uuid: sessionUuid }).lean();
     if (user) {
@@ -39,7 +48,9 @@ export async function submitFeedbackAction(formData: FormData) {
   const safeMessage = escapeHtml(message);
   const safeUserInfo = escapeHtml(userInfo);
 
-  const subject = `[ConceptsNichod] New ${type === "error" ? "Bug Report" : "Suggestion"} from ${userInfo.split(' ')[0]}`;
+  const cleanType = (type || "").replace(/[\r\n]/g, " ");
+  const cleanHeaderSender = userInfo.split(' ')[0].replace(/[\r\n]/g, "");
+  const subject = `[ConceptsNichod] New ${cleanType === "error" ? "Bug Report" : "Suggestion"} from ${cleanHeaderSender}`;
   const html = `
     <div style="font-family: sans-serif; padding: 20px;">
       <h2>New Feedback Submitted</h2>

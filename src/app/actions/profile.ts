@@ -149,6 +149,20 @@ export async function getPublicProfileData(username: string) {
         score: Math.round(m.total / m.count),
       })).sort((a, b) => b.score - a.score);
 
+      // If no written topics exist yet, populate learning trajectory from oral defenses
+      if (learningProgression.length === 0 && mirrorDocs.length > 0) {
+        mirrorDocs
+          .slice()
+          .reverse()
+          .slice(-7)
+          .forEach((m: any, idx: number) => {
+            learningProgression.push({
+              session: m.conceptName ? (m.conceptName.length > 14 ? m.conceptName.slice(0, 12) + '..' : m.conceptName) : `Session ${idx + 1}`,
+              score: typeof m.overallScore === 'number' ? m.overallScore : 0,
+            });
+          });
+      }
+
       const recentSessions = mirrorDocs.slice(0, 6).map((doc: any) => ({
         id: doc._id?.toString() || '',
         conceptName: doc.conceptName,

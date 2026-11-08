@@ -34,6 +34,10 @@ const TopicSchema: Schema<ITopic> = new Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+// Indexes for high-speed dashboard, profile, and leaderboard aggregation
+TopicSchema.index({ userId: 1, createdAt: -1 });
+TopicSchema.index({ userId: 1, practiceStatus: 1 });
+
 // Use existing model or compile new one
 const Topic: Model<ITopic> = mongoose.models.Topic || mongoose.model<ITopic>("Topic", TopicSchema);
 

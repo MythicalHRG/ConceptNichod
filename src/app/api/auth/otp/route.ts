@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import crypto from 'crypto';
 import dbConnect from '@/lib/mongoose';
 import OtpVerification from '@/models/OtpVerification';
 import User from '@/models/User';
@@ -90,7 +91,8 @@ export async function POST(req: Request) {
         }
       }
 
-      const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
+      // Cryptographically secure 6-digit OTP generation (CWE-338 mitigation)
+      const generatedOtp = crypto.randomInt(100000, 1000000).toString();
       const expiry = new Date(Date.now() + 5 * 60 * 1000); // 5 min expiry
 
       // Upsert OTP record

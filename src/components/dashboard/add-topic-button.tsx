@@ -116,7 +116,7 @@ export function AddTopicButton() {
     }}>
       <DialogTrigger asChild>
         <Button
-          className="fixed bottom-4 right-4 h-14 w-14 rounded-full shadow-lg sm:bottom-8 sm:right-8 sm:h-16 sm:w-16"
+          className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom,0px))] right-[calc(1rem+env(safe-area-inset-right,0px))] h-14 w-14 rounded-full shadow-xl sm:bottom-8 sm:right-8 sm:h-16 sm:w-16 z-40 transition-transform hover:scale-105 active:scale-95"
           size="icon"
           disabled={!isAuthReady}
         >

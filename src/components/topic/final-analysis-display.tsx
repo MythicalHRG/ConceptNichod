@@ -144,14 +144,15 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
       {/* Overall Score Banner */}
       <Card className="bg-gradient-to-br from-primary/10 via-background to-secondary/30 border-primary/30">
         <CardHeader className="pb-4">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <CardTitle className="font-headline text-3xl text-primary flex items-center gap-2">
-                <Award className="w-8 h-8 text-primary" /> Performance Diagnostic Analysis
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <CardTitle className="font-headline text-2xl sm:text-3xl text-primary flex items-center gap-2 break-words">
+                <Award className="w-7 h-7 sm:w-8 sm:h-8 text-primary shrink-0" />
+                <span>Performance Diagnostic Analysis</span>
               </CardTitle>
-              <CardDescription className="text-base mt-1 flex items-center gap-1.5 flex-wrap">
+              <CardDescription className="text-sm sm:text-base mt-1 flex items-center gap-1.5 flex-wrap">
                 <span>Rigorous evaluation for topic:</span>
-                <strong className="inline-block"><LatexRenderer content={topicName} /></strong>
+                <strong className="inline-block break-words"><LatexRenderer content={topicName} /></strong>
               </CardDescription>
             </div>
             <div className="flex items-center gap-3 flex-wrap">

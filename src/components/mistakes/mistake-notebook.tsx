@@ -97,7 +97,7 @@ export function MistakeNotebook() {
   }, [statusFilter, subjectFilter, searchQuery]);
 
   const handleToggleStatus = async (item: MistakeItem) => {
-    const nextStatus = item.status === "unresolved" ? "mastered" : "unresolved";
+    const nextStatus: "unresolved" | "mastered" = item.status === "unresolved" ? "mastered" : "unresolved";
 
     // Optimistic local update for instantaneous to-do checklist feedback
     setData((prev) => {
@@ -353,8 +353,8 @@ export function MistakeNotebook() {
               >
                 <div className="p-4 space-y-3">
                   {/* Top To-Do Row: Checkbox, Metadata & Toggle Action */}
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                    <div className="flex items-start gap-2.5 sm:gap-3 flex-1 min-w-0">
                       {/* Interactive To-Do Checkbox */}
                       <button
                         type="button"
@@ -373,12 +373,12 @@ export function MistakeNotebook() {
 
                       {/* Header and Details */}
                       <div className="space-y-1 min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                           <Badge variant="outline" className="text-[11px] font-semibold">
                             {item.subject}
                           </Badge>
                           {item.chapter && (
-                            <span className="text-xs text-muted-foreground">• {item.chapter}</span>
+                            <span className="text-xs text-muted-foreground truncate max-w-[200px] sm:max-w-none">• {item.chapter}</span>
                           )}
                           <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${errType.color}`}>
                             {errType.icon} {errType.label}
@@ -397,14 +397,14 @@ export function MistakeNotebook() {
                         </div>
 
                         {/* Title with LaTeX support */}
-                        <div className={`text-base font-bold font-headline pt-0.5 ${isRectified ? "line-through text-muted-foreground" : "text-foreground"}`}>
+                        <div className={`text-base font-bold font-headline pt-0.5 break-words ${isRectified ? "line-through text-muted-foreground" : "text-foreground"}`}>
                           <LatexRenderer content={item.title} />
                         </div>
                       </div>
                     </div>
 
                     {/* Actions: Direct status button & delete */}
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-2 self-end sm:self-auto shrink-0 pt-1 sm:pt-0">
                       <Button
                         variant={isRectified ? "outline" : "default"}
                         size="sm"

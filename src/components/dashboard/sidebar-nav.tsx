@@ -8,11 +8,19 @@ import {
   SidebarSeparator,
   SidebarGroup,
   SidebarGroupLabel,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { BookCopy, Home, BrainCircuit, Users, ShieldAlert, Sparkles, Heart, Trophy, MessageSquare, BookMarked } from "lucide-react";
 
 export function SidebarNav({ topics, isAdmin }: { topics: any[], isAdmin?: boolean }) {
   const pathname = usePathname();
+  const { setOpenMobile, isMobile } = useSidebar();
+
+  const handleLinkClick = () => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  };
 
   const mainNav = [
     { name: "Home", href: "/dashboard", icon: Home, isActive: pathname === "/dashboard" },
@@ -35,7 +43,7 @@ export function SidebarNav({ topics, isAdmin }: { topics: any[], isAdmin?: boole
         <SidebarGroupLabel>Menu</SidebarGroupLabel>
         {mainNav.map((item) => (
           <SidebarMenuItem key={item.name}>
-            <Link href={item.href} className="w-full">
+            <Link href={item.href} className="w-full" onClick={handleLinkClick}>
               <SidebarMenuButton
                 isActive={item.isActive}
                 tooltip={item.name}
@@ -54,7 +62,7 @@ export function SidebarNav({ topics, isAdmin }: { topics: any[], isAdmin?: boole
         <SidebarGroupLabel>Your Topics ({topics.length})</SidebarGroupLabel>
         {topics.map((topic) => (
           <SidebarMenuItem key={topic.id}>
-            <Link href={`/dashboard/topic/${topic.id}`} className="w-full">
+            <Link href={`/dashboard/topic/${topic.id}`} className="w-full" onClick={handleLinkClick}>
               <SidebarMenuButton
                 isActive={pathname === `/dashboard/topic/${topic.id}`}
                 tooltip={topic.name}

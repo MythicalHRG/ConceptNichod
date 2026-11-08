@@ -35,21 +35,21 @@ function TopicItem({ topic }: { topic: Topic }) {
   }, [topic.createdAt]);
 
   return (
-    <div className="flex w-full items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors group">
+    <div className="flex w-full items-center justify-between p-2.5 sm:p-3 rounded-lg border hover:bg-muted/50 transition-colors group">
       <Link href={`/dashboard/topic/${topic.id}`} passHref className="flex-1 flex items-center justify-between min-w-0">
-        <div className="flex items-center gap-4 text-left min-w-0">
-          <BookCopy className="w-6 h-6 text-primary shrink-0" />
-          <div className='min-w-0'>
-            <p className="font-semibold whitespace-normal"><LatexRenderer content={topic.name} /></p>
-            <p className="text-sm text-muted-foreground">
+        <div className="flex items-center gap-2.5 sm:gap-4 text-left min-w-0 pr-2">
+          <BookCopy className="w-5 h-5 sm:w-6 sm:h-6 text-primary shrink-0" />
+          <div className='min-w-0 flex-1'>
+            <div className="font-semibold text-sm sm:text-base break-words"><LatexRenderer content={topic.name} /></div>
+            <p className="text-xs sm:text-sm text-muted-foreground truncate">
               {topic.subject} &bull; {formattedDate}
             </p>
           </div>
         </div>
         {topic.analysis ? (
-          <CheckCircle className="w-5 h-5 text-green-500 shrink-0 mx-4" />
+          <CheckCircle className="w-5 h-5 text-green-500 shrink-0 ml-1 sm:mx-4" />
         ) : (
-          <Clock className="w-5 h-5 text-yellow-500 shrink-0 mx-4" />
+          <Clock className="w-5 h-5 text-yellow-500 shrink-0 ml-1 sm:mx-4" />
         )}
       </Link>
     </div>

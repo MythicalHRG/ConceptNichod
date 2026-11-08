@@ -92,9 +92,9 @@ export default async function DashboardLayout({
           </SidebarFooter>
         </Sidebar>
         <SidebarInset>
-          <div className="relative min-h-screen min-w-0 dashboard-gradient">
+          <div className="relative min-h-screen min-w-0 dashboard-gradient pb-[calc(4rem+env(safe-area-inset-bottom,0px))]">
             <Navbar />
-            <main className="min-w-0 p-4 sm:p-6 lg:p-8">
+            <main className="min-w-0 p-3.5 sm:p-6 lg:p-8">
               {children}
             </main>
             <AddTopicButton />

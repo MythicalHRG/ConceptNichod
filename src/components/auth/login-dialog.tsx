@@ -298,7 +298,9 @@ export function LoginDialog() {
                 />
               </div>
               <div className="flex flex-col gap-2 pt-2">
-                <LoadCanvasTemplate />
+                <div className="overflow-x-auto max-w-full flex items-center justify-center rounded-md bg-muted/40 p-1">
+                  <LoadCanvasTemplate />
+                </div>
                 <Input 
                   placeholder="Enter Captcha" 
                   value={captchaValue} 
@@ -406,7 +408,7 @@ export function LoginDialog() {
           </TabsContent>
 
           <TabsContent value="register">
-            <form onSubmit={handleRegister} className="space-y-4 max-h-[60vh] overflow-y-auto px-1 pb-2">
+            <form onSubmit={handleRegister} className="space-y-4 px-1 pb-2">
               <div className="space-y-2">
                 <label className="text-xs font-medium">Full Name *</label>
                 <Input type="text" placeholder="John Doe" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
@@ -500,7 +502,9 @@ export function LoginDialog() {
                 </div>
               </div>
               <div className="flex flex-col gap-2 pt-2">
-                <LoadCanvasTemplate />
+                <div className="overflow-x-auto max-w-full flex items-center justify-center rounded-md bg-muted/40 p-1">
+                  <LoadCanvasTemplate />
+                </div>
                 <Input 
                   placeholder="Enter Captcha" 
                   value={captchaValue} 

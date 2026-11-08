@@ -62,9 +62,9 @@ export function SummaryDisplay({ summary, topic }: { summary: string; topic?: an
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="font-headline">AI-Generated Summary</CardTitle>
-          <Button onClick={handleTextToSpeech} size="sm" variant={isPlaying ? "destructive" : "outline"}>
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <CardTitle className="font-headline text-xl sm:text-2xl">AI-Generated Summary</CardTitle>
+          <Button onClick={handleTextToSpeech} size="sm" variant={isPlaying ? "destructive" : "outline"} className="self-start sm:self-auto shrink-0">
             {isPlaying ? <Square className="mr-2 h-4 w-4" /> : <Volume2 className="mr-2 h-4 w-4" />}
             {isPlaying ? "Stop Listening" : "Listen to Summary"}
           </Button>

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "./auth-context";
+import { MythicalUserBadge } from "@/components/ui/mythical-glass";
 import { Button } from "@/components/ui/button";
 import { LogOut, User, Settings, Loader2, Palette, Sparkles, Check, Monitor, Volume2, ShieldAlert, KeyRound } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -258,21 +259,24 @@ export function UserProfileButton() {
   }
 
   if (isLoggedIn && user) {
+    const isMythical = user.username.toLowerCase() === "mythicalhrg";
     return (
       <>
-        <div className="flex flex-col gap-2 p-2 bg-muted/50 rounded-lg border">
+        <div className={isMythical
+          ? "flex flex-col gap-2 p-2.5 rounded-xl border border-amber-400/40 bg-gradient-to-br from-amber-500/15 via-rose-500/10 to-purple-600/15 backdrop-blur-xl shadow-[0_4px_20px_rgba(245,158,11,0.2)]"
+          : "flex flex-col gap-2 p-2 bg-muted/50 rounded-lg border"
+        }>
           <div className="flex items-center gap-2 overflow-hidden">
-            <div className="bg-primary/10 p-1.5 rounded-full">
+            <div className={isMythical ? "bg-amber-500/20 p-1.5 rounded-full text-amber-400 border border-amber-400/30" : "bg-primary/10 p-1.5 rounded-full"}>
               <User className="size-4 text-primary" />
             </div>
             <div className="flex flex-col flex-1 overflow-hidden">
                 <div className="flex items-center gap-1.5 flex-1 overflow-hidden">
-                  <span className="text-xs truncate font-medium">
-                    {user.username}
-                  </span>
-                  {(user.username.toLowerCase() === 'anurag' || user.username.toLowerCase() === 'rohit') && (
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gradient-to-r from-purple-500 via-pink-500 to-amber-400 text-white shadow-sm flex items-center gap-0.5">
-                      👑 Bade Maalik
+                  {isMythical ? (
+                    <MythicalUserBadge username={user.username} size="xs" />
+                  ) : (
+                    <span className="text-xs truncate font-medium">
+                      @{user.username}
                     </span>
                   )}
                 </div>
@@ -323,10 +327,10 @@ export function UserProfileButton() {
               </DialogDescription>
             </DialogHeader>
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-3 mb-4">
+              <TabsList className="grid w-full grid-cols-3 mb-4 text-xs sm:text-sm">
                 <TabsTrigger value="profile">Profile</TabsTrigger>
                 <TabsTrigger value="appearance">Themes</TabsTrigger>
-                <TabsTrigger value="delete" className="text-destructive data-[state=active]:bg-destructive/10 data-[state=active]:text-destructive">Danger Zone</TabsTrigger>
+                <TabsTrigger value="delete" className="text-destructive data-[state=active]:bg-destructive/10 data-[state=active]:text-destructive">Danger <span className="hidden sm:inline">Zone</span></TabsTrigger>
               </TabsList>
               
               <TabsContent value="profile">

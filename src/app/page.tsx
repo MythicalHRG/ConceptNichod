@@ -37,7 +37,7 @@ export default function Home() {
 
           </div>
 
-          <div className="hidden lg:flex items-center justify-center perspective-1000">
+          <div className="flex items-center justify-center perspective-1000 mt-6 lg:mt-0 scale-90 sm:scale-95 lg:scale-100">
             <FlippingBook />
           </div>
         </div>

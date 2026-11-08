@@ -8,13 +8,13 @@ import { verifySessionCookie } from "@/lib/session";
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
-  await dbConnect();
-  
   const rawSession = cookies().get("user_session")?.value;
   const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) {
     redirect("/?login=true");
   }
+
+  await dbConnect();
 
   const user = await User.findOne({ uuid: sessionUuid }).lean();
   if (!user || user.username !== "mythicalhrg") {

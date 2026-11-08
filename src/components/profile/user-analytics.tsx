@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import Link from 'next/link';
+import { cn } from "@/lib/utils";
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#ffc658', '#82ca9d', '#a4de6c'];
 
@@ -42,6 +43,7 @@ export type AnalyticsData = {
 };
 
 export function UserAnalytics({ data }: { data: AnalyticsData }) {
+  const isMythical = data.user?.username?.toLowerCase() === "mythicalhrg";
   
   const mostStudiedSubject = useMemo(() => {
     if (data.subjectDistribution.length === 0) return "N/A";
@@ -60,16 +62,8 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
     if (data.learningProgression && data.learningProgression.length > 0) {
       return data.learningProgression;
     }
-    // Synthetic smooth trajectory if topics exist but progression array was empty
-    const base = data.averageScore || 70;
-    return [
-      { session: "Session 1", score: Math.max(20, Math.round(base * 0.75)) },
-      { session: "Session 2", score: Math.max(30, Math.round(base * 0.85)) },
-      { session: "Session 3", score: Math.round(base * 0.95) },
-      { session: "Session 4", score: Math.round(base) },
-      { session: "Latest", score: Math.min(100, Math.round(base * 1.05)) },
-    ];
-  }, [data.learningProgression, data.averageScore]);
+    return [];
+  }, [data.learningProgression]);
 
   const mirrorData = data.conceptMirror || {
     totalSessions: 0,
@@ -90,10 +84,15 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
       {/* Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
         
         {/* Card 1: Concept Mirror Oral Defense */}
-        <Card className="hover:-translate-y-1 transition-transform border-primary/20 bg-primary/10">
+        <Card className={cn(
+          "hover:-translate-y-1 transition-transform",
+          isMythical
+            ? "border-amber-400/40 bg-gradient-to-br from-amber-500/15 via-rose-500/10 to-purple-600/15 backdrop-blur-2xl shadow-[0_4px_24px_rgba(245,158,11,0.2),inset_0_1px_1px_rgba(255,255,255,0.4)]"
+            : "border-primary/20 bg-primary/10"
+        )}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-primary">Concept Mirror Mastery</CardTitle>
             <BrainCircuit className="h-5 w-5 text-primary" />
@@ -115,7 +114,12 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
         </Card>
 
         {/* Card 2: Concept Nichod Generated */}
-        <Card className="hover:-translate-y-1 transition-transform border-primary/10">
+        <Card className={cn(
+          "hover:-translate-y-1 transition-transform",
+          isMythical
+            ? "border-white/30 dark:border-white/20 bg-white/10 dark:bg-black/30 backdrop-blur-2xl shadow-[0_4px_24px_rgba(139,92,246,0.15),inset_0_1px_1px_rgba(255,255,255,0.3)]"
+            : "border-primary/10"
+        )}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Concept Nichod Generated</CardTitle>
             <BookOpen className="h-4 w-4 text-primary" />
@@ -129,7 +133,12 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
         </Card>
         
         {/* Card 3: Written Practice Avg */}
-        <Card className="hover:-translate-y-1 transition-transform">
+        <Card className={cn(
+          "hover:-translate-y-1 transition-transform",
+          isMythical
+            ? "border-white/30 dark:border-white/20 bg-white/10 dark:bg-black/30 backdrop-blur-2xl shadow-[0_4px_24px_rgba(16,185,129,0.15),inset_0_1px_1px_rgba(255,255,255,0.3)]"
+            : ""
+        )}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Written Practice Score</CardTitle>
             <Trophy className="h-4 w-4 text-yellow-500" />
@@ -143,7 +152,12 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
         </Card>
         
         {/* Card 4: Class / Grade */}
-        <Card className="hover:-translate-y-1 transition-transform">
+        <Card className={cn(
+          "hover:-translate-y-1 transition-transform",
+          isMythical
+            ? "border-white/30 dark:border-white/20 bg-white/10 dark:bg-black/30 backdrop-blur-2xl shadow-[0_4px_24px_rgba(59,130,246,0.15),inset_0_1px_1px_rgba(255,255,255,0.3)]"
+            : ""
+        )}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Class / Grade</CardTitle>
             <Target className="h-4 w-4 text-emerald-500" />
@@ -158,7 +172,10 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
       </div>
 
       {/* Concept Mirror Dedicated Analytics Section */}
-      <Card className="border-border shadow-sm overflow-hidden">
+      <Card className={cn(
+        "border-border shadow-sm overflow-hidden",
+        isMythical && "border-amber-400/30 bg-gradient-to-br from-white/15 via-white/5 to-white/10 dark:from-white/10 dark:via-black/30 dark:to-white/5 backdrop-blur-3xl shadow-[0_8px_32px_rgba(245,158,11,0.2),inset_0_1px_1px_rgba(255,255,255,0.4)]"
+      )}>
         <CardHeader className="pb-3 border-b bg-muted/20">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
@@ -278,7 +295,7 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
         {/* Chart 1: Pie / Donut Chart - Subject Distribution */}
-        <Card className="col-span-1 border-border shadow-sm flex flex-col justify-between">
+        <Card className={cn("col-span-1 border-border shadow-sm flex flex-col justify-between", isMythical && "border-white/30 dark:border-white/20 bg-white/10 dark:bg-black/30 backdrop-blur-2xl shadow-[0_8px_32px_rgba(139,92,246,0.15),inset_0_1px_1px_rgba(255,255,255,0.3)]")}>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -326,7 +343,7 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
         </Card>
 
         {/* Chart 2: Histogram - Score Distribution */}
-        <Card className="col-span-1 border-border shadow-sm flex flex-col justify-between">
+        <Card className={cn("col-span-1 border-border shadow-sm flex flex-col justify-between", isMythical && "border-white/30 dark:border-white/20 bg-white/10 dark:bg-black/30 backdrop-blur-2xl shadow-[0_8px_32px_rgba(139,92,246,0.15),inset_0_1px_1px_rgba(255,255,255,0.3)]")}>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -376,7 +393,7 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
         </Card>
 
         {/* Chart 3: Bar Chart - Skill Averages */}
-        <Card className="col-span-1 border-border shadow-sm flex flex-col justify-between">
+        <Card className={cn("col-span-1 border-border shadow-sm flex flex-col justify-between", isMythical && "border-white/30 dark:border-white/20 bg-white/10 dark:bg-black/30 backdrop-blur-2xl shadow-[0_8px_32px_rgba(139,92,246,0.15),inset_0_1px_1px_rgba(255,255,255,0.3)]")}>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -423,7 +440,7 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
         </Card>
 
         {/* Chart 4: Polynomial Spline Area Chart - Mastery Trajectory Curve */}
-        <Card className="col-span-1 border-border shadow-sm flex flex-col justify-between">
+        <Card className={cn("col-span-1 border-border shadow-sm flex flex-col justify-between", isMythical && "border-white/30 dark:border-white/20 bg-white/10 dark:bg-black/30 backdrop-blur-2xl shadow-[0_8px_32px_rgba(139,92,246,0.15),inset_0_1px_1px_rgba(255,255,255,0.3)]")}>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -434,45 +451,51 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
             <CardDescription className="text-xs">Continuous progress curve over assessment sessions</CardDescription>
           </CardHeader>
           <CardContent className="flex-1 min-h-[300px]">
-            <ResponsiveContainer width="100%" height={280}>
-              <AreaChart data={progressionData} margin={{ top: 20, right: 20, left: -10, bottom: 25 }}>
-                <defs>
-                  <linearGradient id="profilePolyGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.8} />
-                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0.05} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border) / 0.5)" />
-                <XAxis 
-                  dataKey="session" 
-                  tickLine={false} 
-                  axisLine={false} 
-                  tick={{ fontSize: 10, fill: 'currentColor' }}
-                  tickMargin={10}
-                />
-                <YAxis 
-                  domain={[0, 100]} 
-                  tickLine={false} 
-                  axisLine={false} 
-                  tick={{ fontSize: 11, fill: 'currentColor' }}
-                  tickFormatter={(v) => `${v}%`}
-                />
-                <RechartsTooltip 
-                  formatter={(val: number) => [`${val}%`, 'Mastery Score']}
-                  contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))', backgroundColor: 'hsl(var(--background))', color: 'hsl(var(--foreground))' }}
-                />
-                <Area 
-                  type="monotone" 
-                  dataKey="score" 
-                  stroke="#6366f1" 
-                  strokeWidth={3} 
-                  fillOpacity={1} 
-                  fill="url(#profilePolyGrad)"
-                  dot={{ r: 4, fill: "#6366f1", stroke: "hsl(var(--background))", strokeWidth: 2 }}
-                  activeDot={{ r: 6 }}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+            {progressionData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <AreaChart data={progressionData} margin={{ top: 20, right: 20, left: -10, bottom: 25 }}>
+                  <defs>
+                    <linearGradient id="profilePolyGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#6366f1" stopOpacity={0.8} />
+                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0.05} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border) / 0.5)" />
+                  <XAxis 
+                    dataKey="session" 
+                    tickLine={false} 
+                    axisLine={false} 
+                    tick={{ fontSize: 10, fill: 'currentColor' }}
+                    tickMargin={10}
+                  />
+                  <YAxis 
+                    domain={[0, 100]} 
+                    tickLine={false} 
+                    axisLine={false} 
+                    tick={{ fontSize: 11, fill: 'currentColor' }}
+                    tickFormatter={(v) => `${v}%`}
+                  />
+                  <RechartsTooltip 
+                    formatter={(val: number) => [`${val}%`, 'Mastery Score']}
+                    contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))', backgroundColor: 'hsl(var(--background))', color: 'hsl(var(--foreground))' }}
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="score" 
+                    stroke="#6366f1" 
+                    strokeWidth={3} 
+                    fillOpacity={1} 
+                    fill="url(#profilePolyGrad)"
+                    dot={{ r: 4, fill: "#6366f1", stroke: "hsl(var(--background))", strokeWidth: 2 }}
+                    activeDot={{ r: 6 }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
+                No assessment history available yet
+              </div>
+            )}
           </CardContent>
         </Card>
 

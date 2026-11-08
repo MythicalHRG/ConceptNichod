@@ -1,5 +1,6 @@
 "use server";
 import { cookies } from "next/headers";
+import mongoose from "mongoose";
 import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
 import OtpVerification from "@/models/OtpVerification";
@@ -237,20 +238,32 @@ export async function logoutAction() {
 }
 
 export async function meAction() {
-    await dbConnect();
-    const rawSession = cookies().get("user_session")?.value;
-    const sessionUuid = verifySessionCookie(rawSession);
-    if (!sessionUuid) return { user: null };
+    try {
+        const rawSession = cookies().get("user_session")?.value;
+        const sessionUuid = verifySessionCookie(rawSession);
+        if (!sessionUuid) return { user: null };
 
-    const user = await User.findOne({ uuid: sessionUuid });
-    if (!user) return { user: null };
+        await dbConnect();
+        let user = await User.findOne({ uuid: sessionUuid }).lean();
 
-    return { user: { 
-        uuid: user.uuid, username: user.username, email: user.email, bio: user.bio,
-        fullName: user.fullName, gender: user.gender, dob: user.dob, classLevel: user.classLevel,
-        examFocus: user.examFocus, city: user.city, futureCollege: user.futureCollege,
-        snapchat: user.snapchat, instagram: user.instagram 
-    } };
+        // Resilience: if the connection was still initializing, retry lookup once
+        if (!user && mongoose.connection.readyState !== 1) {
+            await dbConnect();
+            user = await User.findOne({ uuid: sessionUuid }).lean();
+        }
+
+        if (!user) return { user: null };
+
+        return { user: { 
+            uuid: user.uuid, username: user.username, email: user.email, bio: user.bio,
+            fullName: user.fullName, gender: user.gender, dob: user.dob, classLevel: user.classLevel,
+            examFocus: user.examFocus, city: user.city, futureCollege: user.futureCollege,
+            snapchat: user.snapchat, instagram: user.instagram 
+        } };
+    } catch (error) {
+        console.error("meAction session restoration error:", error);
+        return { user: null, error: "Session restoration temporarily unavailable" };
+    }
 }
 
 export async function updateProfileAction(formData: FormData) {
@@ -331,7 +344,7 @@ export async function requestEmailChangeOtpAction(newEmail: string) {
     if (existingUser) throw new Error("This email is already registered to another account.");
 
     // Generate 6 digit OTP
-    const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    const generatedOtp = crypto.randomInt(100000, 1000000).toString();
     const expiry = new Date(Date.now() + 5 * 60 * 1000); // 5 min expiry
 
     let otpRecord = await OtpVerification.findOne({ email });

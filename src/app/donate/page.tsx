@@ -73,8 +73,8 @@ export default function DonatePage() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground py-10 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-5xl mx-auto space-y-10">
+    <div className="min-h-screen bg-background text-foreground py-6 sm:py-10 px-3.5 sm:px-6 lg:px-8 pb-safe">
+      <div className="max-w-5xl mx-auto space-y-6 sm:space-y-10">
         
         {/* Top Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-border/60 pb-6">
@@ -85,8 +85,9 @@ export default function DonatePage() {
             >
               <ArrowLeft className="w-3.5 h-3.5" /> Back to Dashboard
             </Link>
-            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight flex items-center gap-3 font-headline">
-              <Heart className="w-8 h-8 text-rose-500 fill-rose-500 animate-pulse" /> Support ConceptNichod
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight flex items-center gap-2.5 sm:gap-3 font-headline break-words">
+              <Heart className="w-7 h-7 sm:w-8 sm:h-8 text-rose-500 fill-rose-500 animate-pulse shrink-0" />
+              <span>Support ConceptNichod</span>
             </h1>
             <p className="text-sm sm:text-base text-muted-foreground max-w-2xl">
               ConceptNichod is dedicated to building 100% free, concept-first cognitive learning tools for every competitive aspirant and student across India. Your direct patronage sustains our servers and AI compute.

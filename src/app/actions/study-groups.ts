@@ -173,7 +173,7 @@ export async function getGroupMessagesAction(groupId: string) {
 
   return messagesDocs.map((m: any) => ({
     id: m._id.toString(),
-    senderId: m.senderId,
+    senderId: m.senderUsername,
     senderUsername: m.senderUsername,
     body: m.body,
     isMine: m.senderId === user.uuid,
@@ -223,7 +223,7 @@ export async function sendGroupMessageAction(groupId: string, body: string) {
     success: true,
     message: {
       id: msg._id.toString(),
-      senderId: msg.senderId,
+      senderId: msg.senderUsername,
       senderUsername: msg.senderUsername,
       body: msg.body,
       isMine: true,
@@ -295,8 +295,7 @@ export async function getDirectMessagesAction(targetUsername: string) {
 
   return {
     target: {
-      uuid: target.uuid,
-      username: target.username,
+            username: target.username,
       fullName: target.fullName,
     },
     messages: messagesDocs.map((m: any) => ({

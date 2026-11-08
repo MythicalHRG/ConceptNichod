@@ -31,6 +31,7 @@ import {
   deleteChangelogAction,
 } from "@/app/actions/changelog";
 import { Rupee } from "@/components/ui/rupee-symbol";
+import { MythicalUserBadge } from "@/components/ui/mythical-glass";
 import {
   Card,
   CardContent,
@@ -555,8 +556,8 @@ export function AdminPanel() {
               <CardDescription>View and manage all registered users.</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
+              <div className="overflow-x-auto touch-scrollbar">
+                <table className="w-full text-sm text-left min-w-[700px]">
                   <thead className="text-xs uppercase bg-muted text-muted-foreground">
                     <tr>
                       <th className="px-4 py-3">Username</th>
@@ -570,18 +571,15 @@ export function AdminPanel() {
                   </thead>
                   <tbody>
                     {users.map((u) => {
-                      const isBadeMaalik = ["anurag", "rohit"].includes(u.username.toLowerCase());
+                      const isMythical = u.username.toLowerCase() === "mythicalhrg";
                       return (
                         <tr key={u.uuid} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
                           <td className="px-4 py-3 font-medium">
-                            <span className="flex items-center gap-1.5">
-                              @{u.username}
-                              {isBadeMaalik && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-gradient-to-r from-purple-500 to-amber-500 text-white shadow-xs">
-                                  👑 Bade Maalik
-                                </span>
-                              )}
-                            </span>
+                            {isMythical ? (
+                              <MythicalUserBadge username={u.username} size="sm" />
+                            ) : (
+                              <span className="text-foreground/90 font-mono text-xs">@{u.username}</span>
+                            )}
                           </td>
                           <td className="px-4 py-3">{u.email}</td>
                           <td className="px-4 py-3">{u.fullName}</td>
@@ -696,8 +694,8 @@ export function AdminPanel() {
               <CardTitle>Active Bans ({bans.length})</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
+              <div className="overflow-x-auto touch-scrollbar">
+                <table className="w-full text-sm text-left min-w-[700px]">
                   <thead className="text-xs uppercase bg-muted text-muted-foreground">
                     <tr>
                       <th className="px-4 py-3">Type</th>
@@ -806,8 +804,8 @@ export function AdminPanel() {
               <CardTitle>Active Broadcasts ({activeBroadcasts.length})</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
+              <div className="overflow-x-auto touch-scrollbar">
+                <table className="w-full text-sm text-left min-w-[700px]">
                   <thead className="text-xs uppercase bg-muted text-muted-foreground">
                     <tr>
                       <th className="px-4 py-3">Subject</th>
@@ -1011,8 +1009,8 @@ export function AdminPanel() {
               <CardDescription>Audited records of past email announcements.</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
+              <div className="overflow-x-auto touch-scrollbar">
+                <table className="w-full text-sm text-left min-w-[700px]">
                   <thead className="text-xs uppercase bg-muted text-muted-foreground">
                     <tr>
                       <th className="px-4 py-3">Subject</th>
@@ -1237,8 +1235,8 @@ export function AdminPanel() {
               <CardTitle>Published Changelogs ({changelogs.length})</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
+              <div className="overflow-x-auto touch-scrollbar">
+                <table className="w-full text-sm text-left min-w-[700px]">
                   <thead className="text-xs uppercase bg-muted text-muted-foreground">
                     <tr>
                       <th className="px-4 py-3">Version</th>

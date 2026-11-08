@@ -9,6 +9,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { MythicalUserBadge } from "@/components/ui/mythical-glass";
 import {
   Trophy,
   Flame,
@@ -67,15 +68,15 @@ export function LeaderboardView() {
 
   const [isPending, startTransition] = useTransition();
 
-  const fetchData = (tf: "all" | "week" | "month", exam: string) => {
-    startTransition(async () => {
-      try {
-        const res = await getLeaderboardDataAction(tf, exam);
+  const fetchData = async (tf: "all" | "week" | "month", exam: string) => {
+    try {
+      const res = await getLeaderboardDataAction(tf, exam);
+      startTransition(() => {
         setData(res);
-      } catch (err) {
-        console.error("Failed to load leaderboard data:", err);
-      }
-    });
+      });
+    } catch (err) {
+      console.error("Failed to load leaderboard data:", err);
+    }
   };
 
   useEffect(() => {
@@ -151,13 +152,13 @@ export function LeaderboardView() {
       <Card className="bg-card/60 backdrop-blur-sm border shadow-sm">
         <CardContent className="p-4 flex flex-wrap items-center justify-between gap-4">
           {/* Timeframe selector */}
-          <div className="flex items-center gap-1.5 bg-muted/60 p-1 rounded-lg">
+          <div className="flex items-center gap-1.5 bg-muted/60 p-1 rounded-lg w-full sm:w-auto">
             {TIMEFRAME_OPTIONS.map((tf) => (
               <Button
                 key={tf.id}
                 variant={timeframe === tf.id ? "default" : "ghost"}
                 size="sm"
-                className="text-xs h-8 px-3"
+                className="text-xs h-8 px-3 flex-1 sm:flex-none"
                 onClick={() => setTimeframe(tf.id)}
               >
                 {tf.label}
@@ -322,7 +323,7 @@ export function LeaderboardView() {
           {chartData.length > 0 ? (
             <div className="h-[340px] w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
+                <LineChart data={chartData} margin={{ top: 20, right: 15, left: -10, bottom: 20 }}>
                   <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
                   <XAxis
                     dataKey="conceptIndex"
@@ -369,8 +370,8 @@ export function LeaderboardView() {
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+          <div className="overflow-x-auto touch-scrollbar">
+            <table className="w-full text-left text-sm min-w-[680px]">
               <thead className="bg-muted/70 text-xs uppercase font-semibold text-muted-foreground border-b">
                 <tr>
                   <th className="py-3 px-4">Rank</th>
@@ -393,7 +394,7 @@ export function LeaderboardView() {
                 ) : (
                   data.entries.map((entry) => (
                     <tr
-                      key={entry.uuid}
+                      key={entry.username}
                       className={`hover:bg-muted/40 transition-colors ${
                         entry.isCurrentUser ? "bg-primary/10 font-medium" : ""
                       }`}
@@ -413,16 +414,6 @@ export function LeaderboardView() {
                         >
                           <span className="font-semibold text-foreground flex items-center flex-wrap gap-1">
                             {entry.fullName}
-                            {entry.username.toLowerCase() === 'mythicalhrg' && (
-                              <Badge className="text-[9px] px-1 py-0 bg-yellow-500/20 text-yellow-400 border-yellow-500/40">
-                                Owner
-                              </Badge>
-                            )}
-                            {['anurag', 'rohit'].includes(entry.username.toLowerCase()) && (
-                              <Badge className="text-[9px] px-1 py-0 bg-purple-500/20 text-purple-300 border-purple-500/40">
-                                👑 Bade Maalik
-                              </Badge>
-                            )}
                             {entry.rank === 1 && (
                               <Badge className="text-[9px] px-1 py-0 bg-yellow-500/20 text-yellow-400 border-yellow-500/40">
                                 #1 Champion
@@ -444,8 +435,13 @@ export function LeaderboardView() {
                               </Badge>
                             )}
                           </span>
-                          <span className="text-xs text-muted-foreground">
-                            @{entry.username} {entry.city ? `• ${entry.city}` : ""}
+                          <span className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
+                            {entry.username.toLowerCase() === 'mythicalhrg' ? (
+                              <MythicalUserBadge username={entry.username} size="xs" />
+                            ) : (
+                              <span>@{entry.username}</span>
+                            )}
+                            {entry.city ? `• ${entry.city}` : ""}
                           </span>
                         </Link>
                       </td>

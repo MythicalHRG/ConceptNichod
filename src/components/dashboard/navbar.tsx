@@ -9,8 +9,8 @@ import { NotificationBell } from "./notification-bell";
 
 export function Navbar() {
   return (
-    <header className="sticky top-0 z-10 flex h-14 items-center gap-3 border-b bg-background/60 px-4 backdrop-blur-sm sm:px-6">
-      <SidebarTrigger className="mr-2" />
+    <header className="sticky top-0 z-10 flex h-14 items-center gap-1.5 sm:gap-3 border-b bg-background/70 px-3 sm:px-6 backdrop-blur-md pt-[env(safe-area-inset-top,0px)] transition-all">
+      <SidebarTrigger className="mr-1 sm:mr-2 shrink-0" />
       <div className="flex-1" />
       
       {/* Public Donation / Support Link */}

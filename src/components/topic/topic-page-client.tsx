@@ -269,8 +269,8 @@ export function TopicPageClient({ topicId, initialTopic }: TopicPageClientProps)
       {!(isPracticing && !finalAnalysis) && (
         <div className="flex justify-between items-start mb-1">
           <div className="flex-1">
-              <h1 className="text-4xl font-headline font-bold">{topic.name}</h1>
-              <p className="text-lg text-muted-foreground mb-6">
+              <h1 className="text-2xl sm:text-3xl md:text-4xl font-headline font-bold break-words">{topic.name}</h1>
+              <p className="text-sm sm:text-base md:text-lg text-muted-foreground mb-4 sm:mb-6">
                   {topic.classLevel} &bull; {topic.subject} &bull; {topic.chapter}
               </p>
           </div>
@@ -292,21 +292,21 @@ export function TopicPageClient({ topicId, initialTopic }: TopicPageClientProps)
                 <CardDescription>Select a timer to complete reading the summary.</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="flex flex-wrap gap-4 items-center">
-                   <Button onClick={() => startTimer(2)}>2 Minutes</Button>
-                   <Button onClick={() => startTimer(5)}>5 Minutes</Button>
-                   <Button onClick={() => startTimer(10)}>10 Minutes</Button>
-                   <div className="flex items-center gap-2 ml-4">
+                <div className="flex flex-wrap gap-2.5 sm:gap-4 items-center">
+                   <Button onClick={() => startTimer(2)} size="sm">2 Minutes</Button>
+                   <Button onClick={() => startTimer(5)} size="sm">5 Minutes</Button>
+                   <Button onClick={() => startTimer(10)} size="sm">10 Minutes</Button>
+                   <div className="flex items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0">
                       <Input 
                         type="number" 
                         min="1" 
                         max="15" 
                         value={customTime} 
                         onChange={(e) => setCustomTime(e.target.value)} 
-                        placeholder="Custom (max 15)" 
-                        className="w-32"
+                        placeholder="Custom (1-15m)" 
+                        className="w-28 sm:w-32 h-9 text-xs sm:text-sm"
                       />
-                      <Button variant="outline" onClick={() => {
+                      <Button variant="outline" size="sm" onClick={() => {
                         const mins = parseInt(customTime);
                         if (mins > 0 && mins <= 15) startTimer(mins);
                         else toast({ title: "Invalid Time", description: "Enter a number between 1 and 15.", variant: "destructive" });

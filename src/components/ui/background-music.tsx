@@ -134,7 +134,7 @@ export function BackgroundMusic() {
   }, [isPlaying]);
 
   return (
-    <div className="fixed bottom-4 left-4 z-40">
+    <div className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom,0px))] left-[calc(1rem+env(safe-area-inset-left,0px))] z-40">
       <Button
         variant="outline"
         size="icon"

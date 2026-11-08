@@ -9,10 +9,20 @@ export function FlippingBook() {
 
   return (
     <div
-      className="relative w-[250px] h-[375px] md:w-[300px] md:h-[450px] cursor-pointer transform-style-preserve-3d transition-transform duration-1000"
+      role="button"
+      tabIndex={0}
+      aria-label="Interactive Concepts Nichod 3D Book. Tap or hover to open."
+      className="relative w-[220px] h-[330px] sm:w-[260px] sm:h-[390px] md:w-[300px] md:h-[450px] cursor-pointer transform-style-preserve-3d transition-transform duration-1000 focus:outline-none focus:ring-2 focus:ring-primary rounded-md select-none"
+      onClick={() => setIsFlipped((prev) => !prev)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          setIsFlipped((prev) => !prev);
+        }
+      }}
       onMouseEnter={() => setIsFlipped(true)}
       onMouseLeave={() => setIsFlipped(false)}
-      style={{ transform: isFlipped ? 'translateX(50%) rotateY(-180deg)' : 'translateX(0) rotateY(0deg)'}}
+      style={{ transform: isFlipped ? 'translateX(30%) rotateY(-180deg)' : 'translateX(0) rotateY(0deg)' }}
     >
       {/* Book Cover */}
       <div className="absolute w-full h-full backface-hidden rounded-md shadow-2xl overflow-hidden border-2 border-primary/50 bg-gradient-to-br from-black via-zinc-900 to-amber-950/40 flex flex-col items-center justify-center p-6" style={{ transform: 'rotateY(0deg)' }}>

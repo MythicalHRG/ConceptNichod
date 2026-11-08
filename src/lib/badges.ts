@@ -32,9 +32,9 @@ export async function computeUserBadges(userUuid: string, username: string): Pro
       getLeaderboardDataAction("all", "All"),
     ]);
 
-    const weeklyEntry = weeklyBoard.entries.find((e) => e.uuid === userUuid);
-    const monthlyEntry = monthlyBoard.entries.find((e) => e.uuid === userUuid);
-    const overallEntry = overallBoard.entries.find((e) => e.uuid === userUuid);
+    const weeklyEntry = weeklyBoard.entries.find((e) => e.username.toLowerCase() === username.toLowerCase());
+    const monthlyEntry = monthlyBoard.entries.find((e) => e.username.toLowerCase() === username.toLowerCase());
+    const overallEntry = overallBoard.entries.find((e) => e.username.toLowerCase() === username.toLowerCase());
 
     // Weekly Performer Badge (single highest earned for this cycle)
     if (weeklyEntry && weeklyEntry.conceptsCovered > 0) {

@@ -54,28 +54,28 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
   return (
     <Card className="w-full">
       <CardHeader>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <CardTitle className="font-headline text-3xl">Concept Mastery Report</CardTitle>
-            <CardDescription className="text-base mt-1">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="min-w-0">
+            <CardTitle className="font-headline text-2xl sm:text-3xl break-words">Concept Mastery Report</CardTitle>
+            <CardDescription className="text-sm sm:text-base mt-1 break-words">
               Oral concept defense for: <span className="font-semibold text-primary">{conceptName}</span>
             </CardDescription>
           </div>
-          <div className="flex items-center gap-4 flex-wrap">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 w-full lg:w-auto shrink-0">
             {timeUtilized > 0 && (
-              <div className="text-right border-r pr-4 border-border/60">
-                <span className="text-xs uppercase font-bold tracking-wider text-muted-foreground block">Time Utilized</span>
-                <span className="text-lg font-bold font-mono text-foreground">
+              <div className="p-3 rounded-xl border bg-card/60 flex flex-col justify-center text-center sm:text-right shadow-xs">
+                <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground block">Time Utilized</span>
+                <span className="text-base sm:text-lg font-bold font-mono text-foreground">
                   {Math.floor(timeUtilized / 60)}:{(timeUtilized % 60).toString().padStart(2, '0')} / 02:00
                 </span>
                 <span className="text-[10px] text-muted-foreground block">
-                  {Math.min(100, Math.round((timeUtilized / 120) * 100))}% of max window
+                  {Math.min(100, Math.round((timeUtilized / 120) * 100))}% window
                 </span>
               </div>
             )}
-            <div className="text-right border-r pr-4 border-border/60">
-              <span className="text-xs uppercase font-bold tracking-wider text-muted-foreground block">Fluff Content</span>
-              <span className={`text-2xl font-extrabold ${
+            <div className="p-3 rounded-xl border bg-card/60 flex flex-col justify-center text-center sm:text-right shadow-xs">
+              <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground block">Fluff Content</span>
+              <span className={`text-xl sm:text-2xl font-extrabold ${
                 fluffPercent > 35 
                   ? "text-destructive" 
                   : fluffPercent > 15 
@@ -84,10 +84,12 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
               }`}>
                 {fluffPercent}%
               </span>
+              <span className="text-[10px] text-muted-foreground">Detected ratio</span>
             </div>
-            <div className="text-right">
-              <span className="text-xs uppercase font-bold tracking-wider text-muted-foreground block">Mastery Score</span>
-              <span className="text-3xl font-extrabold text-primary">{report.overallScore || avgClarity}%</span>
+            <div className="p-3 rounded-xl border border-primary/30 bg-primary/5 flex flex-col justify-center text-center sm:text-right shadow-xs col-span-2 sm:col-span-1">
+              <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground block">Mastery Score</span>
+              <span className="text-2xl sm:text-3xl font-extrabold text-primary">{report.overallScore || avgClarity}%</span>
+              <span className="text-[10px] text-muted-foreground">Rigorous AI score</span>
             </div>
           </div>
         </div>
@@ -473,10 +475,10 @@ export function MasteryDashboard() {
             </div>
 
             {/* Timer and Action Controls */}
-            <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
               {/* Live Stopwatch Badge */}
               <div
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-mono text-sm font-bold shadow-inner ${
+                className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border font-mono text-sm font-bold shadow-inner shrink-0 ${
                   isRecording
                     ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500'
                     : elapsedSeconds > 0
@@ -494,7 +496,7 @@ export function MasteryDashboard() {
                 onClick={isRecording ? stopRecording : handleStartRecording}
                 disabled={isConnecting || isAnalyzing || isTopicLocked}
                 variant={isRecording ? 'destructive' : 'default'}
-                className="font-medium shadow-sm transition-all"
+                className="font-medium shadow-sm transition-all flex-1 sm:flex-none justify-center"
               >
                 {isConnecting ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -513,7 +515,7 @@ export function MasteryDashboard() {
                 disabled={isConnecting || isAnalyzing || isTopicLocked || (!transcript && elapsedSeconds === 0 && !isRecording)}
                 variant="outline"
                 title="Reset verbal explanation"
-                className="text-muted-foreground hover:text-foreground"
+                className="text-muted-foreground hover:text-foreground shrink-0"
               >
                 <RotateCcw className="mr-1.5 h-4 w-4" />
                 Reset

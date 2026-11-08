@@ -191,7 +191,7 @@ export function ChangelogView({ initialChangelogs, isAdmin }: ChangelogViewProps
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/10 rounded-full blur-[120px] pointer-events-none -z-10" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[35%] h-[35%] bg-indigo-500/10 rounded-full blur-[100px] pointer-events-none -z-10" />
 
-      <main className="container mx-auto px-4 py-12 max-w-4xl">
+      <main className="container mx-auto px-3.5 sm:px-6 py-6 sm:py-12 max-w-4xl pb-safe">
         {/* Navigation & Header */}
         <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
           <Link href="/dashboard">
@@ -214,7 +214,7 @@ export function ChangelogView({ initialChangelogs, isAdmin }: ChangelogViewProps
         {/* Title & Live Actions */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
           <div className="space-y-3">
-            <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight font-headline">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight font-headline break-words">
               Changelog & Updates
             </h1>
             <p className="text-muted-foreground text-lg max-w-2xl">

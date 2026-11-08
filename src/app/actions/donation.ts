@@ -41,6 +41,7 @@ export async function getDonationInfoAction() {
   }
 
   const donors = await Donor.find({ isPublic: true })
+    .select("-uuid")
     .sort({ amount: -1, createdAt: -1 })
     .lean();
 

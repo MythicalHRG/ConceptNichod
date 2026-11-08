@@ -41,9 +41,12 @@ export function verifySessionCookie(cookieValue?: string | null): string | null 
     }
   }
 
-  // Backward compatibility: If an unsigned valid UUID was provided, accept it
-  if (UUID_REGEX.test(trimmed)) {
-    return trimmed;
+  // Security Hardening: In production or strict mode, unsigned UUIDs are strictly rejected to prevent account takeover.
+  // Legacy unsigned UUIDs are only tolerated during non-production test suites if not in strict mode.
+  if (process.env.NODE_ENV !== "production" && process.env.STRICT_SESSION_SIGNING !== "true") {
+    if (UUID_REGEX.test(trimmed)) {
+      return trimmed;
+    }
   }
 
   return null;

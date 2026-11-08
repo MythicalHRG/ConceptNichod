@@ -177,7 +177,7 @@ export function SpeechRecorder({
 
         {/* Live Stopwatch / Countdown Timer */}
         <div
-          className={`flex items-center gap-2 font-mono text-lg px-3 py-1.5 rounded-lg border ${
+          className={`flex items-center justify-center gap-2 font-mono text-lg px-3 py-1.5 rounded-lg border w-full sm:w-auto ${
             isRecording
               ? timeLimitSeconds && timeLeft <= 15
                 ? "bg-destructive/10 border-destructive/30 text-destructive animate-pulse"

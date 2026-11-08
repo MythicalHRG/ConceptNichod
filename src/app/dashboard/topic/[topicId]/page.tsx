@@ -8,8 +8,6 @@ import { redirect } from "next/navigation";
 import { verifySessionCookie } from "@/lib/session";
 
 export default async function TopicPage({ params }: { params: { topicId: string } }) {
-  await dbConnect();
-  
   if (!mongoose.isValidObjectId(params.topicId)) {
     return <div>Invalid Topic ID</div>;
   }

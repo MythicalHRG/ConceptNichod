@@ -252,8 +252,27 @@
   * {
     @apply border-border;
   }
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
   body {
     @apply bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  /* Prevent tap delays on touchscreens */
+  button, a, input, select, textarea {
+    touch-action: manipulation;
+  }
+  /* Prevent automatic iOS Safari viewport zoom on form focus */
+  @media (max-width: 767px) {
+    input:not([type="checkbox"]):not([type="radio"]),
+    select,
+    textarea {
+      font-size: 16px !important;
+    }
   }
 }
 
@@ -375,6 +394,60 @@
       border: 1px solid #ccc !important;
       box-shadow: none !important;
       break-inside: avoid;
+    }
+  }
+
+  /* Safe Area Inset utilities for notched phones, dynamic islands, foldables */
+  .pb-safe {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+  }
+  .pt-safe {
+    padding-top: max(0.5rem, env(safe-area-inset-top, 0px));
+  }
+  .pl-safe {
+    padding-left: max(0.5rem, env(safe-area-inset-left, 0px));
+  }
+  .pr-safe {
+    padding-right: max(0.5rem, env(safe-area-inset-right, 0px));
+  }
+  .bottom-safe-fab {
+    bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Touch-friendly ultra-slim scrollbars that don't block viewport width */
+  .touch-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .touch-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .touch-scrollbar::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.25);
+    border-radius: 9999px;
+  }
+  .touch-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.4);
+  }
+
+  /* Liquid Glassmorphism & Shimmer Keyframes */
+  @keyframes shimmer {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(100%);
+    }
+  }
+
+  @keyframes liquid-pulse {
+    0%, 100% {
+      transform: scale(1);
+      opacity: 0.8;
+    }
+    50% {
+      transform: scale(1.08);
+      opacity: 1;
     }
   }
 }

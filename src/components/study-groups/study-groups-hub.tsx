@@ -331,24 +331,24 @@ export function StudyGroupsHub() {
       <div className="max-w-5xl mx-auto space-y-4 pb-12">
         {/* Chat Header */}
         <Card className="border shadow-sm">
-          <CardHeader className="py-4 px-6 flex flex-row items-center justify-between">
-            <div className="flex items-center gap-3">
+          <CardHeader className="py-3 sm:py-4 px-3 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start sm:items-center gap-2.5 sm:gap-3 min-w-0">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setActiveGroup(null)}
-                className="h-8 w-8 p-0"
+                className="h-8 w-8 p-0 shrink-0"
               >
                 <ArrowLeft className="h-4 w-4" />
               </Button>
-              <div>
-                <CardTitle className="text-xl font-headline font-bold flex items-center gap-2">
-                  {activeGroup.name}
-                  <Badge variant="secondary" className="text-xs">
+              <div className="min-w-0">
+                <CardTitle className="text-lg sm:text-xl font-headline font-bold flex items-center flex-wrap gap-2">
+                  <span className="truncate">{activeGroup.name}</span>
+                  <Badge variant="secondary" className="text-xs shrink-0">
                     {activeGroup.subject}
                   </Badge>
                 </CardTitle>
-                <CardDescription className="text-xs flex items-center gap-2 mt-0.5">
+                <CardDescription className="text-xs flex flex-wrap items-center gap-x-2 gap-y-1 mt-0.5">
                   <span className="flex items-center gap-1">
                     <Users className="h-3 w-3" /> {activeGroup.memberCount} Members
                   </span>
@@ -365,7 +365,7 @@ export function StudyGroupsHub() {
             <Button
               variant="outline"
               size="sm"
-              className="text-xs text-destructive hover:bg-destructive/10"
+              className="text-xs text-destructive hover:bg-destructive/10 self-end sm:self-auto shrink-0"
               onClick={() => handleLeaveGroup(activeGroup.id)}
             >
               Leave Group
@@ -444,26 +444,26 @@ export function StudyGroupsHub() {
     return (
       <div className="max-w-4xl mx-auto space-y-4 pb-12">
         <Card className="border shadow-sm">
-          <CardHeader className="py-4 px-6 flex flex-row items-center justify-between">
-            <div className="flex items-center gap-3">
+          <CardHeader className="py-3 sm:py-4 px-3 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setActiveDirectTarget(null)}
-                className="h-8 w-8 p-0"
+                className="h-8 w-8 p-0 shrink-0"
               >
                 <ArrowLeft className="h-4 w-4" />
               </Button>
-              <div>
-                <CardTitle className="text-lg font-headline font-bold">
+              <div className="min-w-0">
+                <CardTitle className="text-base sm:text-lg font-headline font-bold truncate">
                   Chat with @{activeDirectTarget}
                 </CardTitle>
-                <CardDescription className="text-xs">
-                  Native 1-on-1 private messaging • Strictly Server-time synchronized
+                <CardDescription className="text-xs truncate">
+                  Native 1-on-1 private messaging • Synchronized
                 </CardDescription>
               </div>
             </div>
-            <Link href={`/profile/${activeDirectTarget}`}>
+            <Link href={`/profile/${activeDirectTarget}`} className="self-end sm:self-auto shrink-0">
               <Button variant="outline" size="sm" className="text-xs">
                 View Profile
               </Button>

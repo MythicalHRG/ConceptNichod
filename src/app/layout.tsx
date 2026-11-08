@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import Script from 'next/script';
 
 import { Toaster } from '@/components/ui/toaster';
@@ -11,6 +11,17 @@ import { AnimatedBackground } from '@/components/ui/animated-background';
 import { BackgroundMusic } from '@/components/ui/background-music';
 import { SecurityGuard } from '@/components/security-guard';
 import NextTopLoader from 'nextjs-toploader';
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#fbf8f2' },
+    { media: '(prefers-color-scheme: dark)', color: '#1c1917' },
+  ],
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: 'cover',
+};
 
 export const metadata: Metadata = {
   title: 'Concepts Nichod',
@@ -34,7 +45,7 @@ export default function RootLayout({
           crossOrigin="anonymous" 
         />
       </head>
-      <body className="font-body antialiased relative min-h-screen">
+      <body className="font-body antialiased relative min-h-screen overflow-x-hidden selection:bg-primary/20">
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

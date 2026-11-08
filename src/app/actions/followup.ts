@@ -3,6 +3,7 @@
 import { cookies } from 'next/headers';
 import { callOpenRouter } from '@/lib/openrouter';
 import { verifySessionCookie } from '@/lib/session';
+import { checkRateLimit } from '@/lib/rate-limiter';
 
 type Message = {
   role: 'user' | 'assistant';
@@ -28,6 +29,13 @@ export async function askFollowUpAction(input: FollowUpInput): Promise<{ answer:
   const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) {
     throw new Error('Please log in to ask follow-up questions.');
+  }
+
+  // Rate limiting: 15 requests per minute per user session
+  const rateLimitKey = `followup:${sessionUuid}`;
+  const rateCheck = checkRateLimit(rateLimitKey, 15, 60 * 1000);
+  if (!rateCheck.success) {
+    throw new Error('You are asking questions too fast. Please wait a moment before sending another message.');
   }
 
   const { topicName, topicSummary, classLevel, subject, conversationHistory = [] } = input;

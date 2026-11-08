@@ -21,7 +21,7 @@ export function QuestionDisplay({ question, answer, onAnswerChange, disabled = f
     <div className="space-y-4">
       <div className="space-y-2">
         <p className="text-sm font-medium text-primary">{question.type}</p>
-        <div className="text-xl font-semibold leading-relaxed">
+        <div className="text-lg sm:text-xl font-semibold leading-relaxed break-words">
           <LatexRenderer content={question.question} />
         </div>
       </div>

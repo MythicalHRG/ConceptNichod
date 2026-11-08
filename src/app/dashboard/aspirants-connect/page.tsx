@@ -114,7 +114,7 @@ export default function AspirantsConnectPage() {
             </div>
 
             <Card className="bg-secondary/30">
-                <CardContent className="pt-6">
+                <CardContent className="p-3.5 sm:p-6">
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <div className="md:col-span-4 flex gap-2">
                             <div className="relative flex-1">
@@ -225,7 +225,7 @@ export default function AspirantsConnectPage() {
                 )}
             </div>
 
-            <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 transition-opacity duration-200 ${isLiveSearching && !isInitialLoading ? "opacity-70" : "opacity-100"}`}>
+            <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 transition-opacity duration-200 ${isLiveSearching && !isInitialLoading ? "opacity-70" : "opacity-100"}`}>
                 {isInitialLoading ? (
                     <div className="col-span-full flex flex-col items-center justify-center py-16 space-y-3">
                         <Loader2 className="h-8 w-8 animate-spin text-primary" />

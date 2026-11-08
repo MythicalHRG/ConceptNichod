@@ -2,7 +2,26 @@ import dbConnect from "@/lib/mongoose";
 import StudyStreak from "@/models/StudyStreak";
 
 /**
- * Updates a user's study streak using strictly server-side UTC timestamps.
+ * Returns date in YYYY-MM-DD format strictly in Indian Standard Time (Asia/Kolkata).
+ * Ensures students studying past midnight (00:00 - 05:30 IST) are credited with the correct Indian calendar day.
+ */
+export function getIstDateString(date: Date = new Date()): string {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  return formatter.format(date);
+}
+
+export function getYesterdayIstDateString(date: Date = new Date()): string {
+  const prev = new Date(date.getTime() - 24 * 60 * 60 * 1000);
+  return getIstDateString(prev);
+}
+
+/**
+ * Updates a user's study streak using server-side IST timestamps.
  */
 export async function recordUserStudyActivity(userId: string): Promise<{
   currentStreak: number;
@@ -12,9 +31,8 @@ export async function recordUserStudyActivity(userId: string): Promise<{
   await dbConnect();
 
   const now = new Date();
-  const todayStr = now.toISOString().slice(0, 10);
-  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  const yesterdayStr = yesterday.toISOString().slice(0, 10);
+  const todayStr = getIstDateString(now);
+  const yesterdayStr = getYesterdayIstDateString(now);
 
   let streakDoc = await StudyStreak.findOne({ userId });
 
@@ -73,11 +91,10 @@ export async function getUserStreak(userId: string): Promise<{
   if (!streakDoc) return { currentStreak: 0, longestStreak: 0, lastActiveDate: "" };
 
   const now = new Date();
-  const todayStr = now.toISOString().slice(0, 10);
-  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  const yesterdayStr = yesterday.toISOString().slice(0, 10);
+  const todayStr = getIstDateString(now);
+  const yesterdayStr = getYesterdayIstDateString(now);
 
-  // If last activity is older than yesterday, the active streak is currently broken (0)
+  // If last activity is older than yesterday in IST, the active streak is currently broken (0)
   const isStreakLive =
     streakDoc.lastActiveDate === todayStr ||
     streakDoc.lastActiveDate === yesterdayStr;

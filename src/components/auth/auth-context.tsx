@@ -32,14 +32,28 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-function AuthParamsHandler({ setAuthModalOpen }: { setAuthModalOpen: (open: boolean) => void }) {
+function AuthParamsHandler({
+  setAuthModalOpen,
+  isAuthReady,
+  user,
+}: {
+  setAuthModalOpen: (open: boolean) => void;
+  isAuthReady: boolean;
+  user: AuthUser | null;
+}) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
+    // Only handle query parameter once initial session restoration has settled
+    if (!isAuthReady) return;
+
     if (searchParams.get("login") === "true") {
-      setAuthModalOpen(true);
+      // Only pop open the login dialog if the user is truly unauthenticated
+      if (!user) {
+        setAuthModalOpen(true);
+      }
       
       // Clean up the URL parameter
       const params = new URLSearchParams(searchParams.toString());
@@ -48,7 +62,7 @@ function AuthParamsHandler({ setAuthModalOpen }: { setAuthModalOpen: (open: bool
       const newUrl = newQuery ? `${pathname}?${newQuery}` : pathname;
       router.replace(newUrl, { scroll: false });
     }
-  }, [searchParams, pathname, router, setAuthModalOpen]);
+  }, [searchParams, pathname, router, setAuthModalOpen, isAuthReady, user]);
 
   return null;
 }
@@ -66,40 +80,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let active = true;
-    meAction()
-      .then((res) => {
-        if (active && !hasLocalAuthChange.current) {
-          const currentUser = res.user ?? null;
-          userRef.current = currentUser;
-          setUser(currentUser);
-          if (!currentUser) {
-            setAuthModalOpen(true);
-          }
+
+    const restoreSession = async (attempt = 1) => {
+      try {
+        const res = await meAction();
+        if (!active || hasLocalAuthChange.current) return;
+
+        if (res?.user) {
+          userRef.current = res.user;
+          setUser(res.user);
+          setIsAuthReady(true);
+          return;
         }
-      })
-      .catch((error) => {
+
+        // Transient DB wake-up or connection delay: retry before finalizing
+        if (res?.error && attempt < 2) {
+          setTimeout(() => {
+            if (active && !hasLocalAuthChange.current) {
+              restoreSession(attempt + 1);
+            }
+          }, 600);
+          return;
+        }
+
+        userRef.current = null;
+        setUser(null);
+        setIsAuthReady(true);
+      } catch (error) {
         console.error("Unable to restore the current session:", error);
+        if (attempt < 2) {
+          setTimeout(() => {
+            if (active && !hasLocalAuthChange.current) {
+              restoreSession(attempt + 1);
+            }
+          }, 600);
+          return;
+        }
         if (active && !hasLocalAuthChange.current) {
           userRef.current = null;
           setUser(null);
-          setAuthModalOpen(true);
+          setIsAuthReady(true);
         }
-      })
-      .finally(() => {
-        if (active) setIsAuthReady(true);
-      });
+      }
+    };
+
+    restoreSession();
 
     return () => {
       active = false;
     };
   }, []);
-
-  // Whenever auth check is ready and there is no authenticated user, enforce modal popup
-  useEffect(() => {
-    if (isAuthReady && !userRef.current) {
-      setAuthModalOpen(true);
-    }
-  }, [isAuthReady, user]);
 
   const login = (newUser: AuthUser) => {
     hasLocalAuthChange.current = true;
@@ -119,11 +149,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const safeSetAuthModalOpen = (open: boolean) => {
-    // If user is not authenticated and auth check is complete, keep modal open
-    if (!open && !userRef.current && isAuthReady) {
-      setAuthModalOpen(true);
-      return;
-    }
     setAuthModalOpen(open);
   };
 
@@ -140,7 +165,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }}
     >
       <Suspense fallback={null}>
-        <AuthParamsHandler setAuthModalOpen={safeSetAuthModalOpen} />
+        <AuthParamsHandler
+          setAuthModalOpen={safeSetAuthModalOpen}
+          isAuthReady={isAuthReady}
+          user={user}
+        />
       </Suspense>
       {children}
     </AuthContext.Provider>

@@ -7,6 +7,7 @@ import ConceptMirror from "@/models/ConceptMirror";
 import Topic from "@/models/Topic";
 import StudyStreak from "@/models/StudyStreak";
 import { verifySessionCookie } from "@/lib/session";
+import { getIstDateString, getYesterdayIstDateString } from "@/lib/streak";
 
 export interface TrajectoryPoint {
   conceptIndex: number;
@@ -18,7 +19,6 @@ export interface TrajectoryPoint {
 
 export interface LeaderboardEntry {
   rank: number;
-  uuid: string;
   username: string;
   fullName: string;
   examFocus: string;
@@ -97,10 +97,8 @@ export async function getLeaderboardDataAction(
   const streakDocs = await StudyStreak.find({ userId: { $in: userIds } }).lean();
   const streakMap = new Map(streakDocs.map((s) => [s.userId, s]));
 
-  const todayStr = now.toISOString().slice(0, 10);
-  const yesterdayStr = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-    .toISOString()
-    .slice(0, 10);
+  const todayStr = getIstDateString(now);
+  const yesterdayStr = getYesterdayIstDateString(now);
 
   // Group activities per user
   const userActivities = new Map<
@@ -215,7 +213,6 @@ export async function getLeaderboardDataAction(
 
     entries.push({
       rank: 0,
-      uuid: u.uuid,
       username: u.username,
       fullName: u.fullName,
       examFocus: u.examFocus || "General",
@@ -240,7 +237,7 @@ export async function getLeaderboardDataAction(
   // 3. Concepts mastered N (desc)
   // 4. Total Concept Mirror defense seconds (desc)
   // 5. Earlier user registration timestamp (asc)
-  const userMap = new Map(users.map((u) => [u.uuid, u]));
+  const userMap = new Map(users.map((u) => [u.username.toLowerCase(), u]));
 
   entries.sort((a, b) => {
     if (Math.abs(b.rankScore - a.rankScore) > 0.001) {
@@ -255,8 +252,8 @@ export async function getLeaderboardDataAction(
     if (b.totalDurationSeconds !== a.totalDurationSeconds) {
       return b.totalDurationSeconds - a.totalDurationSeconds;
     }
-    const aCreated = userMap.get(a.uuid)?.createdAt ? new Date(userMap.get(a.uuid)!.createdAt).getTime() : 0;
-    const bCreated = userMap.get(b.uuid)?.createdAt ? new Date(userMap.get(b.uuid)!.createdAt).getTime() : 0;
+    const aCreated = userMap.get(a.username.toLowerCase())?.createdAt ? new Date(userMap.get(a.username.toLowerCase())!.createdAt).getTime() : 0;
+    const bCreated = userMap.get(b.username.toLowerCase())?.createdAt ? new Date(userMap.get(b.username.toLowerCase())!.createdAt).getTime() : 0;
     return aCreated - bCreated;
   });
 

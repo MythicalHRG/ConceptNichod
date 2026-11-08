@@ -18,6 +18,9 @@ const OtpVerificationSchema: Schema<IOtpVerification> = new Schema({
   lastSentAt: { type: Date, default: Date.now }
 });
 
+// TTL index to automatically prune expired OTPs from the database
+OtpVerificationSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
 const OtpVerification: Model<IOtpVerification> = mongoose.models.OtpVerification || mongoose.model<IOtpVerification>("OtpVerification", OtpVerificationSchema);
 
 export default OtpVerification;

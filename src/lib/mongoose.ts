@@ -9,22 +9,27 @@ if (!cached) {
 }
 
 async function dbConnect() {
-  if (mongoose.connection.readyState >= 1) {
+  if (mongoose.connection.readyState === 1) {
     return mongoose;
   }
 
-  if (cached.conn) {
-    return cached.conn;
+  if (mongoose.connection.readyState === 2 && cached.promise) {
+    try {
+      cached.conn = await cached.promise;
+      return cached.conn;
+    } catch {
+      // Reconnect below if pending promise failed
+    }
   }
 
   if (!MONGODB_URI) {
     throw new Error("Please define the MONGODB_URI environment variable inside .env");
   }
 
-  if (!cached.promise) {
+  if (!cached.promise || mongoose.connection.readyState === 0) {
     const opts = {
-      bufferCommands: false,
-      serverSelectionTimeoutMS: 2500, // Fast timeout for cold start detection
+      bufferCommands: true,
+      serverSelectionTimeoutMS: 8000, // 8s timeout for cold start resilience
       socketTimeoutMS: 45000,
       connectTimeoutMS: 10000,
     };
@@ -36,6 +41,7 @@ async function dbConnect() {
       })
       .catch((err) => {
         cached.promise = null; // Don't cache rejected connection promise
+        cached.conn = null;
         throw err;
       });
   }
@@ -44,6 +50,7 @@ async function dbConnect() {
     cached.conn = await cached.promise;
   } catch (e) {
     cached.promise = null;
+    cached.conn = null;
     throw e;
   }
 
