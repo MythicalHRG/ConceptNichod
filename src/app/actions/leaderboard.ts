@@ -123,18 +123,30 @@ export async function getLeaderboardDataAction(
   }
 
   for (const topic of topicSessions) {
-    // Determine score from topic analysis if present, or assign baseline mastery for completed topic
-    let score = 75;
-    if (topic.analysis && typeof topic.analysis.overallScore === "number") {
-      score = topic.analysis.overallScore;
-    } else if (topic.practiceStatus === "completed") {
-      score = 80;
+    // Only count topics where the student has actually practiced or completed an evaluation
+    const hasAnalysisScore = topic.analysis && typeof topic.analysis.overallScore === "number";
+    const isCompleted = topic.practiceStatus === "completed";
+    const isInProgress = topic.practiceStatus === "in_progress";
+
+    // If untouched (not_started without any evaluation), skip counting as mastered activity
+    if (!hasAnalysisScore && !isCompleted && !isInProgress) {
+      continue;
     }
+
+    let score = 0;
+    if (hasAnalysisScore) {
+      score = topic.analysis.overallScore;
+    } else if (isCompleted) {
+      score = 70;
+    } else if (isInProgress) {
+      score = 40;
+    }
+
     const list = userActivities.get(topic.userId) || [];
     list.push({
       title: topic.name,
       score: Math.min(100, Math.max(0, score)),
-      durationSeconds: 120,
+      durationSeconds: isCompleted ? 180 : 60,
       createdAt: new Date(topic.createdAt),
     });
     userActivities.set(topic.userId, list);
@@ -200,16 +212,29 @@ export async function getLeaderboardDataAction(
     const longestStreak = streakDoc ? streakDoc.longestStreak : 0;
 
     // Composite Rank Score:
-    // Performance weight (40%) + Concepts volume weight (up to 60 concepts) + Streak (1.5x) + Positive Velocity (2.0x)
-    const conceptsWeight = Math.min(N, 60) * 0.6;
-    const performanceWeight = avgScore * 0.4;
-    const streakWeight = currentStreak * 1.5;
+    // Volume of Mastered Concepts (high weight) + Accuracy (scaled by credibility) + Streak + Velocity + Spoken Fluency
+    // Concepts volume: 3.0 points per mastered concept (up to 100 concepts = 300 pts)
+    const conceptsWeight = Math.min(N, 100) * 3.0;
+
+    // Performance weight: up to 30 points, confidence-weighted by sample size so 1 single topic cannot outrank 10+ completed topics
+    const credibilityFactor = Math.min(1, N / 3);
+    const performanceWeight = (avgScore * 0.3) * credibilityFactor;
+
+    // Consistency: 2.0 points per active streak day
+    const streakWeight = currentStreak * 2.0;
+
+    // Learning progression velocity
     const velocityWeight = Math.max(-10, Math.min(30, velocity)) * 2.0;
 
+    // Oral defense bonus from Concept Mirror
+    const oralBonus = Math.min(totalDurationSeconds / 60, 20) * 0.5;
+
     const rankScore =
-      Math.round(
-        (performanceWeight + conceptsWeight + streakWeight + velocityWeight) * 100
-      ) / 100;
+      N > 0
+        ? Math.round(
+            (conceptsWeight + performanceWeight + streakWeight + velocityWeight + oralBonus) * 100
+          ) / 100
+        : 0;
 
     entries.push({
       rank: 0,
