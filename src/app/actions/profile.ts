@@ -3,6 +3,7 @@ import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
 import Topic from "@/models/Topic";
 import ConceptMirror from "@/models/ConceptMirror";
+import { computeUserBadges } from "@/lib/badges";
 
 export async function getPublicProfileData(username: string) {
   await dbConnect();
@@ -15,7 +16,7 @@ export async function getPublicProfileData(username: string) {
     return null;
   }
   
-  const userWithId = await User.findOne({ username: new RegExp(`^${safeUsername}$`, 'i') }).select("uuid");
+  const userWithId = await User.findOne({ username: new RegExp(`^${safeUsername}$`, 'i') }).select("uuid username");
   if (!userWithId) return null;
   
   const topics = await Topic.find({ userId: userWithId.uuid }).lean();
@@ -168,6 +169,17 @@ export async function getPublicProfileData(username: string) {
     console.warn("Could not query ConceptMirror records:", err);
   }
 
+  // 7. Dynamic Badge System Calculation
+  let badges: any[] = [];
+  let topBadge: any = null;
+  try {
+    const badgeRes = await computeUserBadges(userWithId.uuid, userWithId.username);
+    badges = badgeRes.badges;
+    topBadge = badgeRes.topBadge;
+  } catch (err) {
+    console.warn("Could not compute user badges:", err);
+  }
+
   return {
     user: user.toObject(),
     totalTopics,
@@ -177,5 +189,7 @@ export async function getPublicProfileData(username: string) {
     skillAverages,
     learningProgression,
     conceptMirror: conceptMirrorAnalytics,
+    badges,
+    topBadge,
   };
 }

@@ -2,6 +2,7 @@ import React from 'react';
 import { getPublicProfileData } from '@/app/actions/profile';
 import { notFound } from 'next/navigation';
 import { UserAnalytics } from '@/components/profile/user-analytics';
+import { UserBadgesShowcase } from '@/components/profile/user-badges-showcase';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { MapPin, Target, GraduationCap, Instagram, Ghost, Crown } from 'lucide-react';
@@ -35,7 +36,7 @@ export default async function PublicProfilePage({ params }: { params: { username
       <main className="container mx-auto px-4 py-12 max-w-6xl">
         
         {/* Profile Header */}
-        <div className="flex flex-col md:flex-row items-center md:items-start gap-6 mb-12 animate-in fade-in slide-in-from-top-4 duration-500">
+        <div className="flex flex-col md:flex-row items-center md:items-start gap-6 mb-8 animate-in fade-in slide-in-from-top-4 duration-500">
           <Avatar className={`w-32 h-32 border-4 border-background shadow-xl relative ${isBadeMaalik ? 'ring-4 ring-purple-500 shadow-purple-500/40' : 'ring-2 ring-primary/20'}`}>
             <AvatarImage src={`https://api.dicebear.com/7.x/${isOwner ? 'micah' : isBadeMaalik ? 'adventurer' : 'notionists'}/svg?seed=${isBadeMaalik ? user.username + '-royal' : user.username}`} alt={user.username} />
             <AvatarFallback className="text-3xl bg-primary text-primary-foreground">{initials}</AvatarFallback>
@@ -111,6 +112,9 @@ export default async function PublicProfilePage({ params }: { params: { username
                 "{user.bio}"
               </p>
             )}
+
+            {/* Dynamic & Hierarchical Badges Showcase */}
+            <UserBadgesShowcase badges={data.badges} topBadge={data.topBadge} />
           </div>
         </div>
 

@@ -411,10 +411,35 @@ export function LeaderboardView() {
                           href={`/profile/${entry.username}`}
                           className="hover:underline flex flex-col"
                         >
-                          <span className="font-semibold text-foreground">
+                          <span className="font-semibold text-foreground flex items-center flex-wrap gap-1">
                             {entry.fullName}
+                            {entry.username.toLowerCase() === 'mythicalhrg' && (
+                              <Badge className="text-[9px] px-1 py-0 bg-yellow-500/20 text-yellow-400 border-yellow-500/40">
+                                Owner
+                              </Badge>
+                            )}
+                            {['anurag', 'rohit'].includes(entry.username.toLowerCase()) && (
+                              <Badge className="text-[9px] px-1 py-0 bg-purple-500/20 text-purple-300 border-purple-500/40">
+                                👑 Bade Maalik
+                              </Badge>
+                            )}
+                            {entry.rank === 1 && (
+                              <Badge className="text-[9px] px-1 py-0 bg-yellow-500/20 text-yellow-400 border-yellow-500/40">
+                                #1 Champion
+                              </Badge>
+                            )}
+                            {entry.rank > 1 && entry.rank <= 3 && (
+                              <Badge className="text-[9px] px-1 py-0 bg-slate-400/20 text-slate-300 border-slate-400/40">
+                                Podium
+                              </Badge>
+                            )}
+                            {entry.rank > 3 && entry.rank <= 10 && (
+                              <Badge className="text-[9px] px-1 py-0 bg-emerald-500/20 text-emerald-400 border-emerald-500/40">
+                                Top 10
+                              </Badge>
+                            )}
                             {entry.isCurrentUser && (
-                              <Badge variant="secondary" className="ml-2 text-[10px] px-1.5 py-0">
+                              <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0">
                                 You
                               </Badge>
                             )}
