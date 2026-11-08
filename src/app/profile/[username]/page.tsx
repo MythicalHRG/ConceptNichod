@@ -31,18 +31,8 @@ export default async function PublicProfilePage({ params }: { params: { username
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
       {/* Background aesthetics */}
-      {isOwner ? (
-        <div className="absolute inset-0 pointer-events-none overflow-hidden -z-10">
-          <div className="absolute -top-40 -left-40 w-[600px] h-[600px] rounded-full bg-gradient-to-tr from-amber-400/20 via-rose-500/15 to-purple-600/20 blur-[140px] animate-[pulse_7s_ease-in-out_infinite]" />
-          <div className="absolute top-1/3 -right-40 w-[550px] h-[550px] rounded-full bg-gradient-to-bl from-cyan-400/20 via-indigo-500/15 to-purple-600/20 blur-[130px] animate-[pulse_9s_ease-in-out_infinite]" />
-          <div className="absolute -bottom-40 left-1/3 w-[500px] h-[500px] rounded-full bg-gradient-to-t from-amber-500/15 via-pink-500/10 to-emerald-400/15 blur-[120px] animate-[pulse_11s_ease-in-out_infinite]" />
-        </div>
-      ) : (
-        <>
-          <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/10 rounded-full blur-[120px] pointer-events-none -z-10" />
-          <div className="absolute bottom-[-10%] right-[-10%] w-[30%] h-[30%] bg-blue-500/10 rounded-full blur-[100px] pointer-events-none -z-10" />
-        </>
-      )}
+      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/10 rounded-full blur-[120px] pointer-events-none -z-10" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[30%] h-[30%] bg-blue-500/10 rounded-full blur-[100px] pointer-events-none -z-10" />
 
       <main className="container mx-auto px-3.5 sm:px-6 py-6 sm:py-12 max-w-6xl pb-safe">
         
@@ -51,13 +41,11 @@ export default async function PublicProfilePage({ params }: { params: { username
           <MythicalProfileHeroCard className="mb-10 animate-in fade-in slide-in-from-top-6 duration-700">
             <div className="flex flex-col md:flex-row items-center md:items-start gap-6 sm:gap-8">
               <div className="relative group shrink-0">
-                {/* Iridescent Rotating Glass Glow Ring */}
-                <div className="absolute -inset-2 rounded-full bg-gradient-to-tr from-amber-400 via-rose-500 via-purple-600 to-cyan-400 opacity-80 blur-md group-hover:opacity-100 transition-opacity animate-[spin_10s_linear_infinite]" />
-                <Avatar className="w-28 h-28 sm:w-36 sm:h-36 border-4 border-white/60 dark:border-white/40 shadow-2xl relative ring-4 ring-amber-400/50">
+                <Avatar className="w-28 h-28 sm:w-36 sm:h-36 border-4 border-background shadow-xl relative ring-2 ring-amber-500/30">
                   <AvatarImage src={`https://api.dicebear.com/7.x/micah/svg?seed=${user.username}`} alt={user.username} />
-                  <AvatarFallback className="text-4xl bg-gradient-to-br from-amber-400 to-purple-600 text-white font-black">{initials}</AvatarFallback>
-                  <div className="absolute -top-3 -right-3 bg-gradient-to-r from-amber-400 via-pink-500 to-cyan-400 text-black p-2 rounded-full shadow-[0_0_20px_rgba(245,158,11,0.8)] ring-2 ring-white/80 animate-bounce" title="Root Architect & Founder">
-                    <Crown className="w-5 h-5 fill-amber-200 text-slate-900" />
+                  <AvatarFallback className="text-4xl bg-gradient-to-br from-amber-500 to-primary text-white font-black">{initials}</AvatarFallback>
+                  <div className="absolute -top-2.5 -right-2.5 bg-amber-500 text-amber-950 p-2 rounded-full shadow-md ring-2 ring-background" title="Founder & CEO">
+                    <Crown className="w-4 h-4 fill-amber-100 text-amber-950" />
                   </div>
                 </Avatar>
               </div>
@@ -65,38 +53,35 @@ export default async function PublicProfilePage({ params }: { params: { username
               <div className="flex-1 text-center md:text-left space-y-4 min-w-0">
                 <div>
                   <div className="flex flex-wrap items-center justify-center gap-3 md:justify-start">
-                    <h1 className="break-words text-3xl sm:text-5xl font-black tracking-tight bg-gradient-to-r from-amber-300 via-rose-300 via-purple-200 to-cyan-200 bg-clip-text text-transparent drop-shadow-[0_2px_12px_rgba(245,158,11,0.4)]">
+                    <h1 className="break-words text-3xl sm:text-4xl font-extrabold tracking-tight text-foreground">
                       {user.fullName}
                     </h1>
                     <MythicalUserBadge username={user.username} size="md" showAt={true} showTitle={true} />
                   </div>
-                  <p className="text-amber-300/80 dark:text-amber-200/80 font-mono text-xs sm:text-sm tracking-wider uppercase font-semibold mt-1">
-                    Platform Creator • Root Architect
-                  </p>
                 </div>
 
                 <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
                   {user.classLevel && (
-                    <Badge variant="secondary" className="backdrop-blur-md bg-white/10 dark:bg-white/5 border border-white/20 shadow-xs flex items-center gap-1 font-medium text-xs">
-                      <GraduationCap className="w-3.5 h-3.5 text-amber-400" />
+                    <Badge variant="secondary" className="flex items-center gap-1 font-medium text-xs">
+                      <GraduationCap className="w-3.5 h-3.5 text-amber-500" />
                       {user.classLevel}
                     </Badge>
                   )}
                   {user.city && (
-                    <Badge variant="outline" className="backdrop-blur-md bg-white/10 dark:bg-white/5 border border-white/20 shadow-xs flex items-center gap-1 font-medium text-xs">
-                      <MapPin className="w-3.5 h-3.5 text-rose-400" />
+                    <Badge variant="outline" className="flex items-center gap-1 font-medium text-xs">
+                      <MapPin className="w-3.5 h-3.5 text-rose-500" />
                       {user.city}
                     </Badge>
                   )}
                   {user.examFocus && (
-                    <Badge className="backdrop-blur-md bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 flex items-center gap-1 font-medium text-xs">
+                    <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 font-medium text-xs">
                       <Target className="w-3.5 h-3.5" />
                       {user.examFocus}
                     </Badge>
                   )}
                   {user.instagram && (
                     <a href={`https://instagram.com/${encodeURIComponent(user.instagram.replace(/^@/, ''))}`} target="_blank" rel="noopener noreferrer">
-                      <Badge variant="outline" className="backdrop-blur-md bg-pink-500/10 text-pink-300 border-pink-400/30 flex items-center gap-1 cursor-pointer hover:bg-pink-500/20 transition-all text-xs">
+                      <Badge variant="outline" className="flex items-center gap-1 cursor-pointer hover:bg-pink-500/10 hover:text-pink-500 transition-colors text-xs">
                         <Instagram className="w-3.5 h-3.5" />
                         {user.instagram}
                       </Badge>
@@ -104,7 +89,7 @@ export default async function PublicProfilePage({ params }: { params: { username
                   )}
                   {user.snapchat && (
                     <a href={`https://snapchat.com/add/${encodeURIComponent(user.snapchat.replace(/^@/, ''))}`} target="_blank" rel="noopener noreferrer">
-                      <Badge variant="outline" className="backdrop-blur-md bg-yellow-500/10 text-yellow-300 border-yellow-400/30 flex items-center gap-1 cursor-pointer hover:bg-yellow-500/20 transition-all text-xs">
+                      <Badge variant="outline" className="flex items-center gap-1 cursor-pointer hover:bg-yellow-500/10 hover:text-yellow-600 dark:hover:text-yellow-400 transition-colors text-xs">
                         <Ghost className="w-3.5 h-3.5" />
                         {user.snapchat}
                       </Badge>
@@ -113,7 +98,7 @@ export default async function PublicProfilePage({ params }: { params: { username
                 </div>
 
                 {user.bio && (
-                  <div className="backdrop-blur-md bg-white/10 dark:bg-black/25 border border-white/20 dark:border-white/10 rounded-2xl p-4 shadow-inner max-w-2xl">
+                  <div className="rounded-xl border border-border/70 bg-muted/30 p-3.5 max-w-2xl">
                     <p className="text-foreground/90 italic font-medium text-sm sm:text-base">
                       "{user.bio}"
                     </p>

@@ -90,7 +90,7 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
         <Card className={cn(
           "hover:-translate-y-1 transition-transform",
           isMythical
-            ? "border-amber-400/40 bg-gradient-to-br from-amber-500/15 via-rose-500/10 to-purple-600/15 backdrop-blur-2xl shadow-[0_4px_24px_rgba(245,158,11,0.2),inset_0_1px_1px_rgba(255,255,255,0.4)]"
+            ? "border-amber-500/30 bg-amber-500/10"
             : "border-primary/20 bg-primary/10"
         )}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -114,12 +114,7 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
         </Card>
 
         {/* Card 2: Concept Nichod Generated */}
-        <Card className={cn(
-          "hover:-translate-y-1 transition-transform",
-          isMythical
-            ? "border-white/30 dark:border-white/20 bg-white/10 dark:bg-black/30 backdrop-blur-2xl shadow-[0_4px_24px_rgba(139,92,246,0.15),inset_0_1px_1px_rgba(255,255,255,0.3)]"
-            : "border-primary/10"
-        )}>
+        <Card className="hover:-translate-y-1 transition-transform border-primary/10">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Concept Nichod Generated</CardTitle>
             <BookOpen className="h-4 w-4 text-primary" />
@@ -133,12 +128,7 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
         </Card>
         
         {/* Card 3: Written Practice Avg */}
-        <Card className={cn(
-          "hover:-translate-y-1 transition-transform",
-          isMythical
-            ? "border-white/30 dark:border-white/20 bg-white/10 dark:bg-black/30 backdrop-blur-2xl shadow-[0_4px_24px_rgba(16,185,129,0.15),inset_0_1px_1px_rgba(255,255,255,0.3)]"
-            : ""
-        )}>
+        <Card className="hover:-translate-y-1 transition-transform border-border">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Written Practice Score</CardTitle>
             <Trophy className="h-4 w-4 text-yellow-500" />
@@ -152,12 +142,7 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
         </Card>
         
         {/* Card 4: Class / Grade */}
-        <Card className={cn(
-          "hover:-translate-y-1 transition-transform",
-          isMythical
-            ? "border-white/30 dark:border-white/20 bg-white/10 dark:bg-black/30 backdrop-blur-2xl shadow-[0_4px_24px_rgba(59,130,246,0.15),inset_0_1px_1px_rgba(255,255,255,0.3)]"
-            : ""
-        )}>
+        <Card className="hover:-translate-y-1 transition-transform border-border">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Class / Grade</CardTitle>
             <Target className="h-4 w-4 text-emerald-500" />
@@ -172,10 +157,7 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
       </div>
 
       {/* Concept Mirror Dedicated Analytics Section */}
-      <Card className={cn(
-        "border-border shadow-sm overflow-hidden",
-        isMythical && "border-amber-400/30 bg-gradient-to-br from-white/15 via-white/5 to-white/10 dark:from-white/10 dark:via-black/30 dark:to-white/5 backdrop-blur-3xl shadow-[0_8px_32px_rgba(245,158,11,0.2),inset_0_1px_1px_rgba(255,255,255,0.4)]"
-      )}>
+      <Card className="border-border shadow-sm overflow-hidden">
         <CardHeader className="pb-3 border-b bg-muted/20">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
@@ -295,7 +277,7 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
         {/* Chart 1: Pie / Donut Chart - Subject Distribution */}
-        <Card className={cn("col-span-1 border-border shadow-sm flex flex-col justify-between", isMythical && "border-white/30 dark:border-white/20 bg-white/10 dark:bg-black/30 backdrop-blur-2xl shadow-[0_8px_32px_rgba(139,92,246,0.15),inset_0_1px_1px_rgba(255,255,255,0.3)]")}>
+        <Card className="col-span-1 border-border shadow-sm flex flex-col justify-between">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -343,7 +325,7 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
         </Card>
 
         {/* Chart 2: Histogram - Score Distribution */}
-        <Card className={cn("col-span-1 border-border shadow-sm flex flex-col justify-between", isMythical && "border-white/30 dark:border-white/20 bg-white/10 dark:bg-black/30 backdrop-blur-2xl shadow-[0_8px_32px_rgba(139,92,246,0.15),inset_0_1px_1px_rgba(255,255,255,0.3)]")}>
+        <Card className="col-span-1 border-border shadow-sm flex flex-col justify-between">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -393,7 +375,7 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
         </Card>
 
         {/* Chart 3: Bar Chart - Skill Averages */}
-        <Card className={cn("col-span-1 border-border shadow-sm flex flex-col justify-between", isMythical && "border-white/30 dark:border-white/20 bg-white/10 dark:bg-black/30 backdrop-blur-2xl shadow-[0_8px_32px_rgba(139,92,246,0.15),inset_0_1px_1px_rgba(255,255,255,0.3)]")}>
+        <Card className="col-span-1 border-border shadow-sm flex flex-col justify-between">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -440,7 +422,7 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
         </Card>
 
         {/* Chart 4: Polynomial Spline Area Chart - Mastery Trajectory Curve */}
-        <Card className={cn("col-span-1 border-border shadow-sm flex flex-col justify-between", isMythical && "border-white/30 dark:border-white/20 bg-white/10 dark:bg-black/30 backdrop-blur-2xl shadow-[0_8px_32px_rgba(139,92,246,0.15),inset_0_1px_1px_rgba(255,255,255,0.3)]")}>
+        <Card className="col-span-1 border-border shadow-sm flex flex-col justify-between">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base font-semibold flex items-center gap-2">
