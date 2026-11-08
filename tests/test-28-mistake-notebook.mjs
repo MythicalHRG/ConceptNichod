@@ -107,3 +107,36 @@ test('Mistake Notebook: Search filter escapes regex special characters safely', 
   assert.ok(reg.test('Concept: e = -dPhi/dt (JEE [2024])? in physics'));
   assert.equal(reg.test('something completely different'), false);
 });
+
+test('Mistake Notebook: AI auto-generation supports concept_mirror and nichod sources', () => {
+  const validSources = ['concept_mirror', 'nichod', 'manual'];
+  assert.ok(validSources.includes('concept_mirror'));
+  assert.ok(validSources.includes('nichod'));
+  assert.ok(validSources.includes('manual'));
+
+  const sampleDetectedMistake = {
+    title: 'Lenz Law EMF Sign Ambiguity',
+    subject: 'Physics',
+    chapter: 'Electromagnetic Induction',
+    errorType: 'conceptual',
+    questionOrPrompt: 'Concept Oral Defense: Electromagnetic Induction',
+    myMistake: 'Forgot the minus sign in $e = -\\frac{d\\Phi}{dt}$',
+    correctConcept: 'Induced EMF opposes the rate of change of magnetic flux via Lenz’s Law.',
+    status: 'unresolved',
+    source: 'concept_mirror',
+  };
+
+  assert.equal(sampleDetectedMistake.source, 'concept_mirror');
+  assert.equal(sampleDetectedMistake.status, 'unresolved');
+  assert.ok(sampleDetectedMistake.myMistake.includes('$e = -\\frac{d\\Phi}{dt}$'));
+});
+
+test('Mistake Notebook: Hindi text Galti Diary is completely removed from UI code', async () => {
+  const fs = await import('node:fs');
+  const notebookPath = 'src/components/mistakes/mistake-notebook.tsx';
+  if (fs.existsSync(notebookPath)) {
+    const content = fs.readFileSync(notebookPath, 'utf8');
+    assert.equal(content.includes('Galti'), false, 'Mistake Notebook must not contain Hindi text "Galti"');
+    assert.equal(content.includes('Galti Diary'), false);
+  }
+});

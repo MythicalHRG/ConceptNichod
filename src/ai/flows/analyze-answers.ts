@@ -3,6 +3,8 @@
 import { cookies } from 'next/headers';
 import { callOpenRouter, parseJsonResponse } from '@/lib/openrouter';
 import { verifySessionCookie } from '@/lib/session';
+import dbConnect from '@/lib/mongoose';
+import MistakeEntry from '@/models/MistakeEntry';
 
 export type AuthenticityReport = {
   isNatural: boolean;
@@ -111,6 +113,12 @@ CRITICAL EXAMINER GUIDELINES — EXTREMELY STRICT & UNFORGIVING SCORING:
 5. CHART DATA GENERATION:
    - Ensure the chart numbers align with the strict score! If overallScore is 15, chart scores must reflect low scores (10-25), NOT 80!
 
+6. AUTO-GENERATED MISTAKE NOTEBOOK (LATEX FORMULAS & ACTIONABLE TO-DO ITEMS):
+   - Analyze all written and spoken answers for specific mistakes, calculation slips, incorrect formulas, or faulty reasoning.
+   - Extract each distinct mistake as an actionable to-do item in "detected_mistakes".
+   - Format all equations, formulas, and math using LaTeX ($...$ or $$...$$). E.g. $F = G\frac{m_1 m_2}{r^2}$, $PV = nRT$, $pH = -\log[H^+]$.
+   - If the student answered flawlessly with zero errors, return an empty array [].
+
 Respond with ONLY a valid JSON object (no markdown fences, no surrounding prose):
 {
   "analysis": {
@@ -136,6 +144,17 @@ Respond with ONLY a valid JSON object (no markdown fences, no surrounding prose)
       "<tactical problem-solving blueprint or derivation shortcut>"
     ],
     "aiGeneratedAnswerIndices": [<array of 0-based indices of suspected AI-generated answers>],
+    "detected_mistakes": [
+      {
+        "title": "<Concise concept blunder title e.g. Carnot Engine - Temperature in Celsius>",
+        "subject": "Physics",
+        "chapter": "${topic}",
+        "errorType": "conceptual",
+        "questionOrPrompt": "<specific question text>",
+        "myMistake": "<what the user answered wrong or missed, with LaTeX equations>",
+        "correctConcept": "<correct derivation, formula, and conceptual rule with LaTeX equations e.g. $\\eta = 1 - \\frac{T_C}{T_H}$ where $T$ is in Kelvin>"
+      }
+    ],
     "authenticityReport": {
       "isNatural": <boolean: true if written by human student>,
       "naturalConfidenceScore": <number 0-100: percentage probability of natural human authoring>,
@@ -197,6 +216,51 @@ Respond with ONLY a valid JSON object (no markdown fences, no surrounding prose)
           : 'Linguistic cadence indicates authentic, organic student thought with genuine conceptual formulation.',
         flaggedAnswers: [],
       };
+    }
+
+    // Auto-populate student's Mistake Notebook To-Do List with detected mistakes from Nichod
+    try {
+      await dbConnect();
+      const detected = (analysis as any).detected_mistakes;
+      if (Array.isArray(detected) && detected.length > 0) {
+        for (const m of detected.slice(0, 5)) {
+          if (!m.title || !m.myMistake || !m.correctConcept) continue;
+          await MistakeEntry.create({
+            userId: sessionUuid,
+            title: m.title.trim().slice(0, 120),
+            subject: m.subject || "General",
+            chapter: (m.chapter || topic).trim().slice(0, 80),
+            errorType: m.errorType || "conceptual",
+            questionOrPrompt: (m.questionOrPrompt || `Nichod Topic: ${topic}`).trim().slice(0, 3000),
+            myMistake: m.myMistake.trim().slice(0, 2500),
+            correctConcept: m.correctConcept.trim().slice(0, 2500),
+            status: "unresolved",
+            source: "nichod",
+            createdAt: new Date(),
+          });
+        }
+      } else if (Array.isArray(analysis.questionCritiques)) {
+        // Fallback: extract mistakes from questions where score <= 6/10
+        for (const q of analysis.questionCritiques) {
+          if (q.scoreOutOf10 <= 6 && q.missingPoints && q.missingPoints.length > 0) {
+            await MistakeEntry.create({
+              userId: sessionUuid,
+              title: `${topic} - Q${q.questionNumber} Conceptual Gap`.slice(0, 120),
+              subject: "General",
+              chapter: topic.slice(0, 80),
+              errorType: "conceptual",
+              questionOrPrompt: (q.questionText || `Question ${q.questionNumber}`).slice(0, 3000),
+              myMistake: (q.userAnswer ? `Your answer: ${q.userAnswer}` : "Incomplete derivation or missing key points.").slice(0, 2500),
+              correctConcept: (q.idealDerivationOrAnswer || q.missingPoints.join("; ")).slice(0, 2500),
+              status: "unresolved",
+              source: "nichod",
+              createdAt: new Date(),
+            });
+          }
+        }
+      }
+    } catch (mErr) {
+      console.warn("Could not auto-populate Mistake Notebook from Nichod:", mErr);
     }
 
     return { analysis };

@@ -43,6 +43,7 @@ export interface MistakeItem {
   myMistake: string;
   correctConcept: string;
   status: "unresolved" | "mastered";
+  source?: "concept_mirror" | "nichod" | "manual";
   reviewCount: number;
   lastReviewedAt?: string;
   createdAt: string;
@@ -100,6 +101,7 @@ export async function getMistakesDataAction(filter?: {
     myMistake: doc.myMistake,
     correctConcept: doc.correctConcept,
     status: doc.status,
+    source: doc.source || "manual",
     reviewCount: doc.reviewCount || 0,
     lastReviewedAt: doc.lastReviewedAt ? new Date(doc.lastReviewedAt).toISOString() : undefined,
     createdAt: new Date(doc.createdAt).toISOString(),

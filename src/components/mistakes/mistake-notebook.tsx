@@ -1,19 +1,18 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   getMistakesDataAction,
-  createMistakeAction,
   updateMistakeStatusAction,
   deleteMistakeAction,
   generateMistakeQuizAction,
   MistakeItem,
   MistakeQuizQuestion,
 } from "@/app/actions/mistakes";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -22,22 +21,23 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   BookMarked,
-  Plus,
   Zap,
   CheckCircle2,
+  Circle,
   RotateCcw,
   Trash2,
   Search,
-  Filter,
   Sparkles,
   Loader2,
   AlertCircle,
-  HelpCircle,
   BookOpen,
+  BrainCircuit,
+  ArrowRight,
+  CheckSquare,
+  Square,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { LatexRenderer } from "@/components/ui/latex-renderer";
@@ -63,19 +63,6 @@ export function MistakeNotebook() {
   const [statusFilter, setStatusFilter] = useState<"all" | "unresolved" | "mastered">("all");
   const [subjectFilter, setSubjectFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
-
-  // Create Modal State
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [createForm, setCreateForm] = useState({
-    title: "",
-    subject: "Physics",
-    chapter: "",
-    errorType: "conceptual" as "conceptual" | "calculation" | "formula" | "misread",
-    questionOrPrompt: "",
-    myMistake: "",
-    correctConcept: "",
-  });
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Quiz Modal State
   const [isQuizOpen, setIsQuizOpen] = useState(false);
@@ -109,68 +96,48 @@ export function MistakeNotebook() {
     fetchMistakes();
   }, [statusFilter, subjectFilter, searchQuery]);
 
-  const handleCreateMistake = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!createForm.title || !createForm.subject || !createForm.myMistake || !createForm.correctConcept) {
-      toast({
-        variant: "destructive",
-        title: "Missing Fields",
-        description: "Please fill in all required fields.",
-      });
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      await createMistakeAction(createForm);
-      toast({
-        title: "Mistake Logged!",
-        description: "Added to your notebook for active revision.",
-      });
-      setIsCreateOpen(false);
-      setCreateForm({
-        title: "",
-        subject: "Physics",
-        chapter: "",
-        errorType: "conceptual",
-        questionOrPrompt: "",
-        myMistake: "",
-        correctConcept: "",
-      });
-      fetchMistakes();
-    } catch (err: any) {
-      toast({
-        variant: "destructive",
-        title: "Failed to Save",
-        description: err.message || "Could not log mistake.",
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   const handleToggleStatus = async (item: MistakeItem) => {
     const nextStatus = item.status === "unresolved" ? "mastered" : "unresolved";
+
+    // Optimistic local update for instantaneous to-do checklist feedback
+    setData((prev) => {
+      const updatedMistakes = prev.mistakes.map((m) =>
+        m.id === item.id ? { ...m, status: nextStatus, reviewCount: nextStatus === "mastered" ? m.reviewCount + 1 : m.reviewCount } : m
+      );
+      const unresolvedDelta = nextStatus === "mastered" ? -1 : 1;
+      const masteredDelta = nextStatus === "mastered" ? 1 : -1;
+
+      return {
+        ...prev,
+        mistakes: updatedMistakes,
+        counts: {
+          ...prev.counts,
+          unresolved: Math.max(0, prev.counts.unresolved + unresolvedDelta),
+          mastered: Math.max(0, prev.counts.mastered + masteredDelta),
+        },
+      };
+    });
+
     try {
       await updateMistakeStatusAction(item.id, nextStatus);
       toast({
-        title: nextStatus === "mastered" ? "Marked as Mastered! 🎉" : "Reopened for Revision",
-        description: nextStatus === "mastered" ? "Great job fixing this concept blunder." : "Keep practicing!",
+        title: nextStatus === "mastered" ? "Mistake Rectified! 🎉" : "Marked: Needs Revision",
+        description: nextStatus === "mastered" ? "Concept rectified. Keep up the high retention!" : "Moved back to active revision tasks.",
       });
-      fetchMistakes();
     } catch (err: any) {
       toast({
         variant: "destructive",
         title: "Update Failed",
         description: err.message,
       });
+      fetchMistakes(); // Revert on failure
     }
   };
 
   const handleDelete = async (id: string) => {
     try {
       await deleteMistakeAction(id);
-      toast({ title: "Mistake Deleted" });
+      toast({ title: "Mistake Task Deleted" });
       fetchMistakes();
     } catch (err: any) {
       toast({
@@ -206,7 +173,7 @@ export function MistakeNotebook() {
   };
 
   const handleSelectOption = (idx: number) => {
-    if (selectedOption !== null) return; // Already answered
+    if (selectedOption !== null) return;
     setSelectedOption(idx);
     if (idx === quizQuestions[currentQIndex].correctIndex) {
       setQuizScore((prev) => prev + 1);
@@ -225,16 +192,16 @@ export function MistakeNotebook() {
   const subjectsList = Object.keys(data.counts.subjects);
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto pb-12">
+    <div className="space-y-6 max-w-5xl mx-auto pb-12">
       {/* Header Section */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-headline font-bold flex items-center gap-2">
+          <h1 className="text-3xl font-headline font-bold flex items-center gap-2.5">
             <BookMarked className="h-7 w-7 text-primary" />
-            Mistake Notebook (Galti Diary)
+            Mistake Notebook
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Log your blunders, formulas you forget, and conceptual slips. Master them so you never repeat them in exams.
+            Actionable to-do checklist of conceptual slips, formula amnesia, and traps auto-detected by AI from your Concept Mirror &amp; Nichod sessions.
           </p>
         </div>
 
@@ -243,164 +210,35 @@ export function MistakeNotebook() {
             variant="outline"
             size="sm"
             onClick={handleStartQuiz}
-            className="flex items-center gap-1.5 text-xs font-semibold"
+            className="flex items-center gap-1.5 text-xs font-semibold border-yellow-500/40 hover:bg-yellow-500/10 text-yellow-400"
             disabled={data.counts.unresolved === 0}
           >
-            <Zap className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500" />
-            Test My Weaknesses
+            <Zap className="h-3.5 w-3.5 text-yellow-400 fill-yellow-400" />
+            Test My Weaknesses ({data.counts.unresolved})
           </Button>
-
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm" className="flex items-center gap-1.5 text-xs font-semibold">
-                <Plus className="h-3.5 w-3.5" />
-                Log a Mistake
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[560px]">
-              <form onSubmit={handleCreateMistake}>
-                <DialogHeader>
-                  <DialogTitle>Log a Mistake</DialogTitle>
-                  <DialogDescription>
-                    Record what went wrong and write the correct concept so your brain locks it in.
-                  </DialogDescription>
-                </DialogHeader>
-
-                <div className="space-y-3.5 py-4 text-xs">
-                  <div className="space-y-1">
-                    <label className="font-semibold text-foreground">Mistake Title / Concept *</label>
-                    <Input
-                      required
-                      placeholder="e.g. Lenz's Law - Forgot minus sign in EMF formula"
-                      value={createForm.title}
-                      onChange={(e) => setCreateForm({ ...createForm, title: e.target.value })}
-                      maxLength={120}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="font-semibold text-foreground">Subject *</label>
-                      <select
-                        className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs"
-                        value={createForm.subject}
-                        onChange={(e) => setCreateForm({ ...createForm, subject: e.target.value })}
-                      >
-                        <option value="Physics">Physics</option>
-                        <option value="Chemistry">Chemistry</option>
-                        <option value="Mathematics">Mathematics</option>
-                        <option value="Biology">Biology</option>
-                        <option value="General">General</option>
-                      </select>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="font-semibold text-foreground">Chapter</label>
-                      <Input
-                        placeholder="e.g. Electromagnetic Induction"
-                        value={createForm.chapter}
-                        onChange={(e) => setCreateForm({ ...createForm, chapter: e.target.value })}
-                        maxLength={80}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="font-semibold text-foreground">Type of Mistake</label>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      {Object.entries(ERROR_TYPE_MAP).map(([key, info]) => (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={() => setCreateForm({ ...createForm, errorType: key as any })}
-                          className={`p-2 rounded-lg border text-left flex items-center gap-1.5 transition-colors text-[11px] ${
-                            createForm.errorType === key
-                              ? "bg-primary/10 border-primary text-primary font-bold"
-                              : "border-border text-muted-foreground hover:bg-muted"
-                          }`}
-                        >
-                          <span>{info.icon}</span>
-                          <span className="truncate">{info.label}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="font-semibold text-foreground">The Question / Problem (Optional)</label>
-                    <Textarea
-                      rows={2}
-                      placeholder="What was the problem statement or question you were solving?"
-                      value={createForm.questionOrPrompt}
-                      onChange={(e) => setCreateForm({ ...createForm, questionOrPrompt: e.target.value })}
-                      maxLength={3000}
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="font-semibold text-rose-500 flex items-center gap-1">
-                      <span>❌ What Mistake Did You Make? *</span>
-                    </label>
-                    <Textarea
-                      required
-                      rows={2}
-                      placeholder="e.g. I assumed current was clockwise and neglected the flux direction."
-                      value={createForm.myMistake}
-                      onChange={(e) => setCreateForm({ ...createForm, myMistake: e.target.value })}
-                      maxLength={2500}
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="font-semibold text-emerald-500 flex items-center gap-1">
-                      <span>✅ What Is The Correct Concept / Takeaway? *</span>
-                    </label>
-                    <Textarea
-                      required
-                      rows={2}
-                      placeholder="e.g. $e = -\\frac{d\\Phi}{dt}$. Induced EMF always opposes the change in magnetic flux."
-                      value={createForm.correctConcept}
-                      onChange={(e) => setCreateForm({ ...createForm, correctConcept: e.target.value })}
-                      maxLength={2500}
-                    />
-                  </div>
-                </div>
-
-                <DialogFooter>
-                  <Button type="button" variant="outline" size="sm" onClick={() => setIsCreateOpen(false)} disabled={isSubmitting}>
-                    Cancel
-                  </Button>
-                  <Button type="submit" size="sm" disabled={isSubmitting}>
-                    {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
-                    Save to Notebook
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
         </div>
       </div>
 
-      {/* Quick Overview Summary Chips */}
+      {/* Progress & Overview Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="p-3 rounded-xl border bg-card/60 flex items-center justify-between">
-          <span className="text-xs text-muted-foreground font-medium">Total Mistakes</span>
+        <div className="p-3.5 rounded-xl border bg-card/60 flex items-center justify-between shadow-sm">
+          <span className="text-xs text-muted-foreground font-medium">Total Detected</span>
           <span className="text-lg font-headline font-bold text-foreground">{data.counts.total}</span>
         </div>
-        <div className="p-3 rounded-xl border border-rose-500/20 bg-rose-500/5 flex items-center justify-between">
-          <span className="text-xs text-rose-400 font-medium flex items-center gap-1">
+        <div className="p-3.5 rounded-xl border border-rose-500/20 bg-rose-500/5 flex items-center justify-between shadow-sm">
+          <span className="text-xs text-rose-400 font-medium flex items-center gap-1.5">
             <AlertCircle className="w-3.5 h-3.5" /> Needs Revision
           </span>
           <span className="text-lg font-headline font-bold text-rose-400">{data.counts.unresolved}</span>
         </div>
-        <div className="p-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 flex items-center justify-between">
-          <span className="text-xs text-emerald-400 font-medium flex items-center gap-1">
-            <CheckCircle2 className="w-3.5 h-3.5" /> Rectified
+        <div className="p-3.5 rounded-xl border border-emerald-500/20 bg-emerald-500/5 flex items-center justify-between shadow-sm">
+          <span className="text-xs text-emerald-400 font-medium flex items-center gap-1.5">
+            <CheckCircle2 className="w-3.5 h-3.5" /> Mistake Rectified
           </span>
           <span className="text-lg font-headline font-bold text-emerald-400">{data.counts.mastered}</span>
         </div>
-        <div className="p-3 rounded-xl border bg-card/60 flex items-center justify-between">
-          <span className="text-xs text-muted-foreground font-medium">Mastery Rate</span>
+        <div className="p-3.5 rounded-xl border bg-card/60 flex items-center justify-between shadow-sm">
+          <span className="text-xs text-muted-foreground font-medium">Rectification Rate</span>
           <span className="text-lg font-headline font-bold text-primary">
             {data.counts.total > 0 ? Math.round((data.counts.mastered / data.counts.total) * 100) : 0}%
           </span>
@@ -418,7 +256,7 @@ export function MistakeNotebook() {
                 statusFilter === "all" ? "bg-background text-foreground shadow" : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              All ({data.counts.total})
+              All Tasks ({data.counts.total})
             </button>
             <button
               onClick={() => setStatusFilter("unresolved")}
@@ -434,16 +272,16 @@ export function MistakeNotebook() {
                 statusFilter === "mastered" ? "bg-background text-emerald-400 shadow" : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              Mastered ({data.counts.mastered})
+              Mistake Rectified ({data.counts.mastered})
             </button>
           </div>
 
-          {/* Subject Pills & Search */}
+          {/* Subject Filter & Search Input */}
           <div className="flex items-center gap-2 w-full md:w-auto flex-wrap">
-            <div className="relative flex-1 sm:w-60">
+            <div className="relative flex-1 sm:w-64">
               <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
               <Input
-                placeholder="Search mistakes or concepts..."
+                placeholder="Search concepts or formulas..."
                 className="pl-8 h-8 text-xs"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -466,64 +304,128 @@ export function MistakeNotebook() {
         </div>
       </Card>
 
-      {/* Mistake Entries Feed */}
+      {/* Mistake To-Do Checklist Feed */}
       {loading ? (
-        <div className="py-16 text-center">
+        <div className="py-20 text-center">
           <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
+          <p className="text-xs text-muted-foreground mt-2">Loading your mistake checklist...</p>
         </div>
       ) : data.mistakes.length === 0 ? (
         <Card className="text-center py-16 border-dashed bg-card/30">
-          <CardContent className="space-y-3">
-            <BookOpen className="w-10 h-10 text-muted-foreground mx-auto opacity-40" />
-            <h3 className="font-headline font-bold text-lg">No Mistakes Logged Here</h3>
-            <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-              Every topper keeps a mistake diary. When you get a question wrong in tests or concept practice, log it here to cement your learning!
-            </p>
-            <Button size="sm" onClick={() => setIsCreateOpen(true)} className="mt-2">
-              <Plus className="w-3.5 h-3.5 mr-1.5" /> Log Your First Mistake
-            </Button>
+          <CardContent className="space-y-4 max-w-md mx-auto">
+            <BookOpen className="w-12 h-12 text-muted-foreground mx-auto opacity-40" />
+            <div>
+              <h3 className="font-headline font-bold text-lg">No Mistakes In This View!</h3>
+              <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                Whenever you complete an oral defense in <strong>Concept Mirror</strong> or evaluate written &amp; spoken answers in <strong>Nichod</strong>, our AI automatically extracts your blunders with full LaTeX equations and places them here in your checklist!
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <Link href="/dashboard/concept-mirror">
+                <Button variant="outline" size="sm" className="text-xs">
+                  <BrainCircuit className="w-3.5 h-3.5 mr-1.5 text-primary" />
+                  Try Concept Mirror
+                </Button>
+              </Link>
+              <Link href="/dashboard">
+                <Button size="sm" className="text-xs">
+                  <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+                  Practice Nichod Topics
+                </Button>
+              </Link>
+            </div>
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3.5">
           {data.mistakes.map((item) => {
             const errType = ERROR_TYPE_MAP[item.errorType] || ERROR_TYPE_MAP.conceptual;
-            const isMastered = item.status === "mastered";
+            const isRectified = item.status === "mastered";
 
             return (
               <Card
                 key={item.id}
-                className={`border transition-shadow hover:shadow-md ${
-                  isMastered ? "bg-card/40 opacity-80" : "bg-card/90"
+                className={`border transition-all duration-200 ${
+                  isRectified
+                    ? "bg-card/40 border-border/60 opacity-80"
+                    : "bg-card/90 border-border hover:border-primary/40 shadow-sm"
                 }`}
               >
-                <CardHeader className="py-3 px-4 pb-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Badge variant="outline" className="text-[11px] font-semibold">
-                        {item.subject}
-                      </Badge>
-                      {item.chapter && (
-                        <span className="text-xs text-muted-foreground">• {item.chapter}</span>
-                      )}
-                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${errType.color}`}>
-                        {errType.icon} {errType.label}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant={isMastered ? "outline" : "default"}
-                        size="sm"
+                <div className="p-4 space-y-3">
+                  {/* Top To-Do Row: Checkbox, Metadata & Toggle Action */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                      {/* Interactive To-Do Checkbox */}
+                      <button
+                        type="button"
                         onClick={() => handleToggleStatus(item)}
-                        className={`h-7 px-2.5 text-xs flex items-center gap-1.5 ${
-                          isMastered
-                            ? "text-emerald-500 hover:text-emerald-600 border-emerald-500/40"
-                            : "bg-emerald-600 hover:bg-emerald-700 text-white"
+                        title={isRectified ? "Mark as Needs Revision" : "Mark as Mistake Rectified"}
+                        className={`mt-0.5 shrink-0 transition-transform active:scale-95 ${
+                          isRectified ? "text-emerald-500 hover:text-emerald-400" : "text-muted-foreground hover:text-primary"
                         }`}
                       >
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        {isMastered ? "Mastered" : "Mark as Mastered"}
+                        {isRectified ? (
+                          <CheckSquare className="w-5 h-5 fill-emerald-500/10" />
+                        ) : (
+                          <Square className="w-5 h-5" />
+                        )}
+                      </button>
+
+                      {/* Header and Details */}
+                      <div className="space-y-1 min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline" className="text-[11px] font-semibold">
+                            {item.subject}
+                          </Badge>
+                          {item.chapter && (
+                            <span className="text-xs text-muted-foreground">• {item.chapter}</span>
+                          )}
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${errType.color}`}>
+                            {errType.icon} {errType.label}
+                          </span>
+
+                          {/* Source indicator */}
+                          {item.source === "concept_mirror" ? (
+                            <Badge variant="outline" className="text-[10px] bg-purple-500/10 text-purple-300 border-purple-500/30">
+                              <BrainCircuit className="w-3 h-3 mr-1" /> Concept Mirror AI
+                            </Badge>
+                          ) : item.source === "nichod" ? (
+                            <Badge variant="outline" className="text-[10px] bg-blue-500/10 text-blue-300 border-blue-500/30">
+                              <Sparkles className="w-3 h-3 mr-1" /> Nichod AI
+                            </Badge>
+                          ) : null}
+                        </div>
+
+                        {/* Title with LaTeX support */}
+                        <div className={`text-base font-bold font-headline pt-0.5 ${isRectified ? "line-through text-muted-foreground" : "text-foreground"}`}>
+                          <LatexRenderer content={item.title} />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Actions: Direct status button & delete */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button
+                        variant={isRectified ? "outline" : "default"}
+                        size="sm"
+                        onClick={() => handleToggleStatus(item)}
+                        className={`h-7 px-2.5 text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                          isRectified
+                            ? "border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10"
+                            : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                        }`}
+                      >
+                        {isRectified ? (
+                          <>
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            <span>Needs Revision</span>
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Mistake Rectified</span>
+                          </>
+                        )}
                       </Button>
 
                       <Button
@@ -537,55 +439,65 @@ export function MistakeNotebook() {
                     </div>
                   </div>
 
-                  <CardTitle className="text-base font-bold font-headline mt-1.5">
-                    <LatexRenderer content={item.title} />
-                  </CardTitle>
-                </CardHeader>
-
-                <CardContent className="py-2 px-4 space-y-3">
+                  {/* Problem Statement Prompt if present */}
                   {item.questionOrPrompt && (
                     <div className="text-xs bg-muted/40 p-2.5 rounded-lg border border-border/60">
                       <span className="font-semibold text-muted-foreground block text-[11px] mb-1">
-                        Problem Statement:
+                        Context / Question Prompt:
                       </span>
                       <LatexRenderer content={item.questionOrPrompt} />
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                    {/* The Mistake */}
+                  {/* Side-by-Side Diagnostic Breakdown */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs pt-1">
+                    {/* The Mistake / Blunder */}
                     <div className="bg-rose-500/10 border border-rose-500/30 p-3 rounded-lg space-y-1">
                       <span className="text-[11px] font-bold text-rose-400 flex items-center gap-1">
-                        <span>❌ What Went Wrong</span>
+                        <span>❌ What Went Wrong (Your Mistake)</span>
                       </span>
                       <div className="text-foreground/90 leading-relaxed">
                         <LatexRenderer content={item.myMistake} />
                       </div>
                     </div>
 
-                    {/* The Correct Concept */}
+                    {/* The Corrected Concept with LaTeX */}
                     <div className="bg-emerald-500/10 border border-emerald-500/30 p-3 rounded-lg space-y-1">
                       <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1">
-                        <span>✅ Correct Concept / Formula</span>
+                        <span>✅ Correct Concept / Formula (Rectification)</span>
                       </span>
                       <div className="text-foreground/90 leading-relaxed">
                         <LatexRenderer content={item.correctConcept} />
                       </div>
                     </div>
                   </div>
-                </CardContent>
 
-                <CardFooter className="py-2 px-4 border-t text-[11px] text-muted-foreground flex items-center justify-between">
-                  <span>Logged {new Date(item.createdAt).toLocaleDateString()}</span>
-                  {item.reviewCount > 0 && <span>Reviewed {item.reviewCount} time(s)</span>}
-                </CardFooter>
+                  {/* Footer status row */}
+                  <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1 border-t border-border/40">
+                    <span className="flex items-center gap-1.5">
+                      Status:{" "}
+                      {isRectified ? (
+                        <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3" /> Rectified
+                        </span>
+                      ) : (
+                        <span className="text-rose-400 font-semibold flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" /> Needs Revision
+                        </span>
+                      )}
+                    </span>
+                    <span>
+                      {item.reviewCount > 0 ? `Reviewed ${item.reviewCount} time(s)` : "Pending review"}
+                    </span>
+                  </div>
+                </div>
               </Card>
             );
           })}
         </div>
       )}
 
-      {/* Interactive Mistake Quiz Drill Modal */}
+      {/* Interactive Diagnostic Drill Modal */}
       <Dialog open={isQuizOpen} onOpenChange={setIsQuizOpen}>
         <DialogContent className="sm:max-w-[560px]">
           <DialogHeader>
@@ -594,7 +506,7 @@ export function MistakeNotebook() {
               Mistake Rectification Drill
             </DialogTitle>
             <DialogDescription>
-              A rapid diagnostic drill targeting your logged blunders.
+              Rapid 3-question diagnostic test targeting your unresolved mistakes.
             </DialogDescription>
           </DialogHeader>
 
@@ -602,83 +514,118 @@ export function MistakeNotebook() {
             <div className="py-12 text-center space-y-3">
               <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
               <p className="text-xs text-muted-foreground">
-                Analyzing your logged mistakes and generating a custom diagnostic quiz...
+                Analyzing your active mistakes and crafting diagnostic questions with LaTeX...
               </p>
             </div>
           ) : quizCompleted ? (
-            <div className="py-8 text-center space-y-4">
-              <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto animate-bounce" />
-              <h3 className="text-xl font-headline font-bold">Drill Completed!</h3>
-              <p className="text-sm text-muted-foreground">
-                You scored <span className="text-primary font-bold">{quizScore} / {quizQuestions.length}</span> on your mistake revision drill.
-              </p>
-              <Button size="sm" onClick={() => setIsQuizOpen(false)} className="mt-2">
-                Back to Notebook
-              </Button>
+            <div className="py-6 text-center space-y-4">
+              <div className="w-16 h-16 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto text-2xl font-bold font-headline">
+                {quizScore} / {quizQuestions.length}
+              </div>
+              <div>
+                <h3 className="font-bold text-lg font-headline">
+                  {quizScore === quizQuestions.length
+                    ? "Outstanding Mastery! 🎯"
+                    : quizScore >= 2
+                    ? "Great Progress! 👏"
+                    : "Needs More Practice! 📚"}
+                </h3>
+                <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
+                  {quizScore === quizQuestions.length
+                    ? "You answered all diagnostic questions correctly! You can now mark these mistakes as rectified in your checklist."
+                    : "Review the takeaways in your notebook and drill again until you hit 100% accuracy."}
+                </p>
+              </div>
+              <DialogFooter>
+                <Button size="sm" onClick={() => setIsQuizOpen(false)} className="mx-auto">
+                  Back to Mistake Checklist
+                </Button>
+              </DialogFooter>
             </div>
-          ) : quizQuestions.length > 0 ? (
-            <div className="py-3 space-y-4 text-xs">
-              <div className="flex items-center justify-between text-muted-foreground">
-                <span>Question {currentQIndex + 1} of {quizQuestions.length}</span>
-                <span className="text-[11px] font-medium text-primary">
-                  Targeting: {quizQuestions[currentQIndex].relatedMistake}
+          ) : quizQuestions.length > 0 && currentQIndex < quizQuestions.length ? (
+            <div className="space-y-4 py-2">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>
+                  Question {currentQIndex + 1} of {quizQuestions.length}
                 </span>
+                <span className="font-semibold text-primary">Score: {quizScore}</span>
               </div>
 
-              <div className="bg-muted/40 p-3 rounded-lg border text-sm leading-relaxed font-medium">
+              {quizQuestions[currentQIndex].relatedMistake && (
+                <div className="text-[11px] text-muted-foreground bg-muted/40 p-2 rounded border">
+                  Targeting blunder:{" "}
+                  <strong className="text-foreground">
+                    <LatexRenderer content={quizQuestions[currentQIndex].relatedMistake} />
+                  </strong>
+                </div>
+              )}
+
+              {/* Question Text with LaTeX support */}
+              <div className="text-sm font-semibold p-3 rounded-lg bg-card border leading-relaxed">
                 <LatexRenderer content={quizQuestions[currentQIndex].question} />
               </div>
 
+              {/* Options with LaTeX support */}
               <div className="space-y-2">
-                {quizQuestions[currentQIndex].options.map((opt, oIdx) => {
-                  const isSelected = selectedOption === oIdx;
-                  const isCorrect = oIdx === quizQuestions[currentQIndex].correctIndex;
+                {quizQuestions[currentQIndex].options.map((opt, idx) => {
+                  const isSelected = selectedOption === idx;
+                  const isCorrect = idx === quizQuestions[currentQIndex].correctIndex;
                   const hasAnswered = selectedOption !== null;
 
-                  let btnStyle = "border-border hover:bg-muted/60";
+                  let optClass = "border-border hover:bg-muted/60";
                   if (hasAnswered) {
-                    if (isCorrect) btnStyle = "bg-emerald-500/15 border-emerald-500 text-emerald-400 font-bold";
-                    else if (isSelected) btnStyle = "bg-rose-500/15 border-rose-500 text-rose-400";
+                    if (isCorrect) {
+                      optClass = "border-emerald-500 bg-emerald-500/10 text-emerald-400 font-bold";
+                    } else if (isSelected) {
+                      optClass = "border-rose-500 bg-rose-500/10 text-rose-400";
+                    } else {
+                      optClass = "opacity-50 border-border";
+                    }
                   }
 
                   return (
                     <button
-                      key={oIdx}
+                      key={idx}
+                      type="button"
                       disabled={hasAnswered}
-                      onClick={() => handleSelectOption(oIdx)}
-                      className={`w-full p-2.5 rounded-lg border text-left flex items-start gap-2.5 transition-colors ${btnStyle}`}
+                      onClick={() => handleSelectOption(idx)}
+                      className={`w-full text-left p-3 rounded-lg border text-xs transition-colors flex items-center justify-between ${optClass}`}
                     >
-                      <span className="font-mono text-xs opacity-60">
-                        {String.fromCharCode(65 + oIdx)}.
-                      </span>
-                      <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-muted-foreground font-bold">
+                          {String.fromCharCode(65 + idx)}.
+                        </span>
                         <LatexRenderer content={opt} />
                       </div>
+                      {hasAnswered && isCorrect && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
                     </button>
                   );
                 })}
               </div>
 
+              {/* Explanation card after answering with LaTeX */}
               {selectedOption !== null && (
-                <div className="p-3 rounded-lg bg-primary/10 border border-primary/20 space-y-1 animate-in fade-in">
-                  <p className="font-bold text-primary flex items-center gap-1.5">
-                    {selectedOption === quizQuestions[currentQIndex].correctIndex ? "✅ Correct!" : "❌ Incorrect"}
-                  </p>
-                  <p className="text-muted-foreground leading-relaxed">
+                <div className="text-xs p-3 rounded-lg bg-muted/60 border space-y-1">
+                  <span className="font-bold text-foreground block">
+                    {selectedOption === quizQuestions[currentQIndex].correctIndex
+                      ? "Correct! 🎉"
+                      : "Incorrect ❌"}
+                  </span>
+                  <div className="text-muted-foreground leading-relaxed">
                     <LatexRenderer content={quizQuestions[currentQIndex].explanation} />
-                  </p>
+                  </div>
                 </div>
               )}
 
               <DialogFooter className="pt-2">
-                <Button
-                  size="sm"
-                  onClick={handleNextQuestion}
-                  disabled={selectedOption === null}
-                  className="w-full sm:w-auto"
-                >
-                  {currentQIndex + 1 < quizQuestions.length ? "Next Question" : "See Results"}
-                </Button>
+                {selectedOption !== null && (
+                  <Button size="sm" onClick={handleNextQuestion} className="ml-auto flex items-center gap-1">
+                    <span>
+                      {currentQIndex + 1 < quizQuestions.length ? "Next Question" : "View Results"}
+                    </span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </Button>
+                )}
               </DialogFooter>
             </div>
           ) : null}

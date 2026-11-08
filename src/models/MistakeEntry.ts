@@ -10,6 +10,7 @@ export interface IMistakeEntry extends Document {
   myMistake: string;
   correctConcept: string;
   status: "unresolved" | "mastered";
+  source?: "concept_mirror" | "nichod" | "manual";
   reviewCount: number;
   lastReviewedAt?: Date;
   createdAt: Date;
@@ -33,6 +34,11 @@ const MistakeEntrySchema = new Schema<IMistakeEntry>({
     enum: ["unresolved", "mastered"],
     default: "unresolved",
     index: true,
+  },
+  source: {
+    type: String,
+    enum: ["concept_mirror", "nichod", "manual"],
+    default: "manual",
   },
   reviewCount: { type: Number, default: 0 },
   lastReviewedAt: { type: Date },

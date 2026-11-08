@@ -5,6 +5,17 @@ import { callOpenRouter, parseJsonResponse } from '@/lib/openrouter';
 import { verifySessionCookie } from '@/lib/session';
 import dbConnect from '@/lib/mongoose';
 import ConceptMirror from '@/models/ConceptMirror';
+import MistakeEntry from '@/models/MistakeEntry';
+
+export type DetectedMistake = {
+  title: string;
+  subject: string;
+  chapter?: string;
+  errorType: "conceptual" | "calculation" | "formula" | "misread";
+  questionOrPrompt?: string;
+  myMistake: string;
+  correctConcept: string;
+};
 
 export type MasteryReportOutput = {
   feedback_summary: string;
@@ -15,6 +26,7 @@ export type MasteryReportOutput = {
   overallScore?: number;
   durationSeconds?: number;
   fluffPercentage?: number;
+  detected_mistakes?: DetectedMistake[];
 };
 
 export type AnalyzeConceptExplanationInput = {
@@ -88,6 +100,12 @@ CRITICAL FORMATTING RULES:
 2. NEVER use raw slashes like "$/" or unformatted ASCII math.
 3. Use simple, direct, engaging language with clear sub-points and real-life analogies where appropriate.
 
+4. AUTO-GENERATED MISTAKE NOTEBOOK (LATEX FORMULAS & ACTIONABLE TO-DO ITEMS):
+   - You must detect and extract any specific mistakes, conceptual slips, missing minus signs/constants, false assumptions, or inaccurate formulas made by the student during their oral defense.
+   - For every mistake detected, return a concrete mistake item in "detected_mistakes".
+   - You MUST format all mathematical and scientific expressions, formulas, and variables in LaTeX ($...$ inline or $$...$$ display). E.g. $e = -\\frac{d\\Phi}{dt}$, $\\Delta S \\ge 0$, $\\vec{F} = m\\vec{a}$.
+   - If the student's verbal explanation was 100% flawless with zero slips, return an empty array [].
+
 Respond with ONLY a valid JSON object (no markdown, pure JSON):
 {
   "feedback_summary": "<constructive, rigorous critique mentioning their time utilization (${durationSeconds}s / 120s) and specific fluff percentage with LaTeX equations formatted as $...$ or $$...$$>",
@@ -115,6 +133,17 @@ Respond with ONLY a valid JSON object (no markdown, pure JSON):
     {"step": "Analytical Nuance", "score": <0-100>},
     {"step": "Synthesis & Proof", "score": <0-100>},
     {"step": "Final Mastery", "score": <0-100>}
+  ],
+  "detected_mistakes": [
+    {
+      "title": "<Concise title of specific mistake / conceptual slip>",
+      "subject": "Physics",
+      "chapter": "${conceptName}",
+      "errorType": "conceptual",
+      "questionOrPrompt": "Concept Oral Defense: ${conceptName}",
+      "myMistake": "<Exact error or conceptual flaw in their spoken words with LaTeX math>",
+      "correctConcept": "<Rigorous correction with accurate LaTeX math equations e.g. $e = -\\frac{d\\Phi}{dt}$>"
+    }
   ]
 }
 
@@ -187,6 +216,26 @@ CRITICAL: pie_chart_data values MUST sum to exactly 100.`;
       radarData: output.radar_chart_data,
       pieData: output.pie_chart_data,
     });
+
+    // Auto-populate student's Mistake Notebook To-Do List with detected mistakes
+    if (Array.isArray(output.detected_mistakes) && output.detected_mistakes.length > 0) {
+      for (const m of output.detected_mistakes.slice(0, 5)) {
+        if (!m.title || !m.myMistake || !m.correctConcept) continue;
+        await MistakeEntry.create({
+          userId: sessionUuid,
+          title: m.title.trim().slice(0, 120),
+          subject: m.subject || "General",
+          chapter: (m.chapter || conceptName).trim().slice(0, 80),
+          errorType: m.errorType || "conceptual",
+          questionOrPrompt: (m.questionOrPrompt || `Concept Oral Defense: ${conceptName}`).trim().slice(0, 3000),
+          myMistake: m.myMistake.trim().slice(0, 2500),
+          correctConcept: m.correctConcept.trim().slice(0, 2500),
+          status: "unresolved",
+          source: "concept_mirror",
+          createdAt: new Date(),
+        });
+      }
+    }
   } catch (dbErr) {
     console.warn("Could not persist ConceptMirror record:", dbErr);
   }
