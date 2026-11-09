@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,15 +11,14 @@ import { useToast } from "@/hooks/use-toast";
 import { 
   Heart, Copy, Check, ArrowLeft, QrCode, Sparkles, ShieldCheck, 
   Award, Star, Users, ExternalLink, ArrowRight, Loader2, Zap,
-  CheckCircle2, Info, ChevronDown, ChevronUp, Lock, UserCheck, LogIn
+  CheckCircle2, Info, Lock, LogIn, Smartphone, History, Trophy
 } from "lucide-react";
 import { IndianRupee } from "lucide-react";
 import { Rupee } from "@/components/ui/rupee-symbol";
 import { 
   getDonationInfoAction, 
-  createDonationCheckoutAction,
-  getCurrentUserDonationContextAction,
-  checkDonationStatusAction
+  submitDonationUtrAction,
+  getCurrentUserDonationContextAction
 } from "@/app/actions/donation";
 
 interface DonationSettings {
@@ -33,10 +31,23 @@ interface DonationSettings {
 interface DonorCard {
   uuid: string;
   username: string;
+  totalAmount?: number;
   amount: number;
+  donationCount?: number;
   tier: "Supporter" | "Patron" | "Benefactor" | "Legend";
+  latestMessage?: string;
   message?: string;
+  lastDonatedAt?: string;
   donatedAt: string;
+}
+
+interface RecentTransaction {
+  uuid: string;
+  username: string;
+  amount: number;
+  utr: string;
+  donatedAt: string;
+  message?: string;
 }
 
 const PRESET_AMOUNTS = [
@@ -68,89 +79,90 @@ function getTierForAmount(amt: number): "Supporter" | "Patron" | "Benefactor" | 
   return "Supporter";
 }
 
+function formatRelativeTime(dateString: string) {
+  try {
+    const diff = Date.now() - new Date(dateString).getTime();
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 1) return "Just now";
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 30) return `${days}d ago`;
+    return new Date(dateString).toLocaleDateString("en-IN", { month: "short", day: "numeric" });
+  } catch {
+    return "Recently";
+  }
+}
+
 function DonatePageContent() {
   const { toast } = useToast();
-  const searchParams = useSearchParams();
 
-  // Settings & Donors state
+  // Settings, Donors & Recent Activity state
   const [settings, setSettings] = useState<DonationSettings | null>(null);
   const [donors, setDonors] = useState<DonorCard[]>([]);
+  const [recentTransactions, setRecentTransactions] = useState<RecentTransaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [copied, setCopied] = useState(false);
-  const [showManualQr, setShowManualQr] = useState(false);
 
   // Form State
   const [selectedAmount, setSelectedAmount] = useState<number | null>(100);
   const [customAmount, setCustomAmount] = useState<string>("");
+  const [utrNumber, setUtrNumber] = useState<string>("");
+  const [userMessage, setUserMessage] = useState<string>("");
   const [username, setUsername] = useState<string>("");
   const [isLoggedInUser, setIsLoggedInUser] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Success Celebration State
-  const [successOrderId, setSuccessOrderId] = useState<string | null>(null);
-  const [confirmedDonor, setConfirmedDonor] = useState<DonorCard | null>(null);
+  const [verifiedDonor, setVerifiedDonor] = useState<{
+    username: string;
+    contributed: number;
+    totalAmount: number;
+    donationCount: number;
+    tier: string;
+  } | null>(null);
 
   const activeAmount = customAmount !== "" ? Number(customAmount) || 0 : (selectedAmount || 100);
   const currentTier = getTierForAmount(activeAmount);
+  const receiverUpiId = settings?.upiId || "harsh.2525@ptaxis";
 
-  // Load initial settings and current user context
+  // Construct dynamic UPI Intent URI
+  const upiIntentUri = `upi://pay?pa=${encodeURIComponent(receiverUpiId)}&pn=${encodeURIComponent("ConceptNichod")}&am=${activeAmount}&cu=INR&tn=${encodeURIComponent(`ConceptNichod Patron ${username || "Student"}`)}`;
+  const dynamicQrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=8&data=${encodeURIComponent(upiIntentUri)}`;
+
+  // Load initial settings, donors, and current user context
   useEffect(() => {
     Promise.all([
       getDonationInfoAction(),
       getCurrentUserDonationContextAction()
     ])
-      .then(([infoRes, userRes]) => {
-        if (infoRes.success) {
-          setSettings(infoRes.settings);
-          setDonors(infoRes.donors || []);
+      .then(([donationRes, userRes]) => {
+        if (donationRes.success) {
+          if (donationRes.settings) setSettings(donationRes.settings);
+          if (donationRes.donors) setDonors(donationRes.donors);
+          if (donationRes.recentTransactions) setRecentTransactions(donationRes.recentTransactions);
         }
         if (userRes.success && userRes.username) {
           setUsername(userRes.username);
           setIsLoggedInUser(true);
-        } else {
-          setIsLoggedInUser(false);
         }
       })
-      .catch((err) => console.error("Failed to load donation context:", err))
-      .finally(() => setIsLoading(false));
+      .catch((err) => {
+        console.error("Failed to load donation context:", err);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
   }, []);
 
-  // Handle return from MysticPayments checkout (?status=success&orderId=...&paymentId=...)
-  useEffect(() => {
-    const statusParam = searchParams.get("status");
-    const orderIdParam = searchParams.get("orderId");
-    const paymentIdParam = searchParams.get("paymentId");
-
-    if (statusParam === "success" && (orderIdParam || paymentIdParam)) {
-      const orderKey = orderIdParam || paymentIdParam || "";
-      setSuccessOrderId(orderKey);
-      toast({
-        title: "🎉 Payment Successful!",
-        description: "Your patronage is verified and immortalized in the Hall of Patrons.",
-      });
-
-      // Probe donation status with gateway reconciliation fallback
-      checkDonationStatusAction(orderKey, paymentIdParam || undefined).then((res) => {
-        if (res.success && res.isConfirmed && res.donor) {
-          setConfirmedDonor(res.donor);
-        }
-        // Refresh donor list
-        getDonationInfoAction().then((freshRes) => {
-          if (freshRes.success && freshRes.donors) {
-            setDonors(freshRes.donors);
-          }
-        });
-      });
-    }
-  }, [searchParams, toast]);
-
   const handleCopyUpi = () => {
-    if (!settings?.upiId) return;
-    navigator.clipboard.writeText(settings.upiId);
+    if (!receiverUpiId) return;
+    navigator.clipboard.writeText(receiverUpiId);
     setCopied(true);
     toast({
       title: "UPI ID Copied!",
-      description: `${settings.upiId} copied to clipboard.`,
+      description: `${receiverUpiId} copied to clipboard.`,
     });
     setTimeout(() => setCopied(false), 2500);
   };
@@ -170,13 +182,19 @@ function DonatePageContent() {
     }
   };
 
-  const handleProceedToPayment = async (e: React.FormEvent) => {
+  const handleUtrChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Only allow alphanumeric uppercase characters up to 12 digits
+    const clean = e.target.value.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 12);
+    setUtrNumber(clean);
+  };
+
+  const handleSubmitUtrVerification = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!isLoggedInUser || !username) {
       toast({
         title: "Sign In Required",
-        description: "Please sign in with your account to make a donation.",
+        description: "Please sign in with your ConceptNichod account to verify your donation.",
         variant: "destructive",
       });
       return;
@@ -191,53 +209,69 @@ function DonatePageContent() {
       return;
     }
 
+    const cleanUtr = utrNumber.trim();
+    if (cleanUtr.length !== 12) {
+      toast({
+        title: "12-Digit UTR Required",
+        description: `Please enter the complete 12-digit UPI reference number. Currently ${cleanUtr.length}/12 digits entered.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      const res = await createDonationCheckoutAction({
+      const res = await submitDonationUtrAction({
         amount: activeAmount,
-        username: username.trim().replace(/^@+/, ""),
+        utr: cleanUtr,
+        message: userMessage.trim(),
       });
 
-      if (res.success && res.checkoutUrl) {
-        // Strip BOM and whitespace, ensuring clean absolute URL navigation
-        const cleanUrl = res.checkoutUrl.replace(/^[\uFEFF\u200B\u200C\u200D\s]+/, "").trim();
+      if (res.success && res.donor) {
+        setVerifiedDonor({
+          username,
+          contributed: res.contributedAmount || activeAmount,
+          totalAmount: res.totalAmount || activeAmount,
+          donationCount: res.donationCount || 1,
+          tier: res.donor.tier,
+        });
 
-        if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
-          toast({
-            title: "Checkout Redirection Error",
-            description: "Received an invalid checkout URL format from gateway.",
-            variant: "destructive",
-          });
-          setIsSubmitting(false);
-          return;
-        }
+        // Reset UTR & message inputs
+        setUtrNumber("");
+        setUserMessage("");
 
         toast({
-          title: "Redirecting to MysticPayments...",
-          description: "Opening sovereign UPI checkout portal.",
+          title: "Payment Verified Successfully! 🎉",
+          description: `Thank you @${username}! Your contribution has been verified and added to the Hall of Patrons.`,
         });
-        window.location.assign(cleanUrl);
+
+        // Refresh donor list and recent transactions
+        const fresh = await getDonationInfoAction();
+        if (fresh.success) {
+          if (fresh.donors) setDonors(fresh.donors);
+          if (fresh.recentTransactions) setRecentTransactions(fresh.recentTransactions);
+        }
       } else {
         toast({
-          title: "Payment Initialization Failed",
-          description: res.error || "Could not launch checkout session. Please try again.",
+          title: "Verification Notice",
+          description: res.error || "Could not verify UTR. Please double-check your receipt.",
           variant: "destructive",
         });
-        setIsSubmitting(false);
       }
     } catch (err: any) {
       toast({
-        title: "Error",
-        description: err?.message || "An unexpected error occurred.",
+        title: "Verification Error",
+        description: err?.message || "An unexpected error occurred while verifying your UTR.",
         variant: "destructive",
       });
+    } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
     <div className="min-h-screen bg-background text-foreground py-6 sm:py-10 px-3.5 sm:px-6 lg:px-8 pb-safe">
-      <div className="max-w-6xl mx-auto space-y-6 sm:space-y-10">
+      <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8">
         
         {/* Top Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-border/60 pb-6">
@@ -253,75 +287,100 @@ function DonatePageContent() {
               <span>Support ConceptNichod</span>
             </h1>
             <p className="text-sm sm:text-base text-muted-foreground max-w-2xl">
-              ConceptNichod is dedicated to building 100% free, concept-first cognitive learning tools for every competitive aspirant and student across India. Your direct patronage sustains our servers and AI compute.
+              100% free, concept-first education for competitive aspirants across India. Your direct patronage sustains our servers, database, and AI compute.
             </p>
           </div>
 
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="px-3 py-1 text-xs border-primary/30 bg-primary/5 text-primary flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5" /> Direct Community Driven
+              <ShieldCheck className="w-3.5 h-3.5" /> Direct UPI • 0% Commission
             </Badge>
           </div>
         </div>
 
-        {/* Celebration Banner if returned with ?status=success */}
-        {successOrderId && (
-          <Card className="border-emerald-500/50 bg-emerald-500/10 shadow-lg overflow-hidden animate-in fade-in slide-in-from-top-4 duration-500">
-            <CardContent className="p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4 justify-between">
+        {/* Live Recent Transactions Feed Banner */}
+        {recentTransactions.length > 0 && (
+          <div className="bg-muted/30 border border-border/80 rounded-2xl p-3.5 sm:p-4 overflow-hidden">
+            <div className="flex items-center gap-2 mb-2.5 text-xs font-bold text-muted-foreground uppercase tracking-wider">
+              <History className="w-3.5 h-3.5 text-primary animate-spin-slow" />
+              <span>Recent Contributions</span>
+            </div>
+            <div className="flex gap-2.5 overflow-x-auto pb-1.5 no-scrollbar scroll-smooth">
+              {recentTransactions.map((tx) => (
+                <div 
+                  key={tx.uuid} 
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-card border border-border/70 text-xs shrink-0 shadow-sm hover:border-primary/40 transition-colors"
+                >
+                  <span className="font-bold text-foreground">@{tx.username}</span>
+                  <span className="text-muted-foreground">contributed</span>
+                  <span className="font-black text-primary flex items-center">
+                    <Rupee amount={tx.amount} className="w-3 h-3 stroke-[2.8]" />
+                  </span>
+                  <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded font-mono">
+                    {formatRelativeTime(tx.donatedAt)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Celebration Banner after successful verification */}
+        {verifiedDonor && (
+          <Card className="border-emerald-500/50 bg-emerald-500/10 shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-4 duration-500">
+            <CardContent className="p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4 justify-between">
               <div className="flex items-center gap-3.5">
-                <div className="p-2.5 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
-                  <CheckCircle2 className="w-6 h-6" />
+                <div className="p-3 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 shrink-0">
+                  <CheckCircle2 className="w-7 h-7" />
                 </div>
                 <div>
                   <h3 className="text-base sm:text-lg font-bold text-foreground flex items-center gap-2">
-                    Payment Verified & Honored!
+                    Payment Verified & Celebrated!
                     <Sparkles className="w-4 h-4 text-amber-500" />
                   </h3>
                   <p className="text-xs sm:text-sm text-muted-foreground">
-                    {confirmedDonor
-                      ? `Thank you @${confirmedDonor.username}! Your ${confirmedDonor.tier} Patron badge is now live in the Hall of Patrons.`
-                      : "Thank you for empowering free education! Your patronage record is now active in the Hall of Patrons."}
+                    Thank you <strong>@{verifiedDonor.username}</strong>! You just contributed <strong className="text-foreground">₹{verifiedDonor.contributed}</strong>.
+                    Your cumulative patronage is now <strong className="text-primary font-bold">₹{verifiedDonor.totalAmount}</strong> across {verifiedDonor.donationCount} contribution{verifiedDonor.donationCount > 1 ? "s" : ""}.
                   </p>
                 </div>
               </div>
-              <Badge className="bg-emerald-600 text-white px-3 py-1 text-xs shrink-0">
-                Order #{successOrderId.slice(-8)}
+              <Badge className="bg-emerald-600 text-white px-3.5 py-1 text-xs shrink-0 font-bold">
+                {verifiedDonor.tier} Patron
               </Badge>
             </CardContent>
           </Card>
         )}
 
-        {/* Main Grid: Interactive Donation Checkout + Hall of Patrons */}
+        {/* Main Grid: Direct UPI Payment Widget + Hall of Patrons */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           
-          {/* Left Column: Interactive Payment Widget & Manual Fallback (5 Cols) */}
+          {/* Left Column: Direct In-App Payment & UTR Entry (5 Cols) */}
           <div className="lg:col-span-5 space-y-6">
             
-            {/* Interactive Patron Checkout Card */}
             <Card className="border-primary/40 shadow-xl bg-gradient-to-b from-card via-card to-card/95 overflow-hidden">
               <div className="h-2 bg-gradient-to-r from-rose-500 via-amber-500 to-primary" />
               
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between gap-2">
                   <CardTitle className="text-xl font-bold flex items-center gap-2 font-headline">
-                    <Zap className="w-5 h-5 text-amber-500" /> Become a Patron
+                    <Zap className="w-5 h-5 text-amber-500" /> Direct UPI Contribution
                   </CardTitle>
                   <Badge variant="outline" className={`text-[10px] font-bold ${getTierBadgeStyle(currentTier)}`}>
                     {currentTier} Tier
                   </Badge>
                 </div>
                 <CardDescription className="text-xs">
-                  Automated instant recognition • Sovereign 0% commission UPI gateway
+                  Scan QR, pay with any UPI App, and submit your 12-digit UTR below for instant recognition.
                 </CardDescription>
               </CardHeader>
 
               <CardContent className="space-y-5">
-                <form onSubmit={handleProceedToPayment} className="space-y-5">
+                <form onSubmit={handleSubmitUtrVerification} className="space-y-5">
                   
-                  {/* Preset Amount Chips with SVG Indian Rupee */}
+                  {/* Step 1: Select Amount */}
                   <div className="space-y-2">
                     <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Select Contribution Amount
+                      Step 1: Select Contribution Amount
                     </Label>
                     <div className="grid grid-cols-3 gap-2">
                       {PRESET_AMOUNTS.map((preset) => {
@@ -331,7 +390,7 @@ function DonatePageContent() {
                             key={preset.value}
                             type="button"
                             onClick={() => handleSelectPreset(preset.value)}
-                            className={`flex flex-col items-center justify-center py-2.5 px-1 rounded-xl border text-xs font-bold transition-all ${
+                            className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl border text-xs font-bold transition-all ${
                               isSelected
                                 ? "border-primary bg-primary text-primary-foreground shadow-md ring-2 ring-primary/20 scale-[1.02]"
                                 : "border-border/80 bg-muted/40 hover:bg-muted text-foreground"
@@ -350,14 +409,11 @@ function DonatePageContent() {
                     </div>
                   </div>
 
-                  {/* Custom Amount Input with SVG Indian Rupee */}
+                  {/* Custom Amount Input */}
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between text-xs">
                       <Label htmlFor="custom-amount" className="font-semibold text-muted-foreground flex items-center gap-1">
                         <span>Or Custom Amount</span>
-                        <span className="inline-flex items-center text-xs text-muted-foreground">
-                          (<IndianRupee className="w-3 h-3 inline stroke-[2]" />)
-                        </span>
                       </Label>
                       {activeAmount > 0 && (
                         <span className="text-muted-foreground">
@@ -379,209 +435,262 @@ function DonatePageContent() {
                     </div>
                   </div>
 
-                  {/* Username Field — STRICTLY UNEDITABLE & LOCKED */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-xs">
-                      <Label className="font-semibold text-muted-foreground flex items-center gap-1.5">
-                        <Lock className="w-3.5 h-3.5 text-primary" /> Patron Account Handle
-                      </Label>
-                      {isLoggedInUser && (
-                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
-                          <Check className="w-3 h-3" /> Verified Profile
-                        </span>
-                      )}
+                  {/* Step 2: Pay via Dynamic QR Code or 1-Tap UPI Apps */}
+                  <div className="space-y-3 pt-2 border-t border-border/60">
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
+                      <span>Step 2: Scan QR or Tap UPI App</span>
+                      <span className="text-primary font-bold font-mono">₹{activeAmount}</span>
+                    </Label>
+
+                    {/* Dynamic QR Box */}
+                    <div className="p-3 bg-white rounded-2xl shadow-sm border border-border/60 flex flex-col items-center justify-center max-w-[210px] mx-auto w-full aspect-square relative group">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img 
+                        src={dynamicQrCodeUrl} 
+                        alt="ConceptNichod UPI Payment QR" 
+                        className="w-full h-full object-contain rounded-lg"
+                      />
+                      <span className="text-[10px] text-slate-500 font-mono mt-1 font-semibold">
+                        Scan with GPay / PhonePe / Paytm
+                      </span>
                     </div>
 
+                    {/* VPA Display & Copy */}
+                    <div className="flex items-center gap-2 p-2 bg-muted/60 rounded-xl border border-border/80">
+                      <span className="text-xs text-muted-foreground font-semibold pl-1">VPA:</span>
+                      <span className="font-mono text-xs font-bold text-foreground px-1 truncate flex-1">
+                        {receiverUpiId}
+                      </span>
+                      <Button 
+                        size="sm" 
+                        type="button"
+                        variant="outline"
+                        onClick={handleCopyUpi} 
+                        className="shrink-0 gap-1.5 h-7 text-xs"
+                      >
+                        {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                        {copied ? "Copied" : "Copy"}
+                      </Button>
+                    </div>
+
+                    {/* 1-Tap Mobile Intent Buttons */}
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      <a 
+                        href={`phonepe://pay?pa=${encodeURIComponent(receiverUpiId)}&pn=ConceptNichod&am=${activeAmount}&cu=INR`}
+                        className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-purple-500/40 bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-300 text-xs font-bold transition-colors"
+                      >
+                        <Smartphone className="w-3.5 h-3.5" /> PhonePe
+                      </a>
+                      <a 
+                        href={`gpay://upi/pay?pa=${encodeURIComponent(receiverUpiId)}&pn=ConceptNichod&am=${activeAmount}&cu=INR`}
+                        className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-blue-500/40 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-300 text-xs font-bold transition-colors"
+                      >
+                        <Smartphone className="w-3.5 h-3.5" /> Google Pay
+                      </a>
+                      <a 
+                        href={`paytmmp://pay?pa=${encodeURIComponent(receiverUpiId)}&pn=ConceptNichod&am=${activeAmount}&cu=INR`}
+                        className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-sky-500/40 bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 dark:text-sky-300 text-xs font-bold transition-colors"
+                      >
+                        <Smartphone className="w-3.5 h-3.5" /> Paytm
+                      </a>
+                      <a 
+                        href={upiIntentUri}
+                        className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold transition-colors"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" /> Any UPI App
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* Step 3: Enter 12-Digit UTR */}
+                  <div className="space-y-2 pt-2 border-t border-border/60">
+                    <div className="flex items-center justify-between text-xs">
+                      <Label htmlFor="utr-input" className="font-semibold text-muted-foreground uppercase tracking-wider">
+                        Step 3: Enter 12-Digit UTR Number
+                      </Label>
+                      <span className={`font-mono text-xs font-bold ${utrNumber.length === 12 ? "text-emerald-500" : "text-muted-foreground"}`}>
+                        {utrNumber.length}/12 Digits
+                      </span>
+                    </div>
+
+                    <div className="relative">
+                      <Input
+                        id="utr-input"
+                        type="text"
+                        inputMode="text"
+                        autoComplete="off"
+                        maxLength={12}
+                        placeholder="e.g. 431289567123"
+                        value={utrNumber}
+                        onChange={handleUtrChange}
+                        className="font-mono text-base tracking-wider font-bold"
+                      />
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Enter the 12-digit UPI Reference / UTR Number found on your payment receipt.
+                    </p>
+                  </div>
+
+                  {/* Optional Message */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="user-message" className="text-xs font-semibold text-muted-foreground">
+                      Leave an Inspiring Message (Optional)
+                    </Label>
+                    <Input
+                      id="user-message"
+                      type="text"
+                      maxLength={140}
+                      placeholder="e.g. Keep up the amazing concept notes!"
+                      value={userMessage}
+                      onChange={(e) => setUserMessage(e.target.value)}
+                      className="text-xs"
+                    />
+                  </div>
+
+                  {/* Username Display / Auth Requirement */}
+                  <div className="space-y-1.5">
                     {isLoggedInUser ? (
-                      <div className="flex items-center justify-between gap-3 p-3 bg-muted/60 rounded-xl border border-border/80">
+                      <div className="flex items-center justify-between gap-3 p-2.5 bg-muted/60 rounded-xl border border-border/80">
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center font-black text-xs shrink-0">
+                          <span className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center font-black text-xs shrink-0">
                             @
                           </span>
-                          <span className="font-mono text-sm font-bold text-foreground truncate">
+                          <span className="font-mono text-xs font-bold text-foreground truncate">
                             {username}
                           </span>
                         </div>
-                        <Badge variant="outline" className="text-[10px] gap-1 shrink-0 bg-background/80 font-mono text-muted-foreground">
-                          <Lock className="w-2.5 h-2.5" /> Fixed
+                        <Badge variant="outline" className="text-[10px] gap-1 shrink-0 bg-background/80 font-mono text-emerald-600 dark:text-emerald-400">
+                          <Check className="w-2.5 h-2.5" /> Verified Account
                         </Badge>
                       </div>
                     ) : (
-                      <div className="p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-2.5">
+                      <div className="p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-2">
                         <div className="flex items-center gap-2 text-xs font-semibold text-amber-600 dark:text-amber-400">
                           <Info className="w-4 h-4 shrink-0" />
-                          <span>Sign in required to donate</span>
+                          <span>Sign in required to record your donation</span>
                         </div>
-                        <p className="text-xs text-muted-foreground leading-relaxed">
-                          To ensure every spot on the Hall of Patrons belongs to an authentic student, you must be signed in with your account.
-                        </p>
                         <Link href="/login?redirect=/donate" className="block">
                           <Button type="button" variant="outline" size="sm" className="w-full gap-2 text-xs h-8">
-                            <LogIn className="w-3.5 h-3.5" /> Sign In with Your Account
+                            <LogIn className="w-3.5 h-3.5" /> Sign In to Donate
                           </Button>
                         </Link>
                       </div>
                     )}
                   </div>
 
-                  {/* Submit CTA Button with SVG Indian Rupee */}
+                  {/* Submit CTA Button */}
                   <Button
                     type="submit"
-                    disabled={isSubmitting || activeAmount < 1 || !isLoggedInUser}
+                    disabled={isSubmitting || activeAmount < 1 || utrNumber.length !== 12 || !isLoggedInUser}
                     className="w-full h-11 text-sm font-bold bg-gradient-to-r from-rose-500 via-amber-500 to-primary hover:opacity-95 shadow-lg shadow-primary/20 gap-2"
                   >
                     {isSubmitting ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        Initiating MysticPayments Checkout...
+                        Verifying UTR & Updating Leaderboard...
                       </>
                     ) : !isLoggedInUser ? (
                       <>
                         <Lock className="w-4 h-4" />
-                        Sign In to Donate
+                        Sign In to Submit UTR
                       </>
                     ) : (
                       <>
-                        <span>Proceed to Pay via UPI •</span>
-                        <span className="inline-flex items-center gap-0.5">
-                          <IndianRupee className="w-3.5 h-3.5 stroke-[2.6]" />
-                          <span>{activeAmount.toLocaleString("en-IN")}</span>
-                        </span>
-                        <ArrowRight className="w-4 h-4" />
+                        <Check className="w-4 h-4" />
+                        <span>Verify UTR & Join Hall of Patrons</span>
                       </>
                     )}
                   </Button>
 
-                  {/* Security Assurance */}
-                  <div className="pt-1 flex items-center justify-center gap-2 text-[11px] text-muted-foreground">
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-                    <span>256-Bit Bank Encryption • Powered by MysticPayments</span>
+                  <div className="pt-0.5 flex items-center justify-center gap-2 text-[11px] text-muted-foreground text-center">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                    <span>Every UTR is strictly unique and verified against duplicate submissions.</span>
                   </div>
                 </form>
               </CardContent>
             </Card>
 
-            {/* Offline / Manual QR Accordion Fallback */}
-            <Card className="border-border/80 bg-card/60 overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setShowManualQr(!showManualQr)}
-                className="w-full p-4 flex items-center justify-between text-left hover:bg-muted/30 transition-colors"
-              >
-                <div className="flex items-center gap-2.5">
-                  <QrCode className="w-4 h-4 text-primary" />
-                  <span className="text-xs font-semibold text-foreground">
-                    Prefer Direct Offline UPI VPA / QR Scan?
-                  </span>
-                </div>
-                {showManualQr ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-              </button>
-
-              {showManualQr && (
-                <CardContent className="pt-0 pb-5 px-5 space-y-4 border-t border-border/60">
-                  <p className="text-xs text-muted-foreground pt-3">
-                    If you prefer paying outside the automated checkout, scan the official QR code or copy our VPA below:
-                  </p>
-
-                  <div className="p-3 bg-white rounded-xl shadow-inner border border-border/40 flex items-center justify-center max-w-[180px] mx-auto w-full aspect-square">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img 
-                      src={settings?.qrCodeUrl || "/qr.png"} 
-                      alt="Admin UPI QR Code" 
-                      className="w-full h-full object-contain rounded-lg"
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-2 p-2 bg-muted/60 rounded-xl border border-border/80">
-                    <span className="font-mono text-xs font-bold text-foreground px-2 truncate flex-1">
-                      {settings?.upiId || "harsh.2525@ptaxis"}
-                    </span>
-                    <Button 
-                      size="sm" 
-                      variant="outline"
-                      onClick={handleCopyUpi} 
-                      className="shrink-0 gap-1.5 h-7 text-xs"
-                    >
-                      {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                      {copied ? "Copied" : "Copy"}
-                    </Button>
-                  </div>
-
-                  <div className="bg-muted/40 p-3 rounded-lg text-[11px] text-muted-foreground space-y-1">
-                    <p className="font-medium text-foreground">Note for Offline Payers:</p>
-                    <p>
-                      {settings?.customInstructions || "Mention your username in UPI remarks. Offline payments are reviewed and added to the Hall of Patrons by the admin team."}
-                    </p>
-                  </div>
-                </CardContent>
-              )}
-            </Card>
-
           </div>
 
-          {/* Right Column: Hall of Patrons / Donor Wall (7 Cols) */}
+          {/* Right Column: Hall of Patrons / Cumulative Leaderboard (7 Cols) */}
           <div className="lg:col-span-7 space-y-6">
             <div className="flex items-center justify-between border-b border-border/60 pb-3">
               <div className="flex items-center gap-2">
-                <Users className="w-5 h-5 text-primary" />
+                <Trophy className="w-5 h-5 text-amber-500" />
                 <h2 className="text-xl font-bold font-headline">Hall of Patrons</h2>
               </div>
               <span className="text-xs text-muted-foreground bg-muted px-2.5 py-1 rounded-full font-medium">
-                {donors.length} Honored Benefactor{donors.length === 1 ? "" : "s"}
+                {donors.length} Honored Patron{donors.length === 1 ? "" : "s"}
               </span>
             </div>
 
             {donors.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {donors.map((donor) => (
-                  <Card 
-                    key={donor.uuid} 
-                    className={`border transition-all duration-300 hover:shadow-md ${
-                      successOrderId && donor.uuid === `mp_${successOrderId}`
-                        ? "border-emerald-500 ring-2 ring-emerald-500/20 bg-emerald-500/5"
-                        : "border-border/80 hover:border-primary/40 bg-card"
-                    }`}
-                  >
-                    <CardHeader className="p-4 pb-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="space-y-0.5">
-                          <CardTitle className="text-base font-bold flex items-center gap-1.5 font-headline">
-                            @{donor.username}
-                          </CardTitle>
-                          <span className="text-xs text-muted-foreground font-mono">
-                            {new Date(donor.donatedAt).toLocaleDateString("en-IN", {
-                              day: "numeric",
-                              month: "short",
-                              year: "numeric"
-                            })}
-                          </span>
+                {donors.map((donor, index) => {
+                  const displayTotal = donor.totalAmount !== undefined ? donor.totalAmount : donor.amount;
+                  const count = donor.donationCount || 1;
+                  const isTopRank = index < 3;
+
+                  return (
+                    <Card 
+                      key={donor.uuid || donor.username} 
+                      className={`border transition-all duration-300 hover:shadow-md ${
+                        verifiedDonor && donor.username === verifiedDonor.username
+                          ? "border-emerald-500 ring-2 ring-emerald-500/20 bg-emerald-500/5 scale-[1.01]"
+                          : isTopRank
+                          ? "border-amber-500/30 bg-card"
+                          : "border-border/80 hover:border-primary/40 bg-card"
+                      }`}
+                    >
+                      <CardHeader className="p-4 pb-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="space-y-0.5 min-w-0">
+                            <CardTitle className="text-base font-bold flex items-center gap-1.5 font-headline truncate">
+                              {index === 0 && <span className="text-amber-500 text-sm">🥇</span>}
+                              {index === 1 && <span className="text-slate-400 text-sm">🥈</span>}
+                              {index === 2 && <span className="text-amber-700 text-sm">🥉</span>}
+                              <span>@{donor.username}</span>
+                            </CardTitle>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground font-mono">
+                              <span>
+                                {donor.lastDonatedAt || donor.donatedAt 
+                                  ? formatRelativeTime(donor.lastDonatedAt || donor.donatedAt)
+                                  : "Supporter"}
+                              </span>
+                              {count > 1 && (
+                                <span className="bg-primary/10 text-primary px-1.5 py-0.2 rounded text-[10px] font-bold">
+                                  {count} donations
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <Badge variant="outline" className={`text-[10px] font-bold shrink-0 ${getTierBadgeStyle(donor.tier)}`}>
+                            {donor.tier}
+                          </Badge>
                         </div>
+                      </CardHeader>
 
-                        <Badge variant="outline" className={`text-[10px] font-bold ${getTierBadgeStyle(donor.tier)}`}>
-                          {donor.tier}
-                        </Badge>
-                      </div>
-                    </CardHeader>
-
-                    <CardContent className="p-4 pt-2 space-y-2">
-                      <div className="text-lg font-black text-primary flex items-center gap-1">
-                        <Rupee amount={donor.amount} className="w-4 h-4 stroke-[2.8]" />
-                      </div>
-                      {donor.message && (
-                        <p className="text-xs text-muted-foreground italic line-clamp-2">
-                          "{donor.message}"
-                        </p>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))}
+                      <CardContent className="p-4 pt-2 space-y-2">
+                        <div className="text-lg font-black text-primary flex items-center gap-1">
+                          <Rupee amount={displayTotal} className="w-4 h-4 stroke-[2.8]" />
+                        </div>
+                        {(donor.latestMessage || donor.message) && (
+                          <p className="text-xs text-muted-foreground italic line-clamp-2">
+                            "{donor.latestMessage || donor.message}"
+                          </p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             ) : (
               <Card className="p-8 text-center border-dashed border-border/80 bg-muted/10 space-y-3">
                 <Heart className="w-10 h-10 text-muted-foreground/60 mx-auto" />
                 <h3 className="text-base font-semibold">Be the First Patron</h3>
                 <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                  Select an amount and proceed to checkout on the left. Your contribution will be automatically celebrated right here!
+                  Scan the UPI QR code on the left, pay any amount, and enter your 12-digit UTR. Your contribution will be celebrated right here!
                 </p>
               </Card>
             )}

@@ -5,8 +5,8 @@ import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
 import DonationSetting from "@/models/DonationSetting";
 import Donor from "@/models/Donor";
+import DonationTransaction from "@/models/DonationTransaction";
 import { verifySessionCookie } from "@/lib/session";
-import { createMysticSession, cleanAndValidateUrl, getMysticPaymentStatus } from "@/lib/mystic-payments";
 import crypto from "crypto";
 
 const ADMIN_USERNAME = "mythicalhrg";
@@ -26,7 +26,8 @@ async function verifyAdmin() {
 }
 
 /**
- * Public action to retrieve donation settings and public donor cards
+ * Public action to retrieve donation settings, public donor leaderboard (summed),
+ * and recent contributions feed.
  */
 export async function getDonationInfoAction() {
   await dbConnect();
@@ -36,20 +37,170 @@ export async function getDonationInfoAction() {
     setting = await DonationSetting.create({
       upiId: "harsh.2525@ptaxis",
       qrCodeUrl: "/qr.png",
-      customInstructions: "Scan the QR code using Google Pay, PhonePe, Paytm, or BHIM UPI. Mention your username in the transaction notes so we can celebrate your support!",
+      customInstructions: "Scan the QR code using Google Pay, PhonePe, Paytm, or BHIM UPI. Enter your 12-digit UTR to be instantly recognized on the Hall of Patrons!",
       thankYouNote: "Thank you for empowering free, high-quality, concept-first education for every student."
     });
   }
 
+  // Retrieve donors ordered by total cumulative amount descending (Leaderboard)
   const donors = await Donor.find({ isPublic: true })
-    .sort({ amount: -1, createdAt: -1 })
+    .sort({ totalAmount: -1, amount: -1, lastDonatedAt: -1, createdAt: -1 })
+    .lean();
+
+  // Retrieve latest 10 verified transactions for the recent activity ticker
+  const recentTransactions = await DonationTransaction.find({ isPublic: true })
+    .sort({ donatedAt: -1 })
+    .limit(10)
     .lean();
 
   return {
     success: true,
     settings: JSON.parse(JSON.stringify(setting)),
     donors: JSON.parse(JSON.stringify(donors)),
+    recentTransactions: JSON.parse(JSON.stringify(recentTransactions)),
   };
+}
+
+/**
+ * Public action to submit and verify a 12-digit UPI Reference (UTR) number.
+ * Enforces strict 12-digit format, strict database deduplication,
+ * and cumulative multi-payment aggregation per username.
+ */
+export async function submitDonationUtrAction(payload: {
+  amount: number;
+  utr: string;
+  message?: string;
+}) {
+  const numericAmount = Math.round(Number(payload.amount));
+  if (!Number.isFinite(numericAmount) || numericAmount < 1) {
+    return { success: false, error: "Please enter a valid amount of at least ₹1." };
+  }
+
+  // 1. Authoritatively verify the caller's session
+  const rawSession = cookies().get("user_session")?.value;
+  const sessionUuid = verifySessionCookie(rawSession);
+  if (!sessionUuid) {
+    return { success: false, error: "Authentication required. Please log in to your ConceptNichod account to donate." };
+  }
+
+  await dbConnect();
+  const user = await User.findOne({ uuid: sessionUuid }).select("username fullName").lean();
+  if (!user) {
+    return { success: false, error: "Authenticated user account not found. Please log in again." };
+  }
+
+  const authenticatedUsername = user.username.trim().replace(/^@+/, "");
+
+  // 2. Strict 12-Digit UPI Reference (UTR) Format Validation
+  const rawUtr = String(payload.utr || "").trim().toUpperCase();
+  // Indian UPI UTRs are strictly 12 alphanumeric/numeric characters (NPCI standard)
+  const UTR_REGEX = /^[A-Z0-9]{12}$/;
+  if (!UTR_REGEX.test(rawUtr)) {
+    return { 
+      success: false, 
+      error: "Invalid UTR format. Please enter the exact 12-digit UPI Reference Number / UTR shown on your Google Pay, PhonePe, or Paytm receipt." 
+    };
+  }
+
+  // 3. Strict Deduplication Check: A UTR can NEVER be reused across any user or order!
+  const existingTx = await DonationTransaction.findOne({ utr: rawUtr }).lean();
+  if (existingTx) {
+    return { 
+      success: false, 
+      error: "This UPI Reference (UTR) has already been submitted or redeemed. Reusing old transactions is strictly prohibited." 
+    };
+  }
+
+  // 4. Record the fresh donation transaction
+  try {
+    await DonationTransaction.create({
+      uuid: crypto.randomUUID(),
+      utr: rawUtr,
+      username: authenticatedUsername,
+      userUuid: sessionUuid,
+      amount: numericAmount,
+      message: payload.message?.trim() || "ConceptNichod Patron Support",
+      donatedAt: new Date(),
+      isPublic: true,
+    });
+  } catch (err: any) {
+    if (err?.code === 11000 || String(err?.message || "").includes("duplicate key")) {
+      return { 
+        success: false, 
+        error: "This UPI Reference (UTR) has already been submitted. Duplicate submissions cannot be accepted." 
+      };
+    }
+    return { success: false, error: "Database error recording transaction. Please try again." };
+  }
+
+  // 5. Cumulative Summation: Calculate total sum of money donated by this username
+  const allUserTxs = await DonationTransaction.find({ username: authenticatedUsername }).lean();
+  const totalAmount = allUserTxs.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  const donationCount = allUserTxs.length;
+
+  // 6. Dynamic Tier Calculation based on cumulative totalAmount
+  let tier: "Supporter" | "Patron" | "Benefactor" | "Legend" = "Supporter";
+  if (totalAmount >= 2500) tier = "Legend";
+  else if (totalAmount >= 1000) tier = "Benefactor";
+  else if (totalAmount >= 500) tier = "Patron";
+
+  const latestMsg = payload.message?.trim() || "Proud supporter of ConceptNichod";
+
+  // 7. Upsert the cumulative Donor record for Hall of Patrons
+  const donor = await Donor.findOneAndUpdate(
+    { username: authenticatedUsername },
+    {
+      $set: {
+        username: authenticatedUsername,
+        userUuid: sessionUuid,
+        totalAmount,
+        amount: totalAmount, // Synchronize legacy amount field with cumulative total
+        donationCount,
+        tier,
+        latestMessage: latestMsg,
+        message: latestMsg,
+        lastDonatedAt: new Date(),
+        donatedAt: new Date(),
+        isPublic: true,
+      },
+      $setOnInsert: {
+        uuid: crypto.randomUUID(),
+      }
+    },
+    { upsert: true, new: true }
+  ).lean();
+
+  return {
+    success: true,
+    message: `Thank you @${authenticatedUsername}! Your contribution has been verified and added to the Hall of Patrons.`,
+    donor: JSON.parse(JSON.stringify(donor)),
+    contributedAmount: numericAmount,
+    totalAmount,
+    donationCount,
+  };
+}
+
+/**
+ * Public action to check if current visitor is logged in and retrieve their handle
+ */
+export async function getCurrentUserDonationContextAction() {
+  try {
+    const rawSession = cookies().get("user_session")?.value;
+    const sessionUuid = verifySessionCookie(rawSession);
+    if (!sessionUuid) return { success: false, username: null };
+
+    await dbConnect();
+    const user = await User.findOne({ uuid: sessionUuid }).select("username fullName").lean();
+    if (!user) return { success: false, username: null };
+
+    return {
+      success: true,
+      username: user.username,
+      name: user.fullName || user.username,
+    };
+  } catch {
+    return { success: false, username: null };
+  }
 }
 
 /**
@@ -108,9 +259,13 @@ export async function addDonorCardAction(payload: {
     uuid: crypto.randomUUID(),
     username: cleanUsername,
     amount: Number(payload.amount),
+    totalAmount: Number(payload.amount),
+    donationCount: 1,
     tier,
     message: payload.message?.trim() || "Proud supporter of ConceptNichod",
+    latestMessage: payload.message?.trim() || "Proud supporter of ConceptNichod",
     donatedAt: new Date(),
+    lastDonatedAt: new Date(),
     isPublic: true,
   });
 
@@ -125,171 +280,3 @@ export async function deleteDonorCardAction(uuid: string) {
   await Donor.deleteOne({ uuid });
   return { success: true };
 }
-
-/**
- * Public action to initiate an authoritative MysticPayments checkout session.
- * Requires user authentication to prevent anonymous impersonation and guarantee
- * authentic placement on the Hall of Patrons.
- */
-export async function createDonationCheckoutAction(payload: {
-  amount: number;
-  username?: string;
-  message?: string;
-}) {
-  const numericAmount = Number(payload.amount);
-  if (!Number.isFinite(numericAmount) || numericAmount < 1) {
-    return { success: false, error: "Please enter a valid amount of at least ₹1." };
-  }
-
-  // Authoritatively verify the caller's session
-  const rawSession = cookies().get("user_session")?.value;
-  const sessionUuid = verifySessionCookie(rawSession);
-  if (!sessionUuid) {
-    return { success: false, error: "Authentication required to initiate donation." };
-  }
-
-  await dbConnect();
-  const user = await User.findOne({ uuid: sessionUuid }).select("username fullName").lean();
-  if (!user) {
-    return { success: false, error: "Authenticated user account not found. Please log in again." };
-  }
-
-  const authenticatedUsername = user.username.trim().replace(/^@+/, "");
-  const orderId = `cn_ord_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
-
-  try {
-    const session = await createMysticSession({
-      orderId,
-      amount: numericAmount,
-      currency: "INR",
-      customer: {
-        name: user.fullName || authenticatedUsername,
-      },
-      metadata: {
-        username: authenticatedUsername,
-        userUuid: sessionUuid,
-        message: payload.message?.trim() || "ConceptNichod Patron Support",
-      },
-    });
-
-    const cleanCheckoutUrl = cleanAndValidateUrl(session.checkoutUrl);
-
-    return {
-      success: true,
-      checkoutUrl: cleanCheckoutUrl,
-      orderId: session.orderId,
-      paymentId: session.paymentId,
-    };
-  } catch (error: any) {
-    console.error("[createDonationCheckoutAction error]:", error);
-    return {
-      success: false,
-      error: error?.message || "Failed to initialize MysticPayments checkout session.",
-    };
-  }
-}
-
-/**
- * Public action to check if current visitor is logged in and retrieve their handle
- */
-export async function getCurrentUserDonationContextAction() {
-  try {
-    const rawSession = cookies().get("user_session")?.value;
-    const sessionUuid = verifySessionCookie(rawSession);
-    if (!sessionUuid) return { success: false, username: null };
-
-    await dbConnect();
-    const user = await User.findOne({ uuid: sessionUuid }).select("username fullName").lean();
-    if (!user) return { success: false, username: null };
-
-    return {
-      success: true,
-      username: user.username,
-      name: user.fullName || user.username,
-    };
-  } catch {
-    return { success: false, username: null };
-  }
-}
-
-/**
- * Public action to check if an order's donation has been confirmed in the Hall of Patrons.
- * Includes authoritative gateway reconciliation fallback if the webhook has not delivered yet.
- */
-export async function checkDonationStatusAction(orderId: string, paymentId?: string) {
-  if (!orderId || typeof orderId !== "string") {
-    return { success: false, error: "Order ID is required" };
-  }
-
-  try {
-    await dbConnect();
-    const cleanOrderId = orderId.trim();
-    let donor = await Donor.findOne({ uuid: `mp_${cleanOrderId}` }).lean();
-
-    if (donor) {
-      return {
-        success: true,
-        isConfirmed: true,
-        donor: JSON.parse(JSON.stringify(donor)),
-      };
-    }
-
-    // Fallback reconciliation directly from MysticPayments API if paymentId is known
-    if (paymentId && typeof paymentId === "string") {
-      const paymentData = await getMysticPaymentStatus(paymentId.trim());
-      const isCompleted =
-        paymentData?.status === "SUCCESS" ||
-        paymentData?.status === "COMPLETED" ||
-        paymentData?.status === "OBSERVED_SUCCESS";
-
-      if (isCompleted) {
-        const numAmt = Math.max(1, Math.round(Number(paymentData.amount) || 100));
-        let tier: "Supporter" | "Patron" | "Benefactor" | "Legend" = "Supporter";
-        if (numAmt >= 2500) tier = "Legend";
-        else if (numAmt >= 1000) tier = "Benefactor";
-        else if (numAmt >= 500) tier = "Patron";
-
-        const donorUsername = (
-          paymentData.metadata?.username ||
-          paymentData.customer?.name ||
-          "Generous Patron"
-        ).toString().trim().replace(/^@+/, "") || "Generous Patron";
-
-        donor = await Donor.findOneAndUpdate(
-          { uuid: `mp_${cleanOrderId}` },
-          {
-            $setOnInsert: {
-              uuid: `mp_${cleanOrderId}`,
-              username: donorUsername,
-              amount: numAmt,
-              tier,
-              message: paymentData.metadata?.message || `Supported via MysticPayments (Payment ID: ${paymentData.paymentId || paymentId})`,
-              isPublic: true,
-              donatedAt: new Date(),
-            },
-          },
-          { upsert: true, new: true }
-        ).lean();
-
-        if (donor) {
-          return {
-            success: true,
-            isConfirmed: true,
-            donor: JSON.parse(JSON.stringify(donor)),
-          };
-        }
-      }
-    }
-
-    return {
-      success: true,
-      isConfirmed: false,
-    };
-  } catch (error: any) {
-    return {
-      success: false,
-      error: error?.message || "Failed to query donation status",
-    };
-  }
-}
-
