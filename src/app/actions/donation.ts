@@ -133,10 +133,18 @@ export async function submitDonationUtrAction(payload: {
     return { success: false, error: "Database error recording transaction. Please try again." };
   }
 
-  // 5. Cumulative Summation: Calculate total sum of money donated by this username
-  const allUserTxs = await DonationTransaction.find({ username: authenticatedUsername }).lean();
+  // 5. Cumulative Summation: Match by userUuid OR username so that changing username/email never loses donation history
+  const allUserTxs = await DonationTransaction.find({
+    $or: [{ userUuid: sessionUuid }, { username: authenticatedUsername }]
+  }).lean();
   const totalAmount = allUserTxs.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
   const donationCount = allUserTxs.length;
+
+  // Keep username synchronized across all past transactions for this userUuid if user changed username
+  await DonationTransaction.updateMany(
+    { userUuid: sessionUuid },
+    { $set: { username: authenticatedUsername } }
+  ).catch(() => {});
 
   // 6. Dynamic Tier Calculation based on cumulative totalAmount
   let tier: "Supporter" | "Patron" | "Benefactor" | "Legend" = "Supporter";
@@ -146,9 +154,9 @@ export async function submitDonationUtrAction(payload: {
 
   const latestMsg = payload.message?.trim() || "Proud supporter of ConceptNichod";
 
-  // 7. Upsert the cumulative Donor record for Hall of Patrons
+  // 7. Upsert the cumulative Donor record for Hall of Patrons by userUuid or username
   const donor = await Donor.findOneAndUpdate(
-    { username: authenticatedUsername },
+    { $or: [{ userUuid: sessionUuid }, { username: authenticatedUsername }] },
     {
       $set: {
         username: authenticatedUsername,
