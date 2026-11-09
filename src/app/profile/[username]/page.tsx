@@ -5,7 +5,7 @@ import { UserAnalytics } from '@/components/profile/user-analytics';
 import { UserBadgesShowcase } from '@/components/profile/user-badges-showcase';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Target, GraduationCap, Instagram, Ghost, Crown, Sparkles, Calendar } from 'lucide-react';
+import { MapPin, Target, GraduationCap, Instagram, Ghost, Crown, Sparkles, Cake } from 'lucide-react';
 import { MythicalUserBadge, MythicalProfileHeroCard } from "@/components/ui/mythical-glass";
 
 export const metadata = {
@@ -79,8 +79,8 @@ export default async function PublicProfilePage({ params }: { params: { username
                     </Badge>
                   )}
                   {user.dob && (
-                    <Badge variant="outline" className="flex items-center gap-1.5 font-medium text-xs">
-                      <span className="text-sm leading-none" role="img" aria-label="Birthday cake">🎂</span>
+                    <Badge variant="outline" className="flex items-center gap-1 font-medium text-xs">
+                      <Cake className="w-3.5 h-3.5 text-pink-500" />
                       <span>Birthday: {formatDob(user.dob)}</span>
                     </Badge>
                   )}
@@ -159,8 +159,8 @@ export default async function PublicProfilePage({ params }: { params: { username
                   </Badge>
                 )}
                 {user.dob && (
-                  <Badge variant="outline" className="flex items-center gap-1.5 text-xs">
-                    <span className="text-sm leading-none" role="img" aria-label="Birthday cake">🎂</span>
+                  <Badge variant="outline" className="flex items-center gap-1 text-xs">
+                    <Cake className="w-3 h-3 text-pink-500" />
                     <span>Birthday: {formatDob(user.dob)}</span>
                   </Badge>
                 )}

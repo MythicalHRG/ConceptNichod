@@ -41,7 +41,7 @@ test('38.3 Owner security guards protect mythicalhrg and mythicalhrg@gmail.com',
   assert.ok(adminContent.includes('mythicalhrg@gmail.com'), 'Admin authorization must recognize mythicalhrg@gmail.com');
 });
 
-test('38.4 User Profiles display Birthday with cake emoji across views', () => {
+test('38.4 User Profiles display Birthday with Lucide Cake icon matching other detail badges', () => {
   const publicProfilePath = path.resolve('src/app/profile/[username]/page.tsx');
   const dashboardPath = path.resolve('src/app/dashboard/page.tsx');
   const userProfileBtnPath = path.resolve('src/components/auth/user-profile-button.tsx');
@@ -50,18 +50,20 @@ test('38.4 User Profiles display Birthday with cake emoji across views', () => {
   const dashContent = fs.readFileSync(dashboardPath, 'utf-8');
   const btnContent = fs.readFileSync(userProfileBtnPath, 'utf-8');
 
-  // Public profile displays Birthday with cake emoji
+  // Public profile displays Birthday with Lucide Cake icon
   assert.ok(publicContent.includes('user.dob'), 'Public profile must display user.dob');
   assert.ok(publicContent.includes('Birthday:'), 'Public profile must show Birthday: label');
-  assert.ok(publicContent.includes('🎂'), 'Public profile must show cake emoji');
+  assert.ok(publicContent.includes('Cake'), 'Public profile must show Lucide Cake icon');
+  assert.ok(publicContent.includes('text-pink-500'), 'Public profile Cake icon must be styled with text-pink-500');
 
-  // Dashboard hero card displays Birthday with cake emoji
+  // Dashboard hero card displays Birthday with Lucide Cake icon
   assert.ok(dashContent.includes('user.dob'), 'Dashboard must display user.dob');
   assert.ok(dashContent.includes('Birthday:'), 'Dashboard must show Birthday: label');
-  assert.ok(dashContent.includes('🎂'), 'Dashboard must show cake emoji');
+  assert.ok(dashContent.includes('Cake'), 'Dashboard must show Lucide Cake icon');
+  assert.ok(dashContent.includes('text-pink-500'), 'Dashboard Cake icon must be styled with text-pink-500');
 
-  // Profile modal displays Birthday with cake emoji
+  // Profile modal displays Birthday with Lucide Cake icon
   assert.ok(btnContent.includes('Birthday'), 'User profile modal must display Birthday label');
-  assert.ok(btnContent.includes('🎂'), 'User profile modal must show cake emoji');
+  assert.ok(btnContent.includes('Cake'), 'User profile modal must show Lucide Cake icon');
   assert.ok(btnContent.includes('user?.dob'), 'User profile modal must access user?.dob');
 });

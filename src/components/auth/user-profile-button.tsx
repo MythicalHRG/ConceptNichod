@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "./auth-context";
 import { MythicalUserBadge } from "@/components/ui/mythical-glass";
 import { Button } from "@/components/ui/button";
-import { LogOut, User, Settings, Loader2, Palette, Sparkles, Check, Monitor, Volume2, ShieldAlert, KeyRound } from "lucide-react";
+import { LogOut, User, Settings, Loader2, Palette, Sparkles, Check, Monitor, Volume2, ShieldAlert, KeyRound, Cake } from "lucide-react";
 import { useTheme } from "next-themes";
 import { THEME_OPTIONS } from "@/components/theme-toggle";
 import {
@@ -409,7 +409,7 @@ export function UserProfileButton() {
                   </div>
                   <div className="space-y-1">
                     <label className="text-sm font-medium flex items-center gap-1.5">
-                      <span role="img" aria-label="Birthday cake">🎂</span>
+                      <Cake className="w-4 h-4 text-pink-500" />
                       <span>Birthday</span>
                     </label>
                     <Input

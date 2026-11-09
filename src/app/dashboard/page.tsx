@@ -8,7 +8,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { verifySessionCookie } from "@/lib/session";
 import { Card, CardContent } from "@/components/ui/card";
-import { MapPin, GraduationCap, Target, Instagram, Calendar } from "lucide-react";
+import { MapPin, GraduationCap, Target, Instagram, Cake } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 function formatDob(dobStr?: string | null) {
@@ -103,7 +103,7 @@ export default async function DashboardPage() {
                 </div>
                 {user.dob && (
                   <div className="flex items-center gap-1.5 px-3 py-1 bg-background rounded-full border shadow-xs">
-                    <span className="text-sm leading-none" role="img" aria-label="Birthday cake">🎂</span>
+                    <Cake className="w-3.5 h-3.5 text-pink-500 shrink-0" />
                     <span className="font-medium truncate max-w-[160px] sm:max-w-none">Birthday: {formatDob(user.dob)}</span>
                   </div>
                 )}
