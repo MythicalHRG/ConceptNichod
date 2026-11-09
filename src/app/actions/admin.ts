@@ -122,6 +122,10 @@ export async function updateUserCredentialsAction(params: {
       throw new Error(`Username "${ADMIN_USERNAME}" is reserved for the platform owner.`);
     }
 
+    if (targetUser.username.toLowerCase() === ADMIN_USERNAME.toLowerCase() && trimmedUsername.toLowerCase() !== ADMIN_USERNAME.toLowerCase()) {
+      throw new Error(`The root platform owner username "${ADMIN_USERNAME}" cannot be changed.`);
+    }
+
     // Check collision with another user
     const collision = await User.findOne({
       username: { $regex: new RegExp(`^${trimmedUsername}$`, "i") },

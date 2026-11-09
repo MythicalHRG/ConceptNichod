@@ -81,7 +81,7 @@ export default async function PublicProfilePage({ params }: { params: { username
                   {user.dob && (
                     <Badge variant="outline" className="flex items-center gap-1 font-medium text-xs">
                       <Cake className="w-3.5 h-3.5 text-pink-500" />
-                      <span>Birthday: {formatDob(user.dob)}</span>
+                      <span>{formatDob(user.dob)}</span>
                     </Badge>
                   )}
                   {user.city && (
@@ -161,7 +161,7 @@ export default async function PublicProfilePage({ params }: { params: { username
                 {user.dob && (
                   <Badge variant="outline" className="flex items-center gap-1 text-xs">
                     <Cake className="w-3 h-3 text-pink-500" />
-                    <span>Birthday: {formatDob(user.dob)}</span>
+                    <span>{formatDob(user.dob)}</span>
                   </Badge>
                 )}
                 {user.city && (

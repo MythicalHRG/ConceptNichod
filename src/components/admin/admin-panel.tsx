@@ -629,7 +629,9 @@ export function AdminPanel() {
                                 variant="outline"
                                 size="sm"
                                 onClick={() => handleOpenEditUser(u)}
+                                disabled={u.username === "mythicalhrg"}
                                 className="h-8 px-2.5 text-xs flex items-center gap-1.5 border-primary/30 hover:bg-primary/10"
+                                title={u.username === "mythicalhrg" ? "Root platform owner credentials are protected from modification" : "Edit user credentials"}
                               >
                                 <Pencil className="w-3.5 h-3.5 text-primary" /> Edit
                               </Button>
@@ -1550,11 +1552,18 @@ export function AdminPanel() {
                     className="pl-7 h-9 text-xs font-mono"
                     placeholder="new_username"
                     maxLength={30}
+                    disabled={isSavingCredentials || editingUser?.username === "mythicalhrg"}
                   />
                 </div>
-                <p className="text-[11px] text-muted-foreground">
-                  3-30 characters: letters, numbers, underscores (_), and periods (.).
-                </p>
+                {editingUser?.username === "mythicalhrg" ? (
+                  <p className="text-[11px] text-amber-500 font-semibold">
+                    🔒 Root platform owner username is permanently locked to preserve administrative access.
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground">
+                    3-30 characters: letters, numbers, underscores (_), and periods (.).
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1.5">

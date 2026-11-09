@@ -50,15 +50,15 @@ test('38.4 User Profiles display Birthday with Lucide Cake icon matching other d
   const dashContent = fs.readFileSync(dashboardPath, 'utf-8');
   const btnContent = fs.readFileSync(userProfileBtnPath, 'utf-8');
 
-  // Public profile displays Birthday with Lucide Cake icon
+  // Public profile displays DOB with Lucide Cake icon
   assert.ok(publicContent.includes('user.dob'), 'Public profile must display user.dob');
-  assert.ok(publicContent.includes('Birthday:'), 'Public profile must show Birthday: label');
+  assert.ok(publicContent.includes('formatDob(user.dob)'), 'Public profile must format user.dob');
   assert.ok(publicContent.includes('Cake'), 'Public profile must show Lucide Cake icon');
   assert.ok(publicContent.includes('text-pink-500'), 'Public profile Cake icon must be styled with text-pink-500');
 
-  // Dashboard hero card displays Birthday with Lucide Cake icon
+  // Dashboard hero card displays DOB with Lucide Cake icon
   assert.ok(dashContent.includes('user.dob'), 'Dashboard must display user.dob');
-  assert.ok(dashContent.includes('Birthday:'), 'Dashboard must show Birthday: label');
+  assert.ok(dashContent.includes('formatDob(user.dob)'), 'Dashboard must format user.dob');
   assert.ok(dashContent.includes('Cake'), 'Dashboard must show Lucide Cake icon');
   assert.ok(dashContent.includes('text-pink-500'), 'Dashboard Cake icon must be styled with text-pink-500');
 

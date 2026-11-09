@@ -104,7 +104,7 @@ export default async function DashboardPage() {
                 {user.dob && (
                   <div className="flex items-center gap-1.5 px-3 py-1 bg-background rounded-full border shadow-xs">
                     <Cake className="w-3.5 h-3.5 text-pink-500 shrink-0" />
-                    <span className="font-medium truncate max-w-[160px] sm:max-w-none">Birthday: {formatDob(user.dob)}</span>
+                    <span className="font-medium truncate max-w-[160px] sm:max-w-none">{formatDob(user.dob)}</span>
                   </div>
                 )}
                 <div className="flex items-center gap-1.5 px-3 py-1 bg-background rounded-full border shadow-xs">
