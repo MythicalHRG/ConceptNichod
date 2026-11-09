@@ -216,8 +216,8 @@ export async function getCurrentUserDonationContextAction() {
  */
 export async function updateDonationSettingsAction(payload: {
   upiId: string;
-  qrCodeUrl: string;
-  customInstructions: string;
+  qrCodeUrl?: string;
+  customInstructions?: string;
   thankYouNote?: string;
 }) {
   await verifyAdmin();
@@ -227,8 +227,12 @@ export async function updateDonationSettingsAction(payload: {
     setting = new DonationSetting(payload);
   } else {
     setting.upiId = payload.upiId?.trim() || setting.upiId;
-    setting.qrCodeUrl = payload.qrCodeUrl?.trim() ?? setting.qrCodeUrl;
-    setting.customInstructions = payload.customInstructions?.trim() || setting.customInstructions;
+    if (payload.qrCodeUrl !== undefined) {
+      setting.qrCodeUrl = payload.qrCodeUrl?.trim() ?? setting.qrCodeUrl;
+    }
+    if (payload.customInstructions !== undefined) {
+      setting.customInstructions = payload.customInstructions?.trim() || setting.customInstructions;
+    }
     if (payload.thankYouNote) {
       setting.thankYouNote = payload.thankYouNote.trim();
     }

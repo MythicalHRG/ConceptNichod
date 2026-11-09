@@ -23,8 +23,6 @@ import {
 import {
   getDonationInfoAction,
   updateDonationSettingsAction,
-  addDonorCardAction,
-  deleteDonorCardAction,
 } from "@/app/actions/donation";
 import {
   getChangelogsAction,
@@ -73,7 +71,6 @@ import {
   Clock,
   Radio,
   Heart,
-  QrCode,
   Pencil,
   Wand2,
   AlertCircle,
@@ -173,19 +170,8 @@ export function AdminPanel() {
   // Donation & UPI State
   const [donationSettings, setDonationSettings] = useState({
     upiId: "harsh.2525@ptaxis",
-    qrCodeUrl: "",
-    customInstructions: "",
-    thankYouNote: "",
-  });
-  const [donorCards, setDonorCards] = useState<any[]>([]);
-  const [newDonor, setNewDonor] = useState({
-    username: "",
-    amount: "",
-    tier: "Supporter" as "Supporter" | "Patron" | "Benefactor" | "Legend",
-    message: "",
   });
   const [isSavingDonation, setIsSavingDonation] = useState(false);
-  const [isAddingDonor, setIsAddingDonor] = useState(false);
 
   // Study Groups State
   const [studyGroups, setStudyGroups] = useState<any[]>([]);
@@ -214,10 +200,9 @@ export function AdminPanel() {
       if (emailRes?.success) setEmailBroadcasts(emailRes.broadcasts || []);
       if (changelogsRes?.success) setChangelogs(changelogsRes.changelogs || []);
       if (studyGroupsRes?.success) setStudyGroups(studyGroupsRes.groups || []);
-      const donationRes = await getDonationInfoAction().catch(() => ({ success: true, settings: null, donors: [] }));
-      if (donationRes?.success) {
-        if (donationRes.settings) setDonationSettings(donationRes.settings);
-        if (donationRes.donors) setDonorCards(donationRes.donors);
+      const donationRes = await getDonationInfoAction().catch(() => ({ success: true, settings: null }));
+      if (donationRes?.success && donationRes.settings) {
+        setDonationSettings({ upiId: donationRes.settings.upiId || "harsh.2525@ptaxis" });
       }
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
@@ -501,53 +486,22 @@ export function AdminPanel() {
 
   const handleSaveDonationSettings = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!donationSettings.upiId.trim()) {
+      toast({ variant: "destructive", title: "Error", description: "Official UPI ID cannot be empty." });
+      return;
+    }
     setIsSavingDonation(true);
     try {
-      const res = await updateDonationSettingsAction(donationSettings);
+      const res = await updateDonationSettingsAction({
+        upiId: donationSettings.upiId.trim(),
+      });
       if (res.success) {
-        toast({ title: "UPI Settings Saved", description: "Donation page details updated successfully." });
+        toast({ title: "UPI ID Saved", description: "Official UPI ID updated successfully." });
       }
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: e.message });
     } finally {
       setIsSavingDonation(false);
-    }
-  };
-
-  const handleAddDonorCard = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newDonor.username.trim() || !newDonor.amount) {
-      toast({ variant: "destructive", title: "Error", description: "Username and amount are required." });
-      return;
-    }
-    setIsAddingDonor(true);
-    try {
-      const res = await addDonorCardAction({
-        username: newDonor.username,
-        amount: Number(newDonor.amount),
-        tier: newDonor.tier,
-        message: newDonor.message,
-      });
-      if (res.success) {
-        toast({ title: "Donor Card Added!", description: `Added @${newDonor.username} to Hall of Patrons.` });
-        setDonorCards([res.donor, ...donorCards]);
-        setNewDonor({ username: "", amount: "", tier: "Supporter", message: "" });
-      }
-    } catch (e: any) {
-      toast({ variant: "destructive", title: "Error", description: e.message });
-    } finally {
-      setIsAddingDonor(false);
-    }
-  };
-
-  const handleDeleteDonorCard = async (uuid: string) => {
-    if (!confirm("Remove this donor card from Hall of Patrons?")) return;
-    try {
-      await deleteDonorCardAction(uuid);
-      toast({ title: "Donor Card Removed" });
-      setDonorCards(donorCards.filter((d) => d.uuid !== uuid));
-    } catch (e: any) {
-      toast({ variant: "destructive", title: "Error", description: e.message });
     }
   };
 
@@ -1345,203 +1299,45 @@ export function AdminPanel() {
 
         {/* DONATIONS & UPI CONFIG TAB */}
         <TabsContent value="donations">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* UPI QR & Instructions Settings */}
-            <Card className="lg:col-span-5">
+          <div className="max-w-2xl mx-auto space-y-6">
+            <Card className="border-border/80 shadow-md">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <QrCode className="w-5 h-5 text-primary" /> UPI & QR Configuration
+                  <Heart className="w-5 h-5 text-rose-500 fill-rose-500" /> UPI Configuration
                 </CardTitle>
                 <CardDescription>
-                  Configure your official UPI ID, QR code image, and custom instructions shown on /donate.
+                  Configure your official UPI ID (VPA). All student contributions made in <Rupee /> on the donation page (<code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">/donate</code>) will be directed to this UPI ID.
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSaveDonationSettings} className="space-y-4">
-                  <div className="space-y-1.5">
+                  <div className="space-y-2">
                     <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                       Official UPI ID / VPA
                     </label>
                     <Input
                       value={donationSettings.upiId}
-                      onChange={(e) => setDonationSettings({ ...donationSettings, upiId: e.target.value })}
+                      onChange={(e) => setDonationSettings({ upiId: e.target.value })}
                       placeholder="e.g. harsh.2525@ptaxis"
                       required
+                      className="font-mono text-sm"
                     />
+                    <p className="text-xs text-muted-foreground">
+                      This UPI VPA is used to generate dynamic payment QR codes and 1-tap UPI app links on the donation page.
+                    </p>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      UPI QR Code Image URL
-                    </label>
-                    <Input
-                      value={donationSettings.qrCodeUrl}
-                      onChange={(e) => setDonationSettings({ ...donationSettings, qrCodeUrl: e.target.value })}
-                      placeholder="https://... or /qr-code.png or paste base64 image data"
-                    />
-                    {donationSettings.qrCodeUrl && (
-                      <div className="mt-2 p-2 border rounded-lg bg-white max-w-[140px] aspect-square flex items-center justify-center">
-                        <img src={donationSettings.qrCodeUrl} alt="QR Preview" className="max-w-full max-h-full object-contain" />
-                      </div>
+                  <Button type="submit" disabled={isSavingDonation} className="w-full sm:w-auto">
+                    {isSavingDonation ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Heart className="mr-2 h-4 w-4 fill-current text-rose-500" />
                     )}
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Custom Instructions for Donors
-                    </label>
-                    <Textarea
-                      value={donationSettings.customInstructions}
-                      onChange={(e) => setDonationSettings({ ...donationSettings, customInstructions: e.target.value })}
-                      placeholder="Instructions shown on the donation card..."
-                      rows={4}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Thank You Message
-                    </label>
-                    <Input
-                      value={donationSettings.thankYouNote}
-                      onChange={(e) => setDonationSettings({ ...donationSettings, thankYouNote: e.target.value })}
-                      placeholder="Thank you for supporting ConceptNichod!"
-                    />
-                  </div>
-
-                  <Button type="submit" disabled={isSavingDonation} className="w-full">
-                    {isSavingDonation ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Heart className="mr-2 h-4 w-4 fill-current" />}
                     Save UPI Settings
                   </Button>
                 </form>
               </CardContent>
             </Card>
-
-            {/* Donor Cards Manager (Hall of Patrons) */}
-            <div className="lg:col-span-7 space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-amber-500" /> Add Donor Card
-                  </CardTitle>
-                  <CardDescription>
-                    Manually add verified donor contributions to showcase on the public Hall of Patrons (/donate).
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form onSubmit={handleAddDonorCard} className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                          Username
-                        </label>
-                        <Input
-                          placeholder="e.g. anurag or rohit"
-                          value={newDonor.username}
-                          onChange={(e) => setNewDonor({ ...newDonor, username: e.target.value })}
-                          required
-                        />
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                          Donated Amount (<Rupee />)
-                        </label>
-                        <Input
-                          type="number"
-                          placeholder="e.g. 500, 1000"
-                          value={newDonor.amount}
-                          onChange={(e) => setNewDonor({ ...newDonor, amount: e.target.value })}
-                          required
-                          min={1}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                          Honorary Tier
-                        </label>
-                        <Select
-                          value={newDonor.tier}
-                          onValueChange={(val: any) => setNewDonor({ ...newDonor, tier: val })}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select Tier" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Supporter">Supporter (₹100+)</SelectItem>
-                            <SelectItem value="Patron">Patron (₹500+)</SelectItem>
-                            <SelectItem value="Benefactor">Benefactor (₹1,000+)</SelectItem>
-                            <SelectItem value="Legend">Legend (₹2,500+)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                          Personal Message / Note
-                        </label>
-                        <Input
-                          placeholder="e.g. Keep empowering students!"
-                          value={newDonor.message}
-                          onChange={(e) => setNewDonor({ ...newDonor, message: e.target.value })}
-                        />
-                      </div>
-                    </div>
-
-                    <Button type="submit" disabled={isAddingDonor} className="w-full">
-                      {isAddingDonor ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                      Add Donor Card to Hall of Patrons
-                    </Button>
-                  </form>
-                </CardContent>
-              </Card>
-
-              {/* List of Current Donor Cards */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Hall of Patrons Cards ({donorCards.length})</CardTitle>
-                  <CardDescription>All publicly displayed donor cards on the donation page.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {donorCards.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-6 text-center">No donor cards added yet.</p>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {donorCards.map((donor) => (
-                        <div
-                          key={donor.uuid}
-                          className="p-3.5 rounded-xl border border-border/80 bg-muted/20 flex flex-col justify-between space-y-2 hover:border-primary/40 transition-colors"
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <p className="font-bold text-sm text-foreground">@{donor.username}</p>
-                              <p className="text-base font-black text-primary"><Rupee amount={Number(donor.amount)} /></p>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <Badge variant="outline" className="text-[10px]">{donor.tier}</Badge>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10"
-                                onClick={() => handleDeleteDonorCard(donor.uuid)}
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </Button>
-                            </div>
-                          </div>
-                          {donor.message && (
-                            <p className="text-xs text-muted-foreground italic">"{donor.message}"</p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
           </div>
         </TabsContent>
 
