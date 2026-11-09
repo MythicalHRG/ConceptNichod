@@ -319,7 +319,7 @@ export async function updateProfileAction(formData: FormData) {
     }
 }
 
-export async function requestEmailChangeOtpAction(newEmail: string) {
+export async function requestEmailChangeOtpAction(newEmail: string, currentPassword?: string) {
     await dbConnect();
     const rawSession = cookies().get("user_session")?.value;
     const sessionUuid = verifySessionCookie(rawSession);
@@ -327,6 +327,13 @@ export async function requestEmailChangeOtpAction(newEmail: string) {
 
     const currentUser = await User.findOne({ uuid: sessionUuid });
     if (!currentUser) throw new Error("User not found");
+
+    if (currentPassword) {
+        const isPasswordValid = await comparePassword(currentPassword, currentUser.password);
+        if (!isPasswordValid) {
+            throw new Error("Incorrect current password.");
+        }
+    }
 
     const email = newEmail.toLowerCase().trim();
     if (!email) throw new Error("Email address is required.");
@@ -343,17 +350,26 @@ export async function requestEmailChangeOtpAction(newEmail: string) {
     const existingUser = await User.findOne({ email });
     if (existingUser) throw new Error("This email is already registered to another account.");
 
+    // Check resend cooldown (60 seconds)
+    const existingOtp = await OtpVerification.findOne({ email });
+    if (existingOtp && existingOtp.lastSentAt) {
+        const elapsed = Date.now() - new Date(existingOtp.lastSentAt).getTime();
+        if (elapsed < 60000) {
+            const waitSecs = Math.ceil((60000 - elapsed) / 1000);
+            throw new Error(`Please wait ${waitSecs} seconds before requesting another code.`);
+        }
+    }
+
     // Generate 6 digit OTP
     const generatedOtp = crypto.randomInt(100000, 1000000).toString();
     const expiry = new Date(Date.now() + 5 * 60 * 1000); // 5 min expiry
 
-    let otpRecord = await OtpVerification.findOne({ email });
-    if (!otpRecord) {
-        otpRecord = new OtpVerification({ email });
-    }
+    let otpRecord = existingOtp || new OtpVerification({ email });
     otpRecord.otp = generatedOtp;
     otpRecord.expiresAt = expiry;
     otpRecord.isVerified = false;
+    otpRecord.attempts = 0;
+    otpRecord.lastSentAt = new Date();
     await otpRecord.save();
 
     const { sendEmail } = await import("@/services/email");
@@ -488,34 +504,153 @@ export async function changePasswordAction(formData: FormData) {
     return { success: true };
 }
 
+export async function requestDeleteAccountOtpAction(currentPassword: string) {
+    await dbConnect();
+    const rawSession = cookies().get("user_session")?.value;
+    const sessionUuid = verifySessionCookie(rawSession);
+    if (!sessionUuid) throw new Error("Authentication required.");
+
+    const user = await User.findOne({ uuid: sessionUuid });
+    if (!user) throw new Error("User account not found.");
+
+    if (user.username.toLowerCase() === "mythicalhrg") {
+        throw new Error("The root platform administrator account @mythicalhrg cannot be deleted.");
+    }
+
+    if (!currentPassword) {
+        throw new Error("Please enter your current password to authorize this deletion request.");
+    }
+
+    const isValid = await comparePassword(currentPassword, user.password);
+    if (!isValid) {
+        throw new Error("Incorrect current password.");
+    }
+
+    const email = user.email.toLowerCase().trim();
+
+    // Check resend cooldown (60 seconds)
+    const existingOtp = await OtpVerification.findOne({ email });
+    if (existingOtp && existingOtp.lastSentAt) {
+        const elapsed = Date.now() - new Date(existingOtp.lastSentAt).getTime();
+        if (elapsed < 60000) {
+            const waitSecs = Math.ceil((60000 - elapsed) / 1000);
+            throw new Error(`Please wait ${waitSecs} seconds before requesting another deletion code.`);
+        }
+    }
+
+    // Generate cryptographically secure 6-digit OTP
+    const generatedOtp = crypto.randomInt(100000, 1000000).toString();
+    const expiry = new Date(Date.now() + 5 * 60 * 1000); // 5 min expiry
+
+    let otpRecord = existingOtp || new OtpVerification({ email });
+    otpRecord.otp = generatedOtp;
+    otpRecord.expiresAt = expiry;
+    otpRecord.isVerified = false;
+    otpRecord.attempts = 0;
+    otpRecord.lastSentAt = new Date();
+    await otpRecord.save();
+
+    const { sendEmail } = await import("@/services/email");
+    await sendEmail({
+        to: email,
+        subject: "ConceptNichod - Account Deletion Verification Code",
+        html: `
+            <div style="font-family: sans-serif; padding: 24px; color: #18181b; max-width: 520px; margin: 0 auto; border: 2px solid #ef4444; border-radius: 12px; background: #ffffff;">
+                <h2 style="color: #dc2626; margin: 0 0 10px;">⚠️ Account Deletion Authorization</h2>
+                <p style="font-size: 14px; line-height: 1.5; color: #374151;">
+                    Hello <strong>@${user.username}</strong>,
+                </p>
+                <p style="font-size: 14px; line-height: 1.5; color: #4b5563;">
+                    A request was initiated to permanently delete your ConceptNichod account and erase all your study materials, topic progress, notes, and activity records.
+                </p>
+                <p style="font-size: 14px; margin-top: 16px; font-weight: 600; color: #111827;">
+                    Your 6-digit deletion authorization code:
+                </p>
+                <div style="background: #fef2f2; border: 1px dashed #f87171; padding: 16px; border-radius: 8px; font-size: 30px; font-weight: bold; letter-spacing: 8px; text-align: center; margin: 18px 0; color: #b91c1c; font-family: monospace;">
+                    ${generatedOtp}
+                </div>
+                <p style="color: #6b7280; font-size: 12px; line-height: 1.4;">
+                    ⏳ This code will expire in 5 minutes. If you did NOT initiate this request, change your password immediately.
+                </p>
+            </div>
+        `,
+    });
+
+    return {
+        success: true,
+        message: `Deletion authorization code sent to ${email}.`,
+    };
+}
+
 export async function deleteAccountAction(formData: FormData) {
     await dbConnect();
     const rawSession = cookies().get("user_session")?.value;
     const sessionId = verifySessionCookie(rawSession);
     if (!sessionId) throw new Error("Not authenticated");
 
-    const email = (formData.get("email") as string).toLowerCase().trim();
+    const email = (formData.get("email") as string || "").toLowerCase().trim();
     const otp = (formData.get("otp") as string || "").trim();
+    const password = (formData.get("password") as string || "").trim();
+    const confirmation = (formData.get("confirmation") as string || "").trim();
 
-    if (!email || !otp) throw new Error("Missing email or OTP");
+    if (!otp) throw new Error("6-digit verification code is required.");
 
     const user = await User.findOne({ uuid: sessionId });
-    if (!user || user.email !== email) throw new Error("User mismatch");
-    if (user.username === "mythicalhrg") {
+    if (!user) throw new Error("User account not found.");
+    if (email && user.email.toLowerCase() !== email) {
+        throw new Error("User email mismatch.");
+    }
+    if (user.username.toLowerCase() === "mythicalhrg") {
         throw new Error("The root admin account cannot be deleted.");
     }
 
-    const otpRecord = await OtpVerification.findOne({ email });
-    if (!otpRecord) throw new Error("No OTP requested for this email");
-    
-    if (!otpRecord.isVerified) {
-        throw new Error("OTP not verified");
+    // If confirmation phrase is provided, enforce DELETE or username
+    if (confirmation && confirmation.toUpperCase() !== "DELETE" && confirmation !== user.username) {
+        throw new Error('Please type "DELETE" to confirm permanent account deletion.');
     }
 
-    await User.deleteOne({ uuid: sessionId });
+    // If password is provided, verify it
+    if (password) {
+        const isPasswordValid = await comparePassword(password, user.password);
+        if (!isPasswordValid) throw new Error("Incorrect current password.");
+    }
+
+    const userEmail = user.email.toLowerCase().trim();
+    const otpRecord = await OtpVerification.findOne({ email: userEmail });
+    if (!otpRecord) throw new Error("No deletion code requested for this email.");
+
+    // Check if OTP matches directly or was pre-verified
+    if (!otpRecord.isVerified && otpRecord.otp !== otp) {
+        otpRecord.attempts = (otpRecord.attempts || 0) + 1;
+        await otpRecord.save();
+        if (otpRecord.attempts >= 5) {
+            await OtpVerification.deleteOne({ email: userEmail });
+            throw new Error("Too many incorrect attempts. This deletion code has been invalidated.");
+        }
+        const remaining = 5 - otpRecord.attempts;
+        throw new Error(`Invalid verification code. ${remaining} attempt(s) remaining.`);
+    }
+
+    if (new Date() > otpRecord.expiresAt) {
+        await OtpVerification.deleteOne({ email: userEmail });
+        throw new Error("Verification code has expired. Please request a new code.");
+    }
+
+    // Cascading DB cleanup
     const Topic = (await import("@/models/Topic")).default;
-    await Topic.deleteMany({ userId: sessionId });
-    await OtpVerification.deleteOne({ email });
+    const StudyGroup = (await import("@/models/StudyGroup")).default;
+    const GroupMessage = (await import("@/models/GroupMessage")).default;
+    const DirectMessage = (await import("@/models/DirectMessage")).default;
+
+    await Promise.allSettled([
+        User.deleteOne({ uuid: sessionId }),
+        Topic.deleteMany({ userId: sessionId }),
+        StudyGroup.deleteMany({ ownerId: sessionId }),
+        StudyGroup.updateMany({ memberIds: sessionId }, { $pull: { memberIds: sessionId } }),
+        GroupMessage.deleteMany({ senderId: sessionId }),
+        DirectMessage.deleteMany({ participantIds: sessionId }),
+        OtpVerification.deleteOne({ email: userEmail }),
+    ]);
 
     cookies().delete("user_session");
 

@@ -18,8 +18,14 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { updateProfileAction, changePasswordAction, deleteAccountAction, requestEmailChangeOtpAction, confirmEmailChangeAction } from "@/app/actions/auth";
-import { loadCaptchaEnginge, LoadCanvasTemplate, validateCaptcha } from "react-simple-captcha";
+import {
+  updateProfileAction,
+  changePasswordAction,
+  deleteAccountAction,
+  requestEmailChangeOtpAction,
+  confirmEmailChangeAction,
+  requestDeleteAccountOtpAction,
+} from "@/app/actions/auth";
 
 export function UserProfileButton() {
   const { user, isLoggedIn, isAuthReady, logout, login, setAuthModalOpen } = useAuth();
@@ -39,30 +45,53 @@ export function UserProfileButton() {
   const [newPassword, setNewPassword] = useState("");
   const { toast } = useToast();
 
-  const [deleteOtp, setDeleteOtp] = useState("");
-  const [isDeleteOtpSent, setIsDeleteOtpSent] = useState(false);
-  const [isDeleteEmailVerified, setIsDeleteEmailVerified] = useState(false);
-  const [deleteCaptchaValue, setDeleteCaptchaValue] = useState("");
   const [activeTab, setActiveTab] = useState("profile");
+
+  // Danger Zone: Change Email state
   const [newEmailToChange, setNewEmailToChange] = useState("");
+  const [emailChangePassword, setEmailChangePassword] = useState("");
   const [emailChangeOtp, setEmailChangeOtp] = useState("");
   const [isEmailChangeOtpSent, setIsEmailChangeOtpSent] = useState(false);
   const [isEmailChangeLoading, setIsEmailChangeLoading] = useState(false);
+  const [emailResendCooldown, setEmailResendCooldown] = useState(0);
+
+  // Danger Zone: Account Deletion state
+  const [deleteCurrentPassword, setDeleteCurrentPassword] = useState("");
+  const [deleteOtp, setDeleteOtp] = useState("");
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState("");
+  const [isDeleteOtpSent, setIsDeleteOtpSent] = useState(false);
+  const [isDeleteLoading, setIsDeleteLoading] = useState(false);
+  const [deleteResendCooldown, setDeleteResendCooldown] = useState(0);
+
+  // Cooldown timers
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (emailResendCooldown > 0) {
+      timer = setTimeout(() => setEmailResendCooldown((c) => c - 1), 1000);
+    }
+    return () => clearTimeout(timer);
+  }, [emailResendCooldown]);
 
   useEffect(() => {
-    if (activeTab === "delete" && isDeleteEmailVerified) {
-      setTimeout(() => {
-        try {
-          loadCaptchaEnginge(6);
-        } catch(e) {}
-      }, 200);
-    } else if (activeTab !== "delete") {
-      setIsDeleteOtpSent(false);
-      setIsDeleteEmailVerified(false);
-      setDeleteOtp("");
-      setDeleteCaptchaValue("");
+    let timer: NodeJS.Timeout;
+    if (deleteResendCooldown > 0) {
+      timer = setTimeout(() => setDeleteResendCooldown((c) => c - 1), 1000);
     }
-  }, [activeTab, isDeleteEmailVerified]);
+    return () => clearTimeout(timer);
+  }, [deleteResendCooldown]);
+
+  useEffect(() => {
+    if (activeTab !== "delete") {
+      setDeleteCurrentPassword("");
+      setDeleteOtp("");
+      setDeleteConfirmationText("");
+      setIsDeleteOtpSent(false);
+      setEmailChangePassword("");
+      setNewEmailToChange("");
+      setEmailChangeOtp("");
+      setIsEmailChangeOtpSent(false);
+    }
+  }, [activeTab]);
 
   const openSettings = () => {
     if (user) {
@@ -112,72 +141,77 @@ export function UserProfileButton() {
     }
   };
 
-  const handleDeleteSendOtp = async () => {
-    setIsLoading(true);
-    try {
-      const res = await fetch("/api/auth/otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: user?.email, action: "send", isPasswordReset: false })
+  const handleDeleteSendOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!deleteCurrentPassword) {
+      toast({
+        variant: "destructive",
+        title: "Password Required",
+        description: "Please enter your current password to authorize requesting a deletion code.",
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setIsDeleteOtpSent(true);
-      toast({ title: "OTP Sent", description: "Check your email for the verification code." });
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "Failed to send OTP", description: err.message });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleDeleteVerifyOtp = async () => {
-    if (!deleteOtp) {
-      toast({ variant: "destructive", title: "Error", description: "Please enter the OTP." });
       return;
     }
-    setIsLoading(true);
+
+    setIsDeleteLoading(true);
     try {
-      const res = await fetch("/api/auth/otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: user?.email, otp: deleteOtp, action: "verify" })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setIsDeleteEmailVerified(true);
-      toast({ title: "Email Verified!", description: "You can now delete your account." });
+      const res = await requestDeleteAccountOtpAction(deleteCurrentPassword);
+      if (res.success) {
+        setIsDeleteOtpSent(true);
+        setDeleteResendCooldown(60);
+        toast({
+          title: "Deletion Code Sent",
+          description: "A 6-digit authorization code has been dispatched to your email.",
+        });
+      }
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Verification Failed", description: err.message });
+      toast({
+        variant: "destructive",
+        title: "Failed to Send Code",
+        description: err.message,
+      });
     } finally {
-      setIsLoading(false);
+      setIsDeleteLoading(false);
     }
   };
 
   const handleDeleteAccount = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isDeleteEmailVerified) return;
-    if (!validateCaptcha(deleteCaptchaValue)) {
-      toast({ variant: "destructive", title: "Captcha Failed", description: "Please enter the correct captcha." });
-      setDeleteCaptchaValue("");
-      loadCaptchaEnginge(6);
+    if (!isDeleteOtpSent) return;
+    if (!deleteOtp || deleteOtp.length < 6) {
+      toast({
+        variant: "destructive",
+        title: "Code Required",
+        description: "Please enter the 6-digit code received on your email.",
+      });
       return;
     }
-    setIsLoading(true);
+    if (deleteConfirmationText.trim().toUpperCase() !== "DELETE") {
+      toast({
+        variant: "destructive",
+        title: "Confirmation Required",
+        description: 'Please type "DELETE" exactly to confirm account deletion.',
+      });
+      return;
+    }
+
+    setIsDeleteLoading(true);
     try {
       const formData = new FormData();
       formData.append("email", user?.email || "");
-      formData.append("otp", deleteOtp);
+      formData.append("otp", deleteOtp.trim());
+      formData.append("password", deleteCurrentPassword);
+      formData.append("confirmation", deleteConfirmationText.trim().toUpperCase());
+
       const res = await deleteAccountAction(formData);
       if (res?.success) {
-        toast({ title: "Account Deleted" });
+        toast({ title: "Account Deleted", description: "Your account and data have been permanently erased." });
         setIsSettingsOpen(false);
         logout();
       }
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Delete Failed", description: err.message });
+      toast({ variant: "destructive", title: "Deletion Failed", description: err.message });
     } finally {
-      setIsLoading(false);
+      setIsDeleteLoading(false);
     }
   };
 
@@ -206,17 +240,22 @@ export function UserProfileButton() {
     }
   };
 
-    const handleRequestEmailChangeOtp = async (e: React.FormEvent) => {
+  const handleRequestEmailChangeOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newEmailToChange) {
       toast({ variant: "destructive", title: "Email Required", description: "Please enter your new email address." });
       return;
     }
+    if (!emailChangePassword) {
+      toast({ variant: "destructive", title: "Password Required", description: "Please enter your current password to authorize email change." });
+      return;
+    }
     setIsEmailChangeLoading(true);
     try {
-      const res = await requestEmailChangeOtpAction(newEmailToChange);
+      const res = await requestEmailChangeOtpAction(newEmailToChange, emailChangePassword);
       if (res.success) {
         setIsEmailChangeOtpSent(true);
+        setEmailResendCooldown(60);
         toast({ title: "OTP Sent", description: "Verification code sent to your new email." });
       }
     } catch (err: any) {
@@ -239,6 +278,7 @@ export function UserProfileButton() {
         login(res.user);
         toast({ title: "Email Changed Successfully", description: "Your email has been updated." });
         setNewEmailToChange("");
+        setEmailChangePassword("");
         setEmailChangeOtp("");
         setIsEmailChangeOtpSent(false);
       }
@@ -537,15 +577,39 @@ export function UserProfileButton() {
 
                 {/* Change Email Section */}
                 <div className="border border-destructive/30 rounded-lg p-4 bg-destructive/5 space-y-3">
-                  <h4 className="text-sm font-semibold text-destructive flex items-center gap-2">
-                    Change Email Address
-                  </h4>
-                  <p className="text-xs text-muted-foreground">
-                    Changing your email requires verifying ownership of your new address via a 6-digit OTP.
-                  </p>
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-semibold text-destructive flex items-center gap-2">
+                      Change Email Address
+                    </h4>
+                    <p className="text-xs text-muted-foreground">
+                      To protect your account, enter your current password and new email address to receive a verification OTP.
+                    </p>
+                  </div>
                   
                   <div className="space-y-3">
-                    <div className="space-y-1">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-muted-foreground">Current Email</label>
+                      <Input
+                        type="email"
+                        value={user?.email || ""}
+                        disabled
+                        className="h-8 text-xs bg-muted/60 text-muted-foreground cursor-not-allowed"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium">Verify Current Password</label>
+                      <Input
+                        type="password"
+                        placeholder="Current password"
+                        value={emailChangePassword}
+                        onChange={(e) => setEmailChangePassword(e.target.value)}
+                        disabled={isEmailChangeOtpSent || isEmailChangeLoading}
+                        className="h-9 text-xs"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
                       <label className="text-xs font-medium">New Email (@gmail.com, @outlook.com/in)</label>
                       <div className="flex gap-2">
                         <Input
@@ -554,39 +618,39 @@ export function UserProfileButton() {
                           value={newEmailToChange}
                           onChange={(e) => setNewEmailToChange(e.target.value)}
                           disabled={isEmailChangeOtpSent || isEmailChangeLoading}
+                          className="h-9 text-xs"
                         />
-                        {!isEmailChangeOtpSent ? (
-                          <Button 
-                            type="button" 
-                            size="sm"
-                            onClick={handleRequestEmailChangeOtp} 
-                            disabled={isEmailChangeLoading || !newEmailToChange}
-                          >
-                            {isEmailChangeLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Send OTP"}
-                          </Button>
-                        ) : (
-                          <Button 
-                            type="button" 
-                            variant="outline" 
-                            size="sm"
-                            onClick={handleRequestEmailChangeOtp}
-                            disabled={isEmailChangeLoading}
-                          >
-                            Resend
-                          </Button>
-                        )}
+                        <Button 
+                          type="button" 
+                          size="sm"
+                          onClick={handleRequestEmailChangeOtp} 
+                          disabled={isEmailChangeLoading || !newEmailToChange || !emailChangePassword || emailResendCooldown > 0}
+                          className="h-9 text-xs shrink-0"
+                          variant={isEmailChangeOtpSent ? "outline" : "default"}
+                        >
+                          {isEmailChangeLoading ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : emailResendCooldown > 0 ? (
+                            `Wait ${emailResendCooldown}s`
+                          ) : isEmailChangeOtpSent ? (
+                            "Resend"
+                          ) : (
+                            "Send OTP"
+                          )}
+                        </Button>
                       </div>
                     </div>
 
                     {isEmailChangeOtpSent && (
-                      <div className="space-y-2 pt-2 border-t">
-                        <label className="text-xs font-medium">Enter OTP Code sent to {newEmailToChange}</label>
+                      <div className="space-y-2 pt-2 border-t border-border/50">
+                        <label className="text-xs font-medium text-primary">Enter 6-digit OTP Code sent to {newEmailToChange}</label>
                         <div className="flex gap-2">
                           <Input
                             placeholder="6-digit OTP"
                             maxLength={6}
                             value={emailChangeOtp}
-                            onChange={(e) => setEmailChangeOtp(e.target.value)}
+                            onChange={(e) => setEmailChangeOtp(e.target.value.replace(/\D/g, ""))}
+                            className="h-9 text-xs font-mono tracking-widest text-center"
                           />
                           <Button
                             type="button"
@@ -594,8 +658,9 @@ export function UserProfileButton() {
                             variant="destructive"
                             onClick={handleConfirmEmailChange}
                             disabled={isEmailChangeLoading || emailChangeOtp.length < 6}
+                            className="h-9 text-xs shrink-0"
                           >
-                            {isEmailChangeLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Confirm Change"}
+                            {isEmailChangeLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Confirm Change"}
                           </Button>
                         </div>
                       </div>
@@ -604,50 +669,140 @@ export function UserProfileButton() {
                 </div>
 
                 {/* Account Deletion Section */}
-                <form onSubmit={handleDeleteAccount} className="space-y-4 px-1 pb-2">
-                  <div className="space-y-2 text-sm text-destructive text-center mb-4 border border-destructive/20 bg-destructive/10 p-3 rounded-md">
-                    <strong>Warning:</strong> Deleting your account is permanent. All your generated topics, materials, and data will be permanently erased.
+                {user?.username?.toLowerCase() === "mythicalhrg" ? (
+                  <div className="border border-amber-500/40 rounded-xl p-4 bg-amber-500/10 space-y-2">
+                    <div className="flex items-center gap-2 font-semibold text-sm text-amber-300">
+                      <ShieldAlert className="w-4 h-4 text-amber-400" /> Platform Owner Account Protected
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      The root platform administrator account <strong>@{user.username}</strong> is permanently protected and cannot be deleted.
+                    </p>
                   </div>
-                  
-                  {!isDeleteEmailVerified ? (
-                    <div className="space-y-4">
-                      <div className="flex gap-2 items-end">
-                        <div className="space-y-2 flex-1">
-                          <label className="text-sm font-medium">OTP Code</label>
+                ) : (
+                  <div className="border border-destructive/30 rounded-xl p-4 bg-destructive/5 space-y-4">
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-semibold text-destructive flex items-center gap-2">
+                        <ShieldAlert className="w-4 h-4 text-destructive" /> Permanently Delete Account
+                      </h4>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Deleting your account is permanent. All your generated topics, practice test analytics, notes, and study group memberships will be erased.
+                      </p>
+                    </div>
+
+                    {!isDeleteOtpSent ? (
+                      <div className="space-y-3 pt-1">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium">Verify Current Password</label>
                           <Input
-                            placeholder="6-digit code"
-                            value={deleteOtp}
-                            onChange={(e) => setDeleteOtp(e.target.value)}
-                            disabled={isDeleteEmailVerified}
+                            type="password"
+                            placeholder="Enter current password to authorize deletion request"
+                            value={deleteCurrentPassword}
+                            onChange={(e) => setDeleteCurrentPassword(e.target.value)}
+                            disabled={isDeleteLoading}
+                            className="h-9 text-xs"
                           />
+                          <p className="text-[11px] text-muted-foreground">
+                            An authorization code will be sent to <strong>{user?.email}</strong> once your password is confirmed.
+                          </p>
                         </div>
-                        <Button type="button" onClick={handleDeleteSendOtp} disabled={isLoading || isDeleteEmailVerified} variant={isDeleteOtpSent ? "outline" : "default"}>
-                          {isDeleteOtpSent ? "Resend OTP" : "Send OTP"}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="w-full h-9 text-xs text-destructive hover:bg-destructive/10 border-destructive/30 font-medium"
+                          onClick={handleDeleteSendOtp}
+                          disabled={isDeleteLoading || !deleteCurrentPassword || deleteResendCooldown > 0}
+                        >
+                          {isDeleteLoading ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : deleteResendCooldown > 0 ? (
+                            `Resend code in ${deleteResendCooldown}s`
+                          ) : (
+                            "Request Deletion Authorization Code"
+                          )}
                         </Button>
                       </div>
-                      {isDeleteOtpSent && !isDeleteEmailVerified && (
-                        <Button type="button" onClick={handleDeleteVerifyOtp} disabled={isLoading || deleteOtp.length < 6} className="w-full">
-                          {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Verify OTP"}
-                        </Button>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <div className="flex flex-col items-center justify-center space-y-2 p-4 bg-muted/50 rounded-lg">
-                        <LoadCanvasTemplate />
-                        <Input
-                          placeholder="Enter Captcha"
-                          value={deleteCaptchaValue}
-                          onChange={(e) => setDeleteCaptchaValue(e.target.value)}
-                          required
-                        />
-                      </div>
-                      <Button type="submit" variant="destructive" className="w-full" disabled={isLoading || !deleteCaptchaValue}>
-                        {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Permanently Delete Account"}
-                      </Button>
-                    </div>
-                  )}
-                </form>
+                    ) : (
+                      <form onSubmit={handleDeleteAccount} className="space-y-3 pt-2 border-t border-destructive/20">
+                        <div className="p-2.5 rounded-lg bg-destructive/10 text-[11px] text-destructive leading-relaxed">
+                          ⚠️ Authorization code sent to <strong>{user?.email}</strong>. Enter the 6-digit code and type <strong>DELETE</strong> below to finalize account destruction.
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium">6-Digit Deletion Code</label>
+                          <div className="flex gap-2">
+                            <Input
+                              placeholder="6-digit code"
+                              maxLength={6}
+                              value={deleteOtp}
+                              onChange={(e) => setDeleteOtp(e.target.value.replace(/\D/g, ""))}
+                              disabled={isDeleteLoading}
+                              className="h-9 text-sm font-mono text-center tracking-widest"
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={handleDeleteSendOtp}
+                              disabled={isDeleteLoading || deleteResendCooldown > 0}
+                              className="h-9 text-xs shrink-0"
+                            >
+                              {deleteResendCooldown > 0 ? `${deleteResendCooldown}s` : "Resend"}
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium">Confirm Intent</label>
+                          <Input
+                            placeholder='Type "DELETE" to confirm'
+                            value={deleteConfirmationText}
+                            onChange={(e) => setDeleteConfirmationText(e.target.value)}
+                            disabled={isDeleteLoading}
+                            className="h-9 text-xs font-mono uppercase"
+                          />
+                          <p className="text-[10px] text-muted-foreground">
+                            Type DELETE in capital letters to confirm this action.
+                          </p>
+                        </div>
+
+                        <div className="flex gap-2 pt-2">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="flex-1 h-9 text-xs"
+                            disabled={isDeleteLoading}
+                            onClick={() => {
+                              setIsDeleteOtpSent(false);
+                              setDeleteOtp("");
+                              setDeleteConfirmationText("");
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            type="submit"
+                            variant="destructive"
+                            size="sm"
+                            className="flex-1 h-9 text-xs font-semibold"
+                            disabled={
+                              isDeleteLoading ||
+                              deleteOtp.length < 6 ||
+                              deleteConfirmationText.trim().toUpperCase() !== "DELETE"
+                            }
+                          >
+                            {isDeleteLoading ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                              "Permanently Delete Account"
+                            )}
+                          </Button>
+                        </div>
+                      </form>
+                    )}
+                  </div>
+                )}
               </TabsContent>
             </Tabs>
           </DialogContent>
