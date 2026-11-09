@@ -180,7 +180,14 @@ export async function loginAction(formData: FormData) {
         if (!rawInput || !password) throw new Error("Missing email or password");
 
         const ip = getClientIp();
+        const accountRateKey = `login:account:${rawInput.toLowerCase()}`;
         const loginRateKey = `login:${ip}:${rawInput.toLowerCase()}`;
+
+        const accountRateStatus = peekRateLimit(accountRateKey, 5, 15 * 60 * 1000);
+        if (!accountRateStatus.success) {
+            throw new Error("This account has experienced too many failed login attempts. Please try again after 15 minutes.");
+        }
+
         const loginRateStatus = peekRateLimit(loginRateKey, 5, 15 * 60 * 1000);
         if (!loginRateStatus.success) {
             throw new Error("Too many failed login attempts. Please try again after 15 minutes.");
@@ -206,6 +213,7 @@ export async function loginAction(formData: FormData) {
         });
 
         if (!user) {
+            recordFailedAttempt(accountRateKey, 5, 15 * 60 * 1000);
             recordFailedAttempt(loginRateKey, 5, 15 * 60 * 1000);
             throw new Error("Invalid credentials");
         }
@@ -219,11 +227,13 @@ export async function loginAction(formData: FormData) {
         try {
             const isValid = await comparePassword(password, user.password);
             if (!isValid) {
+                recordFailedAttempt(accountRateKey, 5, 15 * 60 * 1000);
                 recordFailedAttempt(loginRateKey, 5, 15 * 60 * 1000);
                 throw new Error("Invalid credentials");
             }
 
             // Reset failed login count on successful authentication
+            resetRateLimit(accountRateKey);
             resetRateLimit(loginRateKey);
 
             // Update login IP and timestamps
@@ -237,6 +247,7 @@ export async function loginAction(formData: FormData) {
             }
             await user.save();
         } catch (e: any) {
+            recordFailedAttempt(accountRateKey, 5, 15 * 60 * 1000);
             recordFailedAttempt(loginRateKey, 5, 15 * 60 * 1000);
             throw new Error("Invalid credentials");
         }
@@ -636,11 +647,12 @@ export async function deleteAccountAction(formData: FormData) {
         throw new Error('Please type "DELETE" to confirm permanent account deletion.');
     }
 
-    // If password is provided, verify it
-    if (password) {
-        const isPasswordValid = await comparePassword(password, user.password);
-        if (!isPasswordValid) throw new Error("Incorrect current password.");
+    // Mandatory password verification to prevent unauthorized deletion
+    if (!password) {
+        throw new Error("Your current password is required to authorize permanent account deletion.");
     }
+    const isPasswordValid = await comparePassword(password, user.password);
+    if (!isPasswordValid) throw new Error("Incorrect current password.");
 
     const userEmail = user.email.toLowerCase().trim();
     const otpRecord = await OtpVerification.findOne({ email: userEmail });

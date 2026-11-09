@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { verifySessionCookie } from '@/lib/session';
 
 function addSecurityHeaders(response: NextResponse): NextResponse {
   response.headers.set('X-Frame-Options', 'DENY');
@@ -26,13 +27,14 @@ const PROTECTED_PREFIXES = [
 
 export function middleware(request: NextRequest) {
   const sessionCookie = request.cookies.get('user_session')?.value;
-  const { pathname } = request.nextUrl;
+  const verifiedSessionUuid = verifySessionCookie(sessionCookie);
+  const normalizedPath = request.nextUrl.pathname.toLowerCase();
 
   const isProtected = PROTECTED_PREFIXES.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+    (prefix) => normalizedPath === prefix || normalizedPath.startsWith(`${prefix}/`)
   );
 
-  if (!sessionCookie && isProtected) {
+  if (!verifiedSessionUuid && isProtected) {
     const url = request.nextUrl.clone();
     url.pathname = '/';
     url.searchParams.set('login', 'true');
@@ -41,7 +43,7 @@ export function middleware(request: NextRequest) {
   }
 
   // Redirect logged in users away from auth pages
-  if (sessionCookie && pathname.startsWith('/auth')) {
+  if (verifiedSessionUuid && normalizedPath.startsWith('/auth')) {
     const redirectResponse = NextResponse.redirect(
       new URL('/dashboard', request.url)
     );

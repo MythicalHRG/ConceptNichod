@@ -281,14 +281,14 @@ export default function AspirantsConnectPage() {
                                 </a>
                                 <div className="flex w-full gap-2">
                                     {user.snapchat ? (
-                                        <a href={`https://snapchat.com/add/${user.snapchat.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="flex-1">
+                                        <a href={`https://snapchat.com/add/${encodeURIComponent(user.snapchat.replace('@', ''))}`} target="_blank" rel="noopener noreferrer" className="flex-1">
                                             <Button variant="outline" className="w-full text-yellow-600 border-yellow-600 hover:bg-yellow-50 hover:text-yellow-700">
                                                 Snapchat
                                             </Button>
                                         </a>
                                     ) : null}
                                     {user.instagram ? (
-                                        <a href={`https://instagram.com/${user.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="flex-1">
+                                        <a href={`https://instagram.com/${encodeURIComponent(user.instagram.replace('@', ''))}`} target="_blank" rel="noopener noreferrer" className="flex-1">
                                             <Button variant="outline" className="w-full text-pink-600 border-pink-600 hover:bg-pink-50 hover:text-pink-700">
                                                 <Instagram className="h-4 w-4 mr-2" /> Insta
                                             </Button>

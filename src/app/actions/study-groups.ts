@@ -166,6 +166,11 @@ export async function getGroupMessagesAction(groupId: string) {
   const group = await StudyGroup.findById(groupId).lean();
   if (!group) throw new Error("Study group not found.");
 
+  // IDOR Defense: Only authorized group members can read group conversations
+  if (!group.memberIds || !group.memberIds.includes(user.uuid)) {
+    throw new Error("You must join this study group to read messages.");
+  }
+
   const messagesDocs = await GroupMessage.find({ groupId })
     .sort({ createdAt: 1 })
     .limit(100)
@@ -300,7 +305,7 @@ export async function getDirectMessagesAction(targetUsername: string) {
     },
     messages: messagesDocs.map((m: any) => ({
       id: m._id.toString(),
-      senderId: m.senderId,
+      senderId: m.senderUsername,
       senderUsername: m.senderUsername,
       body: m.body,
       isMine: m.senderId === user.uuid,

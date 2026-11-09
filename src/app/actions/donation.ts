@@ -43,12 +43,16 @@ export async function getDonationInfoAction() {
   }
 
   // Retrieve donors ordered by total cumulative amount descending (Leaderboard)
+  // Security Hardening: Redact internal UUIDs from public responses
   const donors = await Donor.find({ isPublic: true })
+    .select("-uuid -userUuid")
     .sort({ totalAmount: -1, amount: -1, lastDonatedAt: -1, createdAt: -1 })
     .lean();
 
   // Retrieve latest 10 verified transactions for the recent activity ticker
+  // Security Hardening: Redact sensitive 12-digit bank UTR numbers and internal UUIDs from public feed
   const recentTransactions = await DonationTransaction.find({ isPublic: true })
+    .select("-utr -userUuid -uuid")
     .sort({ donatedAt: -1 })
     .limit(10)
     .lean();
