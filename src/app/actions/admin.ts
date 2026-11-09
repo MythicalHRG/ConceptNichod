@@ -7,6 +7,7 @@ import Topic from "@/models/Topic";
 import GroupMessage from "@/models/GroupMessage";
 import DirectMessage from "@/models/DirectMessage";
 import Donor from "@/models/Donor";
+import StudyGroup from "@/models/StudyGroup";
 import { verifySessionCookie } from "@/lib/session";
 
 const ADMIN_USERNAME = "mythicalhrg";
@@ -192,5 +193,71 @@ export async function updateUserCredentialsAction(params: {
       username: targetUser.username,
       email: targetUser.email,
     },
+  };
+}
+
+export async function getAllStudyGroupsAdminAction() {
+  await verifyAdmin();
+  await dbConnect();
+
+  const groups = await StudyGroup.find({}).sort({ createdAt: -1 }).lean();
+
+  const ownerIds = Array.from(new Set(groups.map((g) => g.ownerId)));
+  const owners = await User.find({ uuid: { $in: ownerIds } })
+    .select("uuid username fullName email")
+    .lean();
+  const ownerMap = new Map(owners.map((o) => [o.uuid, o]));
+
+  const messageCounts = await GroupMessage.aggregate([
+    { $group: { _id: "$groupId", count: { $sum: 1 } } },
+  ]);
+  const countMap = new Map(messageCounts.map((m: any) => [m._id ? m._id.toString() : "", m.count]));
+
+  return {
+    success: true,
+    groups: groups.map((g: any) => ({
+      id: g._id.toString(),
+      name: g.name,
+      description: g.description,
+      subject: g.subject,
+      examFocus: g.examFocus || "General",
+      schedule: g.schedule || "Flexible",
+      ownerId: g.ownerId,
+      ownerUsername: ownerMap.get(g.ownerId)?.username || "Unknown",
+      ownerFullName: ownerMap.get(g.ownerId)?.fullName || "Unknown Aspirant",
+      ownerEmail: ownerMap.get(g.ownerId)?.email || "",
+      memberCount: (g.memberIds || []).length,
+      messageCount: countMap.get(g._id.toString()) || 0,
+      createdAt: g.createdAt ? new Date(g.createdAt).toISOString() : new Date().toISOString(),
+    })),
+  };
+}
+
+export async function deleteStudyGroupAdminAction(groupId: string) {
+  const admin = await verifyAdmin();
+  if (admin.username !== ADMIN_USERNAME) {
+    throw new Error("Forbidden: Only @mythicalhrg can delete study groups.");
+  }
+
+  if (!groupId) {
+    throw new Error("Group ID is required.");
+  }
+
+  await dbConnect();
+  const group = await StudyGroup.findById(groupId);
+  if (!group) {
+    throw new Error("Study group not found or already deleted.");
+  }
+
+  const groupName = group.name;
+
+  await Promise.all([
+    StudyGroup.findByIdAndDelete(groupId),
+    GroupMessage.deleteMany({ groupId }),
+  ]);
+
+  return {
+    success: true,
+    message: `Study group "${groupName}" and all associated messages have been deleted.`,
   };
 }

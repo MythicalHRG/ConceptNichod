@@ -13,7 +13,6 @@ import { MythicalUserBadge } from "@/components/ui/mythical-glass";
 import {
   Trophy,
   Flame,
-  TrendingUp,
   BrainCircuit,
   Medal,
   Award,
@@ -24,16 +23,6 @@ import {
   Loader2,
   Calendar,
 } from "lucide-react";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as RechartsTooltip,
-  Legend,
-  ResponsiveContainer,
-} from "recharts";
 import Link from "next/link";
 
 const EXAM_OPTIONS = ["All", "IIT JEE", "NEET", "Class 12+", "CBSE Boards"];
@@ -82,27 +71,6 @@ export function LeaderboardView() {
   useEffect(() => {
     fetchData(timeframe, examFilter);
   }, [timeframe, examFilter]);
-
-  // Transform trajectory data for multi-line comparison chart
-  // Max concepts covered among top trajectories
-  const maxConcepts = Math.max(
-    1,
-    ...data.topTrajectories.flatMap((t) => t.trajectory.map((p) => p.conceptIndex))
-  );
-
-  const chartData: any[] = [];
-  for (let c = 1; c <= Math.min(maxConcepts, 30); c++) {
-    const row: any = { conceptIndex: c };
-    data.topTrajectories.forEach((t) => {
-      const pt = t.trajectory.find((p) => p.conceptIndex === c);
-      if (pt) {
-        row[`${t.username}`] = pt.cumulativeAvg;
-      }
-    });
-    chartData.push(row);
-  }
-
-  const trajectoryColors = ["#EAB308", "#94A3B8", "#B45309", "#3B82F6"];
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto pb-12">
@@ -302,62 +270,6 @@ export function LeaderboardView() {
           )}
         </div>
       )}
-
-      {/* Trajectory Comparison Chart */}
-      <Card className="border shadow-md">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-lg font-headline flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-primary" />
-                Learning Trajectory Graph: Concepts Covered ($X$) vs. Performance ($Y$)
-              </CardTitle>
-              <CardDescription>
-                Shows the mastery growth rate for top rankers and your current profile. Steeper slope ($m$) indicates accelerated learning.
-              </CardDescription>
-            </div>
-            {isPending && <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
-          </div>
-        </CardHeader>
-        <CardContent>
-          {chartData.length > 0 ? (
-            <div className="h-[340px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData} margin={{ top: 20, right: 15, left: -10, bottom: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-                  <XAxis
-                    dataKey="conceptIndex"
-                    label={{ value: "Concepts Covered (X)", position: "insideBottom", offset: -10 }}
-                  />
-                  <YAxis
-                    domain={[0, 100]}
-                    label={{ value: "Cumulative Score % (Y)", angle: -90, position: "insideLeft" }}
-                  />
-                  <RechartsTooltip />
-                  <Legend verticalAlign="top" height={36} />
-                  {data.topTrajectories.map((t, idx) => (
-                    <Line
-                      key={t.username}
-                      type="monotone"
-                      dataKey={t.username}
-                      name={`#${t.rank} @${t.username} (m=${t.slope})`}
-                      stroke={t.isCurrentUser ? "#10B981" : trajectoryColors[idx % trajectoryColors.length]}
-                      strokeWidth={t.isCurrentUser ? 3 : 2}
-                      dot={{ r: 3 }}
-                      activeDot={{ r: 6 }}
-                      connectNulls={true}
-                    />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <div className="py-12 text-center text-muted-foreground text-sm">
-              No concept trajectory data available for the selected filters.
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
       {/* Full Leaderboard Table */}
       <Card className="border shadow-md overflow-hidden">

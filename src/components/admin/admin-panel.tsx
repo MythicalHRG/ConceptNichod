@@ -8,6 +8,8 @@ import {
   getBansAction,
   banEntityAction,
   unbanEntityAction,
+  getAllStudyGroupsAdminAction,
+  deleteStudyGroupAdminAction,
 } from "@/app/actions/admin";
 import {
   createBroadcastAction,
@@ -75,6 +77,10 @@ import {
   Pencil,
   Wand2,
   AlertCircle,
+  Users,
+  MessageSquare,
+  Search,
+  ShieldAlert,
 } from "lucide-react";
 import { UploadButton } from "@/utils/uploadthing";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -181,18 +187,25 @@ export function AdminPanel() {
   const [isSavingDonation, setIsSavingDonation] = useState(false);
   const [isAddingDonor, setIsAddingDonor] = useState(false);
 
+  // Study Groups State
+  const [studyGroups, setStudyGroups] = useState<any[]>([]);
+  const [studyGroupSearch, setStudyGroupSearch] = useState("");
+  const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
+  const [groupToDelete, setGroupToDelete] = useState<any | null>(null);
+
   const { toast } = useToast();
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [usersRes, bansRes, broadcastsRes, emailRes, changelogsRes] =
+      const [usersRes, bansRes, broadcastsRes, emailRes, changelogsRes, studyGroupsRes] =
         await Promise.all([
           getAllUsersAction(),
           getBansAction(),
           getActiveBroadcastsAction(),
           getEmailBroadcastHistoryAction().catch(() => ({ success: true, broadcasts: [] })),
           getChangelogsAction().catch(() => ({ success: true, changelogs: [] })),
+          getAllStudyGroupsAdminAction().catch(() => ({ success: true, groups: [] })),
         ]);
 
       if (usersRes.success) setUsers(usersRes.users);
@@ -200,6 +213,7 @@ export function AdminPanel() {
       if (broadcastsRes.success) setActiveBroadcasts(broadcastsRes.broadcasts);
       if (emailRes?.success) setEmailBroadcasts(emailRes.broadcasts || []);
       if (changelogsRes?.success) setChangelogs(changelogsRes.changelogs || []);
+      if (studyGroupsRes?.success) setStudyGroups(studyGroupsRes.groups || []);
       const donationRes = await getDonationInfoAction().catch(() => ({ success: true, settings: null, donors: [] }));
       if (donationRes?.success) {
         if (donationRes.settings) setDonationSettings(donationRes.settings);
@@ -223,6 +237,34 @@ export function AdminPanel() {
       setChangelogVersion(nextVer);
     }
   }, [majorDigit, changelogCategory, changelogs, isAutoVersion, editingChangelogId]);
+
+  const handleDeleteStudyGroup = async (groupId: string) => {
+    try {
+      setDeletingGroupId(groupId);
+      const res = await deleteStudyGroupAdminAction(groupId);
+      if (res.success) {
+        toast({ title: "Study Group Deleted", description: res.message });
+        setStudyGroups((prev) => prev.filter((g) => g.id !== groupId));
+        setGroupToDelete(null);
+      }
+    } catch (e: any) {
+      toast({ title: "Failed to delete group", description: e.message, variant: "destructive" });
+    } finally {
+      setDeletingGroupId(null);
+    }
+  };
+
+  const filteredStudyGroups = studyGroups.filter((g) => {
+    if (!studyGroupSearch.trim()) return true;
+    const q = studyGroupSearch.toLowerCase();
+    return (
+      (g.name && g.name.toLowerCase().includes(q)) ||
+      (g.subject && g.subject.toLowerCase().includes(q)) ||
+      (g.examFocus && g.examFocus.toLowerCase().includes(q)) ||
+      (g.ownerUsername && g.ownerUsername.toLowerCase().includes(q)) ||
+      (g.description && g.description.toLowerCase().includes(q))
+    );
+  });
 
   const handleDeleteUser = async (uuid: string) => {
     if (!confirm("Are you sure you want to permanently delete this user?")) return;
@@ -545,6 +587,9 @@ export function AdminPanel() {
           </TabsTrigger>
           <TabsTrigger value="donations" className="flex items-center gap-1.5">
             <Heart className="w-4 h-4 text-rose-500 fill-rose-500" /> Donations & UPI
+          </TabsTrigger>
+          <TabsTrigger value="study-groups" className="flex items-center gap-1.5">
+            <Users className="w-4 h-4 text-cyan-400" /> Study Groups ({studyGroups.length})
           </TabsTrigger>
         </TabsList>
 
@@ -1499,7 +1544,190 @@ export function AdminPanel() {
             </div>
           </div>
         </TabsContent>
+
+        {/* STUDY GROUPS TAB */}
+        <TabsContent value="study-groups">
+          <Card>
+            <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="w-5 h-5 text-cyan-400" /> Study Groups & Chit-Chat Purge
+                </CardTitle>
+                <CardDescription>
+                  Review active study groups. Purge chit-chat, spam, or off-topic groups and wipe all associated messages permanently.
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-3 w-full sm:w-auto">
+                <div className="relative w-full sm:w-72">
+                  <Search className="w-4 h-4 absolute left-3 top-2.5 text-muted-foreground" />
+                  <Input
+                    placeholder="Search groups, subjects, owners..."
+                    value={studyGroupSearch}
+                    onChange={(e) => setStudyGroupSearch(e.target.value)}
+                    className="pl-9 h-9 text-xs"
+                  />
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {/* Summary KPIs */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                <div className="p-4 rounded-xl border border-border/50 bg-card/50 flex flex-col gap-1">
+                  <span className="text-xs text-muted-foreground uppercase font-semibold tracking-wider">Total Groups</span>
+                  <span className="text-2xl font-bold font-mono text-cyan-400">{studyGroups.length}</span>
+                </div>
+                <div className="p-4 rounded-xl border border-border/50 bg-card/50 flex flex-col gap-1">
+                  <span className="text-xs text-muted-foreground uppercase font-semibold tracking-wider">Total Memberships</span>
+                  <span className="text-2xl font-bold font-mono text-amber-400">
+                    {studyGroups.reduce((acc, g) => acc + (g.memberCount || 0), 0)}
+                  </span>
+                </div>
+                <div className="p-4 rounded-xl border border-border/50 bg-card/50 flex flex-col gap-1">
+                  <span className="text-xs text-muted-foreground uppercase font-semibold tracking-wider">Total Messages Exchanged</span>
+                  <span className="text-2xl font-bold font-mono text-emerald-400">
+                    {studyGroups.reduce((acc, g) => acc + (g.messageCount || 0), 0)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Study Groups List */}
+              {loading ? (
+                <div className="py-12 flex justify-center items-center">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                </div>
+              ) : filteredStudyGroups.length === 0 ? (
+                <div className="text-center py-12 border border-dashed rounded-lg">
+                  <p className="text-muted-foreground text-sm">
+                    {studyGroupSearch ? "No study groups match your search filter." : "No study groups have been created yet."}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {filteredStudyGroups.map((group) => (
+                    <div
+                      key={group.id}
+                      className="p-4 rounded-xl border border-border/60 bg-card/60 hover:border-cyan-500/30 transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+                    >
+                      <div className="space-y-1.5 flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h4 className="font-semibold text-sm text-foreground truncate max-w-xs sm:max-w-md">
+                            {group.name}
+                          </h4>
+                          <Badge variant="outline" className="text-[10px] bg-cyan-500/10 border-cyan-500/30 text-cyan-300">
+                            {group.subject}
+                          </Badge>
+                          <Badge variant="outline" className="text-[10px] bg-primary/10 border-primary/20 text-primary">
+                            {group.examFocus}
+                          </Badge>
+                          <span className="text-[11px] text-muted-foreground flex items-center gap-1 font-mono">
+                            <Clock className="w-3 h-3" />
+                            {new Date(group.createdAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                        {group.description && (
+                          <p className="text-xs text-muted-foreground line-clamp-2">
+                            {group.description}
+                          </p>
+                        )}
+                        <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground pt-1">
+                          <span>
+                            Owner:{" "}
+                            <strong className="text-foreground">
+                              {group.ownerUsername === "mythicalhrg" ? (
+                                <MythicalUserBadge username={group.ownerUsername} />
+                              ) : (
+                                `@${group.ownerUsername}`
+                              )}
+                            </strong>{" "}
+                            ({group.ownerFullName})
+                          </span>
+                          <span>•</span>
+                          <span className="flex items-center gap-1 text-cyan-300 font-mono">
+                            <Users className="w-3 h-3" /> {group.memberCount} {group.memberCount === 1 ? "member" : "members"}
+                          </span>
+                          <span>•</span>
+                          <span className="flex items-center gap-1 text-emerald-300 font-mono">
+                            <MessageSquare className="w-3 h-3" /> {group.messageCount} messages
+                          </span>
+                          <span>•</span>
+                          <span>Schedule: {group.schedule}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 self-end lg:self-center">
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="h-8 text-xs flex items-center gap-1.5 bg-destructive/90 hover:bg-destructive"
+                          disabled={deletingGroupId === group.id}
+                          onClick={() => setGroupToDelete(group)}
+                        >
+                          {deletingGroupId === group.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-3.5 h-3.5" />
+                          )}
+                          Delete Group
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
+
+      {/* Delete Study Group Confirmation Dialog (Admin @mythicalhrg Only) */}
+      <Dialog open={!!groupToDelete} onOpenChange={(open) => !open && setGroupToDelete(null)}>
+        <DialogContent className="sm:max-w-[460px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <ShieldAlert className="w-5 h-5 text-destructive" /> Delete Study Group
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to permanently delete <strong>{groupToDelete?.name}</strong>?
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-3 text-xs space-y-3">
+            <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-[12px] space-y-1">
+              <p className="font-semibold">⚠️ Irreversible Purge Action</p>
+              <p>
+                This will delete the study group, remove all memberships, and permanently wipe all {groupToDelete?.messageCount || 0} messages from the database.
+              </p>
+            </div>
+            <div className="text-muted-foreground space-y-1 text-[11px] p-2.5 rounded-lg bg-muted/40 border border-border/50">
+              <p>• <strong>Subject:</strong> {groupToDelete?.subject} ({groupToDelete?.examFocus})</p>
+              <p>• <strong>Owner:</strong> @{groupToDelete?.ownerUsername} ({groupToDelete?.ownerFullName})</p>
+              <p>• <strong>Created:</strong> {groupToDelete ? new Date(groupToDelete.createdAt).toLocaleString() : ""}</p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setGroupToDelete(null)}
+              disabled={!!deletingGroupId}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              disabled={!!deletingGroupId}
+              onClick={() => groupToDelete && handleDeleteStudyGroup(groupToDelete.id)}
+            >
+              {deletingGroupId ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Trash2 className="w-4 h-4 mr-1.5" />}
+              Permanently Delete Group
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit User Credentials Dialog (Platform Owner @mythicalhrg Only) */}
       <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>

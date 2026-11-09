@@ -359,3 +359,32 @@ export async function sendDirectMessageAction(targetUsername: string, body: stri
     },
   };
 }
+
+export async function adminDeleteStudyGroupAction(groupId: string) {
+  const user = await getAuthenticatedUser();
+  if (user.username !== "mythicalhrg") {
+    throw new Error("Forbidden: Only @mythicalhrg is authorized to delete study groups.");
+  }
+
+  if (!groupId) {
+    throw new Error("Group ID is required.");
+  }
+
+  await dbConnect();
+  const group = await StudyGroup.findById(groupId);
+  if (!group) {
+    throw new Error("Study group not found or already deleted.");
+  }
+
+  const groupName = group.name;
+
+  await Promise.all([
+    StudyGroup.findByIdAndDelete(groupId),
+    GroupMessage.deleteMany({ groupId }),
+  ]);
+
+  return {
+    success: true,
+    message: `Study group "${groupName}" and all associated messages were deleted by admin.`,
+  };
+}
