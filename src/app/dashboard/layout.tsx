@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 import { AddTopicButton } from "@/components/dashboard/add-topic-button";
 import { SidebarNav } from "@/components/dashboard/sidebar-nav";
 import { Navbar } from "@/components/dashboard/navbar";
+import { BottomNav } from "@/components/dashboard/bottom-nav";
 import {
   Sidebar,
   SidebarContent,
@@ -92,12 +93,13 @@ export default async function DashboardLayout({
           </SidebarFooter>
         </Sidebar>
         <SidebarInset>
-          <div className="relative min-h-screen min-w-0 dashboard-gradient pb-[calc(4rem+env(safe-area-inset-bottom,0px))]">
+          <div className="relative min-h-screen min-w-0 dashboard-gradient pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] sm:pb-[calc(4rem+env(safe-area-inset-bottom,0px))]">
             <Navbar />
             <main className="min-w-0 p-3.5 sm:p-6 lg:p-8">
               {children}
             </main>
             <AddTopicButton />
+            <BottomNav />
           </div>
         </SidebarInset>
       </SidebarProvider>

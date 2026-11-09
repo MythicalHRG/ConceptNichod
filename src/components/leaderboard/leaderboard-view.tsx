@@ -371,7 +371,67 @@ export function LeaderboardView() {
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto touch-scrollbar">
+          {/* Mobile Card-List View (Phones) */}
+          <div className="block sm:hidden divide-y divide-border/60">
+            {data.entries.length === 0 ? (
+              <div className="py-8 text-center text-xs text-muted-foreground">
+                No aspirants found for this view.
+              </div>
+            ) : (
+              data.entries.map((entry) => (
+                <Link
+                  key={`mobile-${entry.username}`}
+                  href={`/profile/${entry.username}`}
+                  className={`flex items-center justify-between p-3.5 hover:bg-muted/40 transition-colors ${
+                    entry.isCurrentUser ? "bg-primary/10" : ""
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center font-bold text-xs shrink-0">
+                      {entry.rank === 1 ? <Crown className="h-4 w-4 text-yellow-500 fill-yellow-500" /> :
+                       entry.rank === 2 ? <Medal className="h-4 w-4 text-slate-400" /> :
+                       entry.rank === 3 ? <Award className="h-4 w-4 text-amber-600" /> :
+                       <span>#{entry.rank}</span>}
+                    </div>
+                    <div className="min-w-0 space-y-0.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-semibold text-sm truncate text-foreground">
+                          {entry.fullName}
+                        </span>
+                        {entry.isCurrentUser && (
+                          <Badge variant="secondary" className="text-[9px] px-1 py-0">You</Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <span>@{entry.username}</span>
+                        <span>•</span>
+                        <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-normal">
+                          {entry.examFocus}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="text-right shrink-0 pl-2">
+                    <div className="font-extrabold text-base text-primary">
+                      {entry.rankScore}
+                    </div>
+                    <div className="flex items-center justify-end gap-1.5 text-[11px] text-muted-foreground">
+                      <span className="text-orange-500 font-semibold flex items-center gap-0.5">
+                        <Flame className="w-3 h-3" />
+                        {entry.currentStreak}d
+                      </span>
+                      <span>•</span>
+                      <span>{entry.conceptsCovered} conc.</span>
+                    </div>
+                  </div>
+                </Link>
+              ))
+            )}
+          </div>
+
+          {/* Desktop & Tablet Table View */}
+          <div className="hidden sm:block overflow-x-auto touch-scrollbar">
             <table className="w-full text-left text-sm min-w-[680px]">
               <thead className="bg-muted/70 text-xs uppercase font-semibold text-muted-foreground border-b">
                 <tr>

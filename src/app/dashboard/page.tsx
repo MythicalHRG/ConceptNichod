@@ -107,19 +107,19 @@ export default async function DashboardPage() {
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row md:flex-col gap-2.5 w-full md:w-auto md:min-w-[200px] shrink-0">
+            <div className="flex flex-row md:flex-col gap-2 w-full md:w-auto md:min-w-[180px] shrink-0">
               {user.snapchat && (
-                <a href={`https://snapchat.com/add/${encodeURIComponent(user.snapchat.replace(/^@/, ''))}`} target="_blank" rel="noopener noreferrer">
-                  <Button variant="outline" className="w-full justify-start text-yellow-600 border-yellow-600 hover:bg-yellow-50 hover:text-yellow-700 bg-background/50 backdrop-blur-sm">
-                    <span className="font-semibold">Snapchat:</span> <span className="ml-2 font-normal truncate">{user.snapchat}</span>
+                <a href={`https://snapchat.com/add/${encodeURIComponent(user.snapchat.replace(/^@/, ''))}`} target="_blank" rel="noopener noreferrer" className="flex-1 md:flex-initial">
+                  <Button variant="outline" size="sm" className="w-full justify-center md:justify-start text-yellow-600 border-yellow-600/40 hover:bg-yellow-500/10 hover:text-yellow-700 bg-background/60 backdrop-blur-sm text-xs h-9">
+                    <span className="font-bold">Snap:</span> <span className="ml-1.5 font-normal truncate max-w-[100px]">{user.snapchat}</span>
                   </Button>
                 </a>
               )}
               {user.instagram && (
-                <a href={`https://instagram.com/${encodeURIComponent(user.instagram.replace(/^@/, ''))}`} target="_blank" rel="noopener noreferrer">
-                  <Button variant="outline" className="w-full justify-start text-pink-600 border-pink-600 hover:bg-pink-50 hover:text-pink-700 bg-background/50 backdrop-blur-sm">
-                    <Instagram className="h-4 w-4 mr-2" />
-                    <span className="font-semibold">Insta:</span> <span className="ml-2 font-normal truncate">{user.instagram}</span>
+                <a href={`https://instagram.com/${encodeURIComponent(user.instagram.replace(/^@/, ''))}`} target="_blank" rel="noopener noreferrer" className="flex-1 md:flex-initial">
+                  <Button variant="outline" size="sm" className="w-full justify-center md:justify-start text-pink-600 border-pink-600/40 hover:bg-pink-500/10 hover:text-pink-700 bg-background/60 backdrop-blur-sm text-xs h-9">
+                    <Instagram className="h-3.5 w-3.5 mr-1 shrink-0" />
+                    <span className="font-bold">Insta:</span> <span className="ml-1.5 font-normal truncate max-w-[100px]">{user.instagram}</span>
                   </Button>
                 </a>
               )}

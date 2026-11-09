@@ -216,26 +216,56 @@ export function PracticeAndAnalysisSection({ topic, onFinalAnalysis, isAnalyzing
   const isLocked = isAnalyzing || isSubmitted;
   const isNextDisabled = currentQuestionIndex === totalSteps - 1 || isLocked;
 
+  const percentComplete = Math.round(((currentQuestionIndex + 1) / totalSteps) * 100);
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-5 sm:space-y-6">
       {/* Proctoring & Integrity Notice */}
-      <div className="flex items-center gap-2 p-3 text-xs rounded-lg border border-amber-500/30 bg-amber-500/5 text-amber-600 dark:text-amber-400">
+      <div className="flex items-center gap-2 p-3 text-xs rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400">
         <ShieldAlert className="w-4 h-4 shrink-0" />
-        <span>
-          <strong>Proctoring Integrity Active:</strong> Do not minimize the window or switch browser tabs. Leaving this screen will automatically submit your session for immediate evaluation.
+        <span className="leading-relaxed">
+          <strong>Proctoring Active:</strong> Do not minimize the window or switch tabs. Leaving this screen will immediately submit partial progress for grading.
         </span>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="font-headline">Practice Section</CardTitle>
-          <CardDescription>
-            {isFinalStep 
-              ? "Final step! Show off what you learned."
-              : "Answer the first few questions by typing, and the remaining questions by speaking out loud."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
+      <Card className="border border-border/80 shadow-sm overflow-hidden">
+        {/* Visual Multi-Step Progress Header */}
+        <div className="p-4 sm:p-5 border-b border-border/60 bg-muted/20 space-y-3">
+          <div className="flex items-center justify-between gap-2 text-xs">
+            <span className="font-bold text-foreground flex items-center gap-1.5">
+              {isWrittenQuestion ? (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-primary" />
+                  <span>Stage 1: Written Questions</span>
+                </>
+              ) : isVoiceQuestion ? (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>Stage 2: Verbal Articulation</span>
+                </>
+              ) : (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                  <span>Stage 3: 2-Minute Oral Defense</span>
+                </>
+              )}
+            </span>
+
+            <span className="font-mono text-muted-foreground font-semibold">
+              Step {currentQuestionIndex + 1} of {totalSteps} ({percentComplete}%)
+            </span>
+          </div>
+
+          {/* Stepper Progress Bar */}
+          <div className="w-full h-2 rounded-full bg-muted/80 overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-amber-500 to-primary transition-all duration-300"
+              style={{ width: `${percentComplete}%` }}
+            />
+          </div>
+        </div>
+
+        <CardContent className="p-4 sm:p-6 space-y-6">
           {isWrittenQuestion ? (
             <QuestionDisplay
               question={questions[currentQuestionIndex]}
@@ -245,9 +275,11 @@ export function PracticeAndAnalysisSection({ topic, onFinalAnalysis, isAnalyzing
             />
           ) : isVoiceQuestion ? (
              <div className="space-y-4">
-               <div className="space-y-2">
-                 <p className="text-sm font-medium text-primary">Voice Question</p>
-                 <div className="text-xl font-semibold">
+               <div className="p-4 sm:p-5 rounded-xl border border-emerald-500/20 bg-emerald-500/5 space-y-1.5">
+                 <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wide">
+                   Verbal Articulation Question
+                 </p>
+                 <div className="text-base sm:text-lg md:text-xl font-semibold text-foreground leading-relaxed break-words">
                    <LatexRenderer content={questions[currentQuestionIndex].question} />
                  </div>
                </div>
@@ -274,21 +306,33 @@ export function PracticeAndAnalysisSection({ topic, onFinalAnalysis, isAnalyzing
              </div>
           )}
           
-          <div className="flex justify-between items-center pt-4 border-t">
-            <div className="w-[100px]"></div>
-            <p className="text-sm text-muted-foreground">
-              Step {currentQuestionIndex + 1} of {totalSteps}
-            </p>
-            {isFinalStep ? (
-              <Button onClick={handleTriggerAnalysis} disabled={isLocked}>
-                {isLocked ? <Loader2 className="mr-2 animate-spin" /> : <BrainCircuit className="mr-2" />}
-                {isLocked ? "Analyzing..." : "Analyze My Performance"}
-              </Button>
-            ) : (
-              <Button onClick={handleNext} disabled={isNextDisabled}>
-                Next <ArrowRight className="ml-2" />
-              </Button>
-            )}
+          {/* Navigation Controls */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-border/60">
+            <div className="text-xs text-muted-foreground font-mono hidden sm:block">
+              Question {currentQuestionIndex + 1} of {totalSteps}
+            </div>
+
+            <div className="w-full sm:w-auto">
+              {isFinalStep ? (
+                <Button 
+                  onClick={handleTriggerAnalysis} 
+                  disabled={isLocked}
+                  className="w-full sm:w-auto h-11 px-6 text-sm font-bold bg-gradient-to-r from-rose-500 via-amber-500 to-primary text-primary-foreground hover:opacity-95 shadow-md gap-2"
+                >
+                  {isLocked ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <BrainCircuit className="mr-2 h-4 w-4" />}
+                  {isLocked ? "Grading Performance..." : "Analyze My Performance"}
+                </Button>
+              ) : (
+                <Button 
+                  onClick={handleNext} 
+                  disabled={isNextDisabled}
+                  className="w-full sm:w-auto h-11 px-6 text-sm font-bold gap-2"
+                >
+                  <span>Next Question</span>
+                  <ArrowRight className="w-4 h-4 ml-1" />
+                </Button>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>

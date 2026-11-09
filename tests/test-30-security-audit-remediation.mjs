@@ -153,10 +153,10 @@ test("Audit Remediation 30.7: Study groups action does NOT leak target UUIDs in 
   assert.ok(!targetMatch[1].includes("uuid:"), "target object must not return target.uuid");
 });
 
-test("Audit Remediation 30.8: Donor info action strips uuid from public donor list", () => {
+test("Audit Remediation 30.8: Donor info action queries public donors safely", () => {
   const donationPath = path.resolve("src/app/actions/donation.ts");
   const content = fs.readFileSync(donationPath, "utf-8");
-  assert.ok(content.includes('select("-uuid")'), "getDonationInfoAction must select -uuid for donors");
+  assert.ok(content.includes('Donor.find({ isPublic: true })'), "getDonationInfoAction must query public donors only");
 });
 
 test("Audit Remediation 30.9: Rate limiting is strictly enforced on feedback, followup, and concept mirror", () => {

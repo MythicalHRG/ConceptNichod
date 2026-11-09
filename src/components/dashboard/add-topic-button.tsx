@@ -116,11 +116,11 @@ export function AddTopicButton() {
     }}>
       <DialogTrigger asChild>
         <Button
-          className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom,0px))] right-[calc(1rem+env(safe-area-inset-right,0px))] h-14 w-14 rounded-full shadow-xl sm:bottom-8 sm:right-8 sm:h-16 sm:w-16 z-40 transition-transform hover:scale-105 active:scale-95"
+          className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] right-[calc(1rem+env(safe-area-inset-right,0px))] h-13 w-13 rounded-full shadow-xl sm:bottom-8 sm:right-8 sm:h-16 sm:w-16 z-40 transition-transform hover:scale-105 active:scale-95"
           size="icon"
           disabled={!isAuthReady}
         >
-          <Plus className="h-8 w-8" />
+          <Plus className="h-7 w-7 sm:h-8 sm:w-8" />
           <span className="sr-only">Add new topic</span>
         </Button>
       </DialogTrigger>

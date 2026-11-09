@@ -149,55 +149,87 @@ export function SpeechRecorder({
         </Alert>
       )}
 
-      <div className="flex items-center gap-3 flex-wrap justify-between sm:justify-start">
+      {/* Speech Control Toolbar */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 items-center">
         <Button
           type="button"
           onClick={toggleRecording}
           size="lg"
-          className="w-full sm:w-auto"
-          variant={isRecording ? "destructive" : "default"}
+          className={`w-full h-12 text-sm sm:text-base font-bold transition-all shadow-md ${
+            isRecording 
+              ? "bg-rose-600 hover:bg-rose-700 text-white animate-pulse" 
+              : "bg-gradient-to-r from-amber-500 to-primary text-primary-foreground hover:opacity-95"
+          }`}
           disabled={isConnecting || isLocked || recorderIsLocked}
         >
           {buttonIcon}
           {buttonText}
         </Button>
 
-        {/* Reset button - no pause button per specification */}
+        {/* Live Stopwatch / Countdown Timer */}
+        <div
+          className={`flex items-center justify-center gap-2 font-mono text-base sm:text-lg h-12 px-3 rounded-xl border transition-all ${
+            isRecording
+              ? timeLimitSeconds && timeLeft <= 15
+                ? "bg-rose-500/10 border-rose-500/30 text-rose-500 animate-pulse font-bold"
+                : "bg-emerald-500/10 border-emerald-500/30 text-emerald-500 font-bold"
+              : "bg-muted/50 border-border text-muted-foreground"
+          }`}
+        >
+          <Timer className={`h-5 w-5 ${isRecording ? "animate-spin text-emerald-500" : ""}`} />
+          <span>{formatTime(displayTime)}</span>
+          {timeLimitSeconds && (
+            <span className="text-xs text-muted-foreground font-sans">
+              / {formatTime(timeLimitSeconds)}
+            </span>
+          )}
+        </div>
+
+        {/* Reset button */}
         <Button
           type="button"
           onClick={handleReset}
           size="lg"
           variant="outline"
-          className="w-full sm:w-auto"
+          className="w-full h-12 text-sm font-semibold border-border/80 hover:bg-muted"
           disabled={isLocked || recorderIsLocked}
         >
           <RotateCcw className="mr-2 h-4 w-4" />
-          Reset
+          Clear & Re-record
         </Button>
-
-        {/* Live Stopwatch / Countdown Timer */}
-        <div
-          className={`flex items-center justify-center gap-2 font-mono text-lg px-3 py-1.5 rounded-lg border w-full sm:w-auto ${
-            isRecording
-              ? timeLimitSeconds && timeLeft <= 15
-                ? "bg-destructive/10 border-destructive/30 text-destructive animate-pulse"
-                : "bg-emerald-500/10 border-emerald-500/30 text-emerald-500"
-              : "bg-muted/40 border-border text-muted-foreground"
-          }`}
-        >
-          <Timer className={`h-5 w-5 ${isRecording ? "animate-pulse" : ""}`} />
-          <span>{formatTime(displayTime)}</span>
-        </div>
       </div>
 
       {/* Strictly read-only voice transcript display - no typing */}
-      <Textarea
-        placeholder="Your verbal explanation will appear here in real-time as you speak..."
-        value={transcript}
-        readOnly={true}
-        rows={5}
-        className="bg-muted/40 text-base cursor-default select-text resize-none focus-visible:ring-0"
-      />
+      <div className="space-y-1.5">
+        <div className="relative">
+          <Textarea
+            placeholder="Your verbal explanation will appear here in real-time as you speak..."
+            value={transcript}
+            readOnly={true}
+            rows={5}
+            className={`p-3.5 sm:p-4 rounded-xl text-base leading-relaxed cursor-default select-text resize-none focus-visible:ring-0 transition-colors ${
+              isRecording 
+                ? "border-emerald-500/40 bg-emerald-500/5" 
+                : "bg-muted/40 border-border/70"
+            }`}
+          />
+          {isRecording && (
+            <div className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-500 text-[10px] font-bold font-mono animate-pulse">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span>LIVE LISTENING</span>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between text-xs text-muted-foreground px-1 font-mono">
+          <span>{transcript.trim().split(/\s+/).filter(Boolean).length} words spoken</span>
+          {isRecording ? (
+            <span className="text-emerald-500 font-semibold">Microphone active • Speak clearly</span>
+          ) : (
+            <span>Tap Start Speaking when ready</span>
+          )}
+        </div>
+      </div>
     </div>
   );
 
