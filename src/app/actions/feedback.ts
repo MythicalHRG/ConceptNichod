@@ -50,7 +50,7 @@ export async function submitFeedbackAction(formData: FormData) {
 
   const cleanType = (type || "").replace(/[\r\n]/g, " ");
   const cleanHeaderSender = userInfo.split(' ')[0].replace(/[\r\n]/g, "");
-  const subject = `[ConceptsNichod] New ${cleanType === "error" ? "Bug Report" : "Suggestion"} from ${cleanHeaderSender}`;
+  const subject = `[ConceptNichod] New ${cleanType === "error" ? "Bug Report" : "Suggestion"} from ${cleanHeaderSender}`;
   const html = `
     <div style="font-family: sans-serif; padding: 20px;">
       <h2>New Feedback Submitted</h2>

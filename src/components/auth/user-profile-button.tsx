@@ -408,7 +408,10 @@ export function UserProfileButton() {
                     </p>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-sm font-medium">Date of Birth</label>
+                    <label className="text-sm font-medium flex items-center gap-1.5">
+                      <span role="img" aria-label="Birthday cake">🎂</span>
+                      <span>Birthday</span>
+                    </label>
                     <Input
                       type="text"
                       value={formatDob(user?.dob) || user?.dob || "Not set"}

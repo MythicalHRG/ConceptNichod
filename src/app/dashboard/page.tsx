@@ -103,8 +103,8 @@ export default async function DashboardPage() {
                 </div>
                 {user.dob && (
                   <div className="flex items-center gap-1.5 px-3 py-1 bg-background rounded-full border shadow-xs">
-                    <Calendar className="w-3.5 h-3.5 text-primary shrink-0" />
-                    <span className="font-medium truncate max-w-[140px] sm:max-w-none">DOB: {formatDob(user.dob)}</span>
+                    <span className="text-sm leading-none" role="img" aria-label="Birthday cake">🎂</span>
+                    <span className="font-medium truncate max-w-[160px] sm:max-w-none">Birthday: {formatDob(user.dob)}</span>
                   </div>
                 )}
                 <div className="flex items-center gap-1.5 px-3 py-1 bg-background rounded-full border shadow-xs">

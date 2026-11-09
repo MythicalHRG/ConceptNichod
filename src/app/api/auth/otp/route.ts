@@ -176,7 +176,7 @@ export async function POST(req: Request) {
       });
 
       await transporter.sendMail({
-        from: `"Concept Nichod Security" <${senderUser}>`,
+        from: `"ConceptNichod Security" <${senderUser}>`,
         to: email,
         subject: 'Your ConceptNichod Verification Code',
         html: `

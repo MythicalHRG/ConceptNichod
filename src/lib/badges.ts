@@ -158,7 +158,7 @@ export async function computeUserBadges(userUuid: string, username: string): Pro
           id: "overall-legend",
           name: "All-Time #1 Legend",
           shortLabel: "All-Time #1",
-          description: "#1 overall learner on Concepts Nichod.",
+          description: "#1 overall learner on ConceptNichod.",
           category: "overall",
           level: 5,
           priorityWeight: 9600,

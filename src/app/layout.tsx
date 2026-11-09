@@ -24,7 +24,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: 'Concepts Nichod',
+  title: 'ConceptNichod',
   description: 'AI-powered learning and concept mastery.',
 };
 

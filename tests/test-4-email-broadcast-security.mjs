@@ -37,7 +37,7 @@ function prepareMailOptions({
     .filter((e) => e.length > 0 && e.includes("@"));
 
   const mailOptions = {
-    from: `"Concept Nichod" <${senderUser}>`,
+    from: `"ConceptNichod" <${senderUser}>`,
     subject,
     text: body,
   };

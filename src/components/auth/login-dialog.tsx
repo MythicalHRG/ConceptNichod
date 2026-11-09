@@ -279,7 +279,7 @@ export function LoginDialog() {
     <Dialog open={isAuthModalOpen} onOpenChange={setAuthModalOpen}>
       <DialogContent className="sm:max-w-[425px] [&>button]:hidden" onInteractOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>Welcome to Concepts Nichod</DialogTitle>
+          <DialogTitle>Welcome to ConceptNichod</DialogTitle>
           <DialogDescription>
             Please sign in or create an account to access our platform. Only @gmail.com, @outlook.com, and @outlook.in emails are permitted.
           </DialogDescription>

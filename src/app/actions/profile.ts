@@ -24,14 +24,14 @@ export async function getPublicProfileData(username: string) {
   const analyzedTopics = topics.filter(t => t.analysis && typeof t.analysis.overallScore === 'number');
   const totalTopics = topics.length;
   
-  // 1. Overall Score Average (Concept Nichod Topics)
+  // 1. Overall Score Average (ConceptNichod Topics)
   let totalScore = 0;
   analyzedTopics.forEach(t => {
       totalScore += t.analysis.overallScore;
   });
   const averageScore = analyzedTopics.length > 0 ? Math.round(totalScore / analyzedTopics.length) : 0;
 
-  // 2. Pie Chart: Subject Distribution (Concept Nichod)
+  // 2. Pie Chart: Subject Distribution (ConceptNichod)
   const subjectMap = new Map<string, number>();
   topics.forEach(t => {
     const subj = t.subject || "Unknown";
@@ -39,7 +39,7 @@ export async function getPublicProfileData(username: string) {
   });
   const subjectDistribution = Array.from(subjectMap.entries()).map(([name, value]) => ({ name, value }));
 
-  // 3. Histogram: Score Distribution (Concept Nichod)
+  // 3. Histogram: Score Distribution (ConceptNichod)
   const scoreBuckets = [
     { name: "0-20", min: 0, max: 20, count: 0 },
     { name: "21-40", min: 21, max: 40, count: 0 },
@@ -58,7 +58,7 @@ export async function getPublicProfileData(username: string) {
   });
   const scoreDistribution = scoreBuckets.map(b => ({ name: b.name, value: b.count }));
 
-  // 4. Bar Chart: Skill Averages (Concept Nichod generated topics)
+  // 4. Bar Chart: Skill Averages (ConceptNichod generated topics)
   const skillAggregator = new Map<string, { total: number, count: number }>();
   
   analyzedTopics.forEach(t => {

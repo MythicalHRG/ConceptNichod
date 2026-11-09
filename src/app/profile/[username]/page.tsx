@@ -9,8 +9,8 @@ import { MapPin, Target, GraduationCap, Instagram, Ghost, Crown, Sparkles, Calen
 import { MythicalUserBadge, MythicalProfileHeroCard } from "@/components/ui/mythical-glass";
 
 export const metadata = {
-  title: 'User Profile - Concept Nichod',
-  description: 'Public analytics and progress profile for a Concept Nichod user.',
+  title: 'User Profile - ConceptNichod',
+  description: 'Public analytics and progress profile for a ConceptNichod user.',
 };
 
 function formatDob(dobStr?: string | null) {
@@ -79,9 +79,9 @@ export default async function PublicProfilePage({ params }: { params: { username
                     </Badge>
                   )}
                   {user.dob && (
-                    <Badge variant="outline" className="flex items-center gap-1 font-medium text-xs">
-                      <Calendar className="w-3.5 h-3.5 text-sky-500" />
-                      <span>DOB: {formatDob(user.dob)}</span>
+                    <Badge variant="outline" className="flex items-center gap-1.5 font-medium text-xs">
+                      <span className="text-sm leading-none" role="img" aria-label="Birthday cake">🎂</span>
+                      <span>Birthday: {formatDob(user.dob)}</span>
                     </Badge>
                   )}
                   {user.city && (
@@ -159,9 +159,9 @@ export default async function PublicProfilePage({ params }: { params: { username
                   </Badge>
                 )}
                 {user.dob && (
-                  <Badge variant="outline" className="flex items-center gap-1 text-xs">
-                    <Calendar className="w-3 h-3 text-sky-500" />
-                    <span>DOB: {formatDob(user.dob)}</span>
+                  <Badge variant="outline" className="flex items-center gap-1.5 text-xs">
+                    <span className="text-sm leading-none" role="img" aria-label="Birthday cake">🎂</span>
+                    <span>Birthday: {formatDob(user.dob)}</span>
                   </Badge>
                 )}
                 {user.city && (

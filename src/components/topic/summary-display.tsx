@@ -197,7 +197,7 @@ export function SummaryDisplay({ summary, topic }: SummaryDisplayProps) {
         </div>
       </div>
 
-      {/* Main Concept Nichod Reader Card */}
+      {/* Main ConceptNichod Reader Card */}
       <Card className="border border-border/80 shadow-sm overflow-hidden bg-gradient-to-b from-card via-card to-background">
         <CardHeader className="p-4 sm:p-6 border-b border-border/60 bg-muted/20">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">

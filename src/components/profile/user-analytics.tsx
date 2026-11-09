@@ -113,10 +113,10 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
           </CardContent>
         </Card>
 
-        {/* Card 2: Concept Nichod Generated */}
+        {/* Card 2: ConceptNichod Generated */}
         <Card className="hover:-translate-y-1 transition-transform border-primary/10">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Concept Nichod Generated</CardTitle>
+            <CardTitle className="text-sm font-medium">ConceptNichod Generated</CardTitle>
             <BookOpen className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
@@ -285,7 +285,7 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
               </CardTitle>
               <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-muted text-muted-foreground">Pie / Donut</span>
             </div>
-            <CardDescription className="text-xs">Topics breakdown from Concept Nichod</CardDescription>
+            <CardDescription className="text-xs">Topics breakdown from ConceptNichod</CardDescription>
           </CardHeader>
           <CardContent className="flex-1 min-h-[300px] flex items-center justify-center">
             {data.subjectDistribution.length > 0 ? (

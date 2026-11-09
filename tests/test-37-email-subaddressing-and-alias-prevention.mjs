@@ -121,6 +121,17 @@ test('37.4 Landing Page Book Cover Verification: "Inside The Book" and skeleton 
   assert.ok(!content.includes('bg-muted-foreground/20 rounded-full'), 'Must not contain skeleton placeholder lines');
   assert.ok(!content.includes('rotateY(180deg)'), 'Must not contain 180deg mirrored flip back page');
   assert.ok(!content.includes('isFlipped'), 'Must not contain flipping state');
-  assert.ok(content.includes('ConceptsNichod'), 'Must contain clean ConceptsNichod book cover');
+  assert.ok(content.includes('ConceptNichod'), 'Must contain clean ConceptNichod book cover');
   assert.ok(content.includes('Your journey begins here.'), 'Must contain journey caption');
+});
+
+test('37.5 Landing Page Mobile Visibility & ConceptNichod Branding', () => {
+  const homePath = path.resolve('src/app/page.tsx');
+  const content = fs.readFileSync(homePath, 'utf8');
+
+  // Verify book cover is hidden on mobile and only visible on desktop (hidden lg:flex)
+  assert.ok(content.includes('hidden lg:flex'), 'Book container must be hidden on mobile (hidden lg:flex)');
+  // Verify correct ConceptNichod title branding
+  assert.ok(content.includes('ConceptNichod'), 'Landing page title must be ConceptNichod');
+  assert.ok(!content.includes('Concepts Nichod'), 'Must not contain old Concepts Nichod title');
 });

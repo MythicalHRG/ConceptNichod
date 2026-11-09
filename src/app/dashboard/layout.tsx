@@ -80,7 +80,7 @@ export default async function DashboardLayout({
           <SidebarHeader>
             <div className="flex items-center gap-2 data-[collapsed=true]:hidden pl-2 pt-2">
               <Logo className="size-8" />
-              <h2 className="text-lg font-headline font-bold">Concepts Nichod</h2>
+              <h2 className="text-lg font-headline font-bold">ConceptNichod</h2>
             </div>
           </SidebarHeader>
           <SidebarContent>

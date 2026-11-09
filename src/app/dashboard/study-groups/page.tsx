@@ -2,7 +2,7 @@ import { StudyGroupsHub } from "@/components/study-groups/study-groups-hub";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Study Groups & Native Chat | Concepts Nichod",
+  title: "Study Groups & Native Chat | ConceptNichod",
   description: "Collaborative study circles and server-time verified discussions.",
 };
 

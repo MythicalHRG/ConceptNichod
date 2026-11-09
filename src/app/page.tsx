@@ -21,7 +21,7 @@ export default function Home() {
             <div className="mb-4 flex flex-col items-center gap-2 sm:flex-row sm:gap-3">
               <Logo className="h-12 w-12 shrink-0 drop-shadow-lg sm:h-16 sm:w-16" />
               <h1 className="text-3xl font-headline font-bold text-foreground sm:text-4xl md:text-5xl">
-                Concepts Nichod
+                ConceptNichod
               </h1>
             </div>
             <p className="mt-2 text-lg md:text-xl text-muted-foreground max-w-md">
@@ -37,7 +37,7 @@ export default function Home() {
 
           </div>
 
-          <div className="flex items-center justify-center perspective-1000 mt-6 lg:mt-0 scale-90 sm:scale-95 lg:scale-100">
+          <div className="hidden lg:flex items-center justify-center perspective-1000 mt-6 lg:mt-0 scale-90 sm:scale-95 lg:scale-100">
             <FlippingBook />
           </div>
         </div>

@@ -41,7 +41,7 @@ test('38.3 Owner security guards protect mythicalhrg and mythicalhrg@gmail.com',
   assert.ok(adminContent.includes('mythicalhrg@gmail.com'), 'Admin authorization must recognize mythicalhrg@gmail.com');
 });
 
-test('38.4 User Profiles display Date of Birth (dob) across views', () => {
+test('38.4 User Profiles display Birthday with cake emoji across views', () => {
   const publicProfilePath = path.resolve('src/app/profile/[username]/page.tsx');
   const dashboardPath = path.resolve('src/app/dashboard/page.tsx');
   const userProfileBtnPath = path.resolve('src/components/auth/user-profile-button.tsx');
@@ -50,15 +50,18 @@ test('38.4 User Profiles display Date of Birth (dob) across views', () => {
   const dashContent = fs.readFileSync(dashboardPath, 'utf-8');
   const btnContent = fs.readFileSync(userProfileBtnPath, 'utf-8');
 
-  // Public profile displays DOB
+  // Public profile displays Birthday with cake emoji
   assert.ok(publicContent.includes('user.dob'), 'Public profile must display user.dob');
-  assert.ok(publicContent.includes('DOB:'), 'Public profile must show DOB label');
+  assert.ok(publicContent.includes('Birthday:'), 'Public profile must show Birthday: label');
+  assert.ok(publicContent.includes('🎂'), 'Public profile must show cake emoji');
 
-  // Dashboard hero card displays DOB
+  // Dashboard hero card displays Birthday with cake emoji
   assert.ok(dashContent.includes('user.dob'), 'Dashboard must display user.dob');
-  assert.ok(dashContent.includes('DOB:'), 'Dashboard must show DOB label');
+  assert.ok(dashContent.includes('Birthday:'), 'Dashboard must show Birthday: label');
+  assert.ok(dashContent.includes('🎂'), 'Dashboard must show cake emoji');
 
-  // Profile modal displays Date of Birth
-  assert.ok(btnContent.includes('Date of Birth'), 'User profile modal must display Date of Birth label');
+  // Profile modal displays Birthday with cake emoji
+  assert.ok(btnContent.includes('Birthday'), 'User profile modal must display Birthday label');
+  assert.ok(btnContent.includes('🎂'), 'User profile modal must show cake emoji');
   assert.ok(btnContent.includes('user?.dob'), 'User profile modal must access user?.dob');
 });

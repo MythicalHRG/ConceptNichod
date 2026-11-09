@@ -143,13 +143,13 @@ export async function sendEmailBroadcastAction(formData: FormData) {
 
   // Privacy protection: If broadcasting to all users, put them in BCC so no one sees other recipients' email addresses
   const mailOptions: any = {
-    from: `"Concept Nichod" <${senderUser}>`,
+    from: `"ConceptNichod" <${senderUser}>`,
     subject,
     html: htmlContent,
   };
 
   if (recipientType === "all") {
-    mailOptions.to = senderUser; // To: Concept Nichod <mythicalhrg@gmail.com>
+    mailOptions.to = senderUser; // To: ConceptNichod <mythicalhrg@gmail.com>
     mailOptions.bcc = Array.from(new Set([...toRecipients, ...bccRecipients]));
   } else {
     mailOptions.to = toRecipients;
