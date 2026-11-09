@@ -109,7 +109,6 @@ function DonatePageContent() {
   const [selectedAmount, setSelectedAmount] = useState<number | null>(100);
   const [customAmount, setCustomAmount] = useState<string>("");
   const [utrNumber, setUtrNumber] = useState<string>("");
-  const [userMessage, setUserMessage] = useState<string>("");
   const [username, setUsername] = useState<string>("");
   const [isLoggedInUser, setIsLoggedInUser] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -224,7 +223,6 @@ function DonatePageContent() {
       const res = await submitDonationUtrAction({
         amount: activeAmount,
         utr: cleanUtr,
-        message: userMessage.trim(),
       });
 
       if (res.success && res.donor) {
@@ -236,9 +234,8 @@ function DonatePageContent() {
           tier: res.donor.tier,
         });
 
-        // Reset UTR & message inputs
+        // Reset UTR input
         setUtrNumber("");
-        setUserMessage("");
 
         toast({
           title: "Payment Verified Successfully! 🎉",
@@ -338,9 +335,12 @@ function DonatePageContent() {
                     Payment Verified & Celebrated!
                     <Sparkles className="w-4 h-4 text-amber-500" />
                   </h3>
-                  <p className="text-xs sm:text-sm text-muted-foreground">
-                    Thank you <strong>@{verifiedDonor.username}</strong>! You just contributed <strong className="text-foreground">₹{verifiedDonor.contributed}</strong>.
-                    Your cumulative patronage is now <strong className="text-primary font-bold">₹{verifiedDonor.totalAmount}</strong> across {verifiedDonor.donationCount} contribution{verifiedDonor.donationCount > 1 ? "s" : ""}.
+                  <p className="text-xs sm:text-sm text-muted-foreground flex flex-wrap items-center gap-1">
+                    <span>Thank you <strong>@{verifiedDonor.username}</strong>! You just contributed</span>
+                    <strong className="text-foreground inline-flex items-center"><Rupee amount={verifiedDonor.contributed} className="w-3.5 h-3.5 stroke-[2.6]" /></strong>.
+                    <span>Your cumulative patronage is now</span>
+                    <strong className="text-primary font-bold inline-flex items-center"><Rupee amount={verifiedDonor.totalAmount} className="w-3.5 h-3.5 stroke-[2.6]" /></strong>
+                    <span>across {verifiedDonor.donationCount} contribution{verifiedDonor.donationCount > 1 ? "s" : ""}.</span>
                   </p>
                 </div>
               </div>
@@ -439,7 +439,9 @@ function DonatePageContent() {
                   <div className="space-y-3 pt-2 border-t border-border/60">
                     <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
                       <span>Step 2: Scan QR or Tap UPI App</span>
-                      <span className="text-primary font-bold font-mono">₹{activeAmount}</span>
+                      <span className="text-primary font-bold font-mono inline-flex items-center">
+                        <Rupee amount={activeAmount} className="w-3.5 h-3.5 stroke-[2.6]" />
+                      </span>
                     </Label>
 
                     {/* Dynamic QR Box */}
@@ -529,22 +531,6 @@ function DonatePageContent() {
                     <p className="text-[11px] text-muted-foreground">
                       Enter the 12-digit UPI Reference / UTR Number found on your payment receipt.
                     </p>
-                  </div>
-
-                  {/* Optional Message */}
-                  <div className="space-y-1.5">
-                    <Label htmlFor="user-message" className="text-xs font-semibold text-muted-foreground">
-                      Leave an Inspiring Message (Optional)
-                    </Label>
-                    <Input
-                      id="user-message"
-                      type="text"
-                      maxLength={140}
-                      placeholder="e.g. Keep up the amazing concept notes!"
-                      value={userMessage}
-                      onChange={(e) => setUserMessage(e.target.value)}
-                      className="text-xs"
-                    />
                   </div>
 
                   {/* Username Display / Auth Requirement */}

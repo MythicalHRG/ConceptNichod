@@ -8,8 +8,19 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { verifySessionCookie } from "@/lib/session";
 import { Card, CardContent } from "@/components/ui/card";
-import { MapPin, GraduationCap, Target, Instagram } from "lucide-react";
+import { MapPin, GraduationCap, Target, Instagram, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
+
+function formatDob(dobStr?: string | null) {
+  if (!dobStr) return null;
+  try {
+    const d = new Date(dobStr);
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+    }
+  } catch {}
+  return dobStr;
+}
 
 export default async function DashboardPage() {
   const rawSession = cookies().get("user_session")?.value;
@@ -90,6 +101,12 @@ export default async function DashboardPage() {
                   <GraduationCap className="w-3.5 h-3.5 text-primary shrink-0" />
                   <span className="font-medium truncate max-w-[140px] sm:max-w-none">{user.classLevel}</span>
                 </div>
+                {user.dob && (
+                  <div className="flex items-center gap-1.5 px-3 py-1 bg-background rounded-full border shadow-xs">
+                    <Calendar className="w-3.5 h-3.5 text-primary shrink-0" />
+                    <span className="font-medium truncate max-w-[140px] sm:max-w-none">DOB: {formatDob(user.dob)}</span>
+                  </div>
+                )}
                 <div className="flex items-center gap-1.5 px-3 py-1 bg-background rounded-full border shadow-xs">
                   <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
                   <span className="font-medium truncate max-w-[140px] sm:max-w-none">{user.city}</span>

@@ -5,13 +5,24 @@ import { UserAnalytics } from '@/components/profile/user-analytics';
 import { UserBadgesShowcase } from '@/components/profile/user-badges-showcase';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Target, GraduationCap, Instagram, Ghost, Crown, Sparkles } from 'lucide-react';
+import { MapPin, Target, GraduationCap, Instagram, Ghost, Crown, Sparkles, Calendar } from 'lucide-react';
 import { MythicalUserBadge, MythicalProfileHeroCard } from "@/components/ui/mythical-glass";
 
 export const metadata = {
   title: 'User Profile - Concept Nichod',
   description: 'Public analytics and progress profile for a Concept Nichod user.',
 };
+
+function formatDob(dobStr?: string | null) {
+  if (!dobStr) return null;
+  try {
+    const d = new Date(dobStr);
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+    }
+  } catch {}
+  return dobStr;
+}
 
 export default async function PublicProfilePage({ params }: { params: { username: string } }) {
   const data = await getPublicProfileData(params.username);
@@ -65,6 +76,12 @@ export default async function PublicProfilePage({ params }: { params: { username
                     <Badge variant="secondary" className="flex items-center gap-1 font-medium text-xs">
                       <GraduationCap className="w-3.5 h-3.5 text-amber-500" />
                       {user.classLevel}
+                    </Badge>
+                  )}
+                  {user.dob && (
+                    <Badge variant="outline" className="flex items-center gap-1 font-medium text-xs">
+                      <Calendar className="w-3.5 h-3.5 text-sky-500" />
+                      <span>DOB: {formatDob(user.dob)}</span>
                     </Badge>
                   )}
                   {user.city && (
@@ -139,6 +156,12 @@ export default async function PublicProfilePage({ params }: { params: { username
                   <Badge variant="secondary" className="flex items-center gap-1">
                     <GraduationCap className="w-3 h-3" />
                     {user.classLevel}
+                  </Badge>
+                )}
+                {user.dob && (
+                  <Badge variant="outline" className="flex items-center gap-1 text-xs">
+                    <Calendar className="w-3 h-3 text-sky-500" />
+                    <span>DOB: {formatDob(user.dob)}</span>
                   </Badge>
                 )}
                 {user.city && (

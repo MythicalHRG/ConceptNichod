@@ -17,7 +17,7 @@ function validateEmailDomain(email: string) {
 
 export async function POST(req: Request) {
   try {
-    let { email, action, otp, isPasswordReset } = await req.json();
+    let { email, action, otp, isPasswordReset, username } = await req.json();
 
     if (email) {
       email = email.toLowerCase().trim();
@@ -71,10 +71,62 @@ export async function POST(req: Request) {
           { status: 400 }
         );
       }
+
+      if (email.includes('+')) {
+        return NextResponse.json(
+          { error: 'Email aliases and subaddressing (+tag) are not permitted. Please use your primary email address.' },
+          { status: 400 }
+        );
+      }
+
+      const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
       if (isPasswordReset) {
-        const existingUser = await User.findOne({ email });
+        const safeEmail = escapeRegex(email);
+        const existingUser = await User.findOne({ email: new RegExp(`^${safeEmail}$`, 'i') });
         if (!existingUser) {
           return NextResponse.json({ error: 'No account registered with this email address.' }, { status: 404 });
+        }
+      } else {
+        // Block reservation of owner email
+        if (email === 'mythicalhrg@gmail.com') {
+          return NextResponse.json({ error: 'This email is reserved for system administration.' }, { status: 400 });
+        }
+
+        // Registration OTP: Check if raw or normalized email is already registered
+        const atIdx = email.lastIndexOf('@');
+        let local = email.substring(0, atIdx);
+        const domain = email.substring(atIdx + 1);
+        if (domain === 'gmail.com' || domain === 'googlemail.com') {
+          local = local.replace(/\./g, '');
+        }
+        const normalized = `${local}@${domain}`;
+        const safeEmail = escapeRegex(email);
+        const safeNormalized = escapeRegex(normalized);
+
+        const existingUser = await User.findOne({
+          $or: [
+            { email: new RegExp(`^${safeEmail}$`, 'i') },
+            { email: new RegExp(`^${safeNormalized}$`, 'i') }
+          ]
+        });
+        if (existingUser) {
+          return NextResponse.json({ error: 'This email is already registered. Please log in instead.' }, { status: 400 });
+        }
+
+        // Registration OTP: Check if username is provided and already taken
+        if (username && typeof username === 'string') {
+          const cleanUser = username.toLowerCase().trim();
+          if (cleanUser === 'mythicalhrg') {
+            return NextResponse.json({ error: 'This username is reserved for system administration.' }, { status: 400 });
+          }
+          const safeUser = escapeRegex(cleanUser);
+          const existingUsernameUser = await User.findOne({
+            username: new RegExp(`^${safeUser}$`, 'i')
+          });
+          if (existingUsernameUser) {
+            return NextResponse.json({ error: 'A user with this username already exists. Please choose a different username.' }, { status: 400 });
+          }
         }
       }
 

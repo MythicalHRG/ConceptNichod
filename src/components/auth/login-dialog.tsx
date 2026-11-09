@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { useAuth } from "./auth-context";
 import { useToast } from "@/hooks/use-toast";
-import { registerAction, loginAction, resetPasswordAction } from "@/app/actions/auth";
+import { registerAction, loginAction, resetPasswordAction, validateUsername } from "@/app/actions/auth";
 import { Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { loadCaptchaEnginge, LoadCanvasTemplate, validateCaptcha } from 'react-simple-captcha';
@@ -80,13 +80,22 @@ export function LoginDialog() {
       toast({ variant: "destructive", title: "Error", description: "Only @gmail.com, @outlook.com, or @outlook.in emails are allowed." });
       return;
     }
+    if (email.includes("+")) {
+      toast({ variant: "destructive", title: "Error", description: "Email aliases and subaddressing (+tag) are not permitted." });
+      return;
+    }
 
     setIsLoading(true);
     try {
       const res = await fetch("/api/auth/otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, action: "send", isPasswordReset: activeTab === "forgot-password" })
+        body: JSON.stringify({ 
+          email, 
+          action: "send", 
+          isPasswordReset: activeTab === "forgot-password",
+          username: activeTab === "register" ? (username.trim() || undefined) : undefined
+        })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -125,6 +134,11 @@ export function LoginDialog() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) return;
+
+    if (email.includes("@") && email.includes("+")) {
+      toast({ variant: "destructive", title: "Login Error", description: "Email aliases (+tag) are not allowed. Please log in with your primary email address." });
+      return;
+    }
 
     if (!validateCaptcha(captchaValue)) {
       toast({ variant: "destructive", title: "Captcha Failed", description: "Please enter the correct captcha." });
@@ -200,6 +214,12 @@ export function LoginDialog() {
     const validUsername = /^[a-zA-Z0-9_.]+$/;
     if (!validUsername.test(username) || username.length < 3 || username.length > 30) {
       toast({ variant: 'destructive', title: 'Invalid Username', description: 'Usernames can only include letters, numbers, underscores (_), and periods (.). Spaces and symbols are not allowed.' });
+      return;
+    }
+
+    const usernameDbErr = await validateUsername(username);
+    if (usernameDbErr) {
+      toast({ variant: 'destructive', title: 'Username Unavailable', description: usernameDbErr });
       return;
     }
     if (!isEmailVerified) {

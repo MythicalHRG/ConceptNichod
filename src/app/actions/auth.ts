@@ -15,12 +15,9 @@ import {
   recordFailedAttempt,
   resetRateLimit,
 } from "@/lib/rate-limiter";
+import { normalizeEmail, validateEmailDomain, validateEmail } from "@/lib/email-utils";
 
 const SECRET_KEY = process.env.ENCRYPTION_SECRET_KEY || "super_secret_default_key_for_encodec_12345!";
-
-function validateEmailDomain(email: string) {
-    return email.endsWith("@gmail.com") || email.endsWith("@outlook.com") || email.endsWith("@outlook.in");
-}
 
 function validatePassword(password: string) {
     if (password.length < 8) return "Password must be at least 8 characters long.";
@@ -41,6 +38,23 @@ export async function validateUsername(username: string): Promise<string | null>
     if (!validUsernameRegex.test(username)) {
         return "Usernames can only include letters, numbers, underscores (_), and periods (.). Spaces and other symbols are not allowed.";
     }
+
+    const clean = username.toLowerCase().trim();
+    if (clean === "mythicalhrg") {
+        return "This username is reserved for system administration.";
+    }
+
+    try {
+        await dbConnect();
+        const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const existing = await User.findOne({ username: new RegExp(`^${escapeRegex(clean)}$`, 'i') });
+        if (existing) {
+            return "A user with this username already exists. Please choose a different username.";
+        }
+    } catch (err) {
+        console.error("Error validating username against database:", err);
+    }
+
     return null;
 }
 
@@ -63,10 +77,13 @@ export async function registerAction(formData: FormData) {
         if (!email || !username || !password || !fullName || !gender || !dob || !classLevel || !city) {
             throw new Error("Missing required fields");
         }
-        if (!validateEmailDomain(email)) throw new Error("Only @gmail.com, @outlook.com, and @outlook.in emails are allowed.");
+        const emailValidation = validateEmail(email);
+        if (!emailValidation.valid) throw new Error(emailValidation.error);
 
-        if (username === "mythicalhrg") {
-            throw new Error("This username is reserved for system administration.");
+        const normalizedEmail = normalizeEmail(email);
+
+        if (username === "mythicalhrg" || email === "mythicalhrg@gmail.com" || normalizedEmail === "mythicalhrg@gmail.com") {
+            throw new Error("This username and email are reserved for system administration.");
         }
 
         const usernameError = await validateUsername(username);
@@ -100,11 +117,16 @@ export async function registerAction(formData: FormData) {
         const safeEmail = escapeRegex(email);
         const safeUsername = escapeRegex(username);
 
-        const existingUserByEmail = await User.findOne({ email: new RegExp(`^${safeEmail}$`, 'i') });
+        const existingUserByEmail = await User.findOne({
+            $or: [
+                { email: new RegExp(`^${safeEmail}$`, 'i') },
+                { email: normalizedEmail }
+            ]
+        });
         if (existingUserByEmail) throw new Error("Email is already registered.");
         
         const existingUserByUsername = await User.findOne({ username: new RegExp(`^${safeUsername}$`, 'i') });
-        if (existingUserByUsername) throw new Error("A user with this username already exists.");
+        if (existingUserByUsername) throw new Error("A user with this username already exists. Please choose a different username.");
 
         const encryptedPassword = await hashPassword(password);
         const uuid = crypto.randomUUID();
@@ -169,6 +191,11 @@ export async function loginAction(formData: FormData) {
 
         const escapeRegex = (string: string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const safeInput = escapeRegex(rawInput);
+
+        // Block subaddressing / alias logins (e.g. abc+1@gmail.com)
+        if (rawInput.includes("@") && rawInput.includes("+")) {
+            throw new Error("Email aliases and subaddressing (+tag) are not permitted. Please log in with your primary email address.");
+        }
 
         // Find user by either email or username (case-insensitive)
         const user = await User.findOne({
@@ -336,12 +363,12 @@ export async function requestEmailChangeOtpAction(newEmail: string, currentPassw
     }
 
     const email = newEmail.toLowerCase().trim();
-    if (!email) throw new Error("Email address is required.");
+    const emailValidation = validateEmail(email);
+    if (!emailValidation.valid) {
+        throw new Error(emailValidation.error);
+    }
     if (email === currentUser.email.toLowerCase()) {
         throw new Error("This is already your current email address.");
-    }
-    if (!validateEmailDomain(email)) {
-        throw new Error("Only @gmail.com, @outlook.com, and @outlook.in emails are allowed.");
     }
 
     const isEmailBanned = await Blacklist.findOne({ type: "email", value: email });
@@ -513,7 +540,7 @@ export async function requestDeleteAccountOtpAction(currentPassword: string) {
     const user = await User.findOne({ uuid: sessionUuid });
     if (!user) throw new Error("User account not found.");
 
-    if (user.username.toLowerCase() === "mythicalhrg") {
+    if (user.username.toLowerCase() === "mythicalhrg" || user.email.toLowerCase() === "mythicalhrg@gmail.com") {
         throw new Error("The root platform administrator account @mythicalhrg cannot be deleted.");
     }
 
@@ -600,7 +627,7 @@ export async function deleteAccountAction(formData: FormData) {
     if (email && user.email.toLowerCase() !== email) {
         throw new Error("User email mismatch.");
     }
-    if (user.username.toLowerCase() === "mythicalhrg") {
+    if (user.username.toLowerCase() === "mythicalhrg" || user.email.toLowerCase() === "mythicalhrg@gmail.com") {
         throw new Error("The root admin account cannot be deleted.");
     }
 

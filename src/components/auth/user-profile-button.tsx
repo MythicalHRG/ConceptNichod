@@ -27,6 +27,17 @@ import {
   requestDeleteAccountOtpAction,
 } from "@/app/actions/auth";
 
+function formatDob(dobStr?: string | null) {
+  if (!dobStr) return null;
+  try {
+    const d = new Date(dobStr);
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+    }
+  } catch {}
+  return dobStr;
+}
+
 export function UserProfileButton() {
   const { user, isLoggedIn, isAuthReady, logout, login, setAuthModalOpen } = useAuth();
   const { theme, setTheme } = useTheme();
@@ -395,6 +406,15 @@ export function UserProfileButton() {
                     <p className="text-[11px] text-muted-foreground">
                       To change email, open the <span className="text-destructive font-medium cursor-pointer underline" onClick={() => setActiveTab("delete")}>Danger</span> tab (OTP required).
                     </p>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">Date of Birth</label>
+                    <Input
+                      type="text"
+                      value={formatDob(user?.dob) || user?.dob || "Not set"}
+                      disabled
+                      className="bg-muted text-muted-foreground cursor-not-allowed"
+                    />
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Class / Grade</label>
