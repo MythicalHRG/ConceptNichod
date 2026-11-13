@@ -510,7 +510,7 @@ function DonatePageContent() {
                       <Label htmlFor="utr-input" className="font-semibold text-muted-foreground uppercase tracking-wider">
                         Step 3: Enter UPI Transaction Reference
                       </Label>
-                      <span className={`font-mono text-xs font-bold ${utrNumber.length === 12 ? "text-emerald-500" : "text-muted-foreground"}`}>
+                      <span className={`font-mono text-xs font-bold ${utrNumber.length >= 8 && utrNumber.length <= 20 ? "text-emerald-500" : "text-muted-foreground"}`}>
                         {utrNumber.length}/20 Characters
                       </span>
                     </div>
@@ -567,7 +567,7 @@ function DonatePageContent() {
                   {/* Submit CTA Button */}
                   <Button
                     type="submit"
-                    disabled={isSubmitting || activeAmount < 1 || !/^[A-Z0-9]{8,20}$/.test(utrNumber) || !isLoggedInUser}
+                    disabled={isSubmitting || !receiverUpiId || activeAmount < 1 || !/^[A-Z0-9]{8,20}$/.test(utrNumber) || !isLoggedInUser}
                     className="w-full h-11 text-sm font-bold bg-gradient-to-r from-rose-500 via-amber-500 to-primary hover:opacity-95 shadow-lg shadow-primary/20 gap-2"
                   >
                     {isSubmitting ? (
