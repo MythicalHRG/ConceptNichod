@@ -242,13 +242,28 @@ export async function updateTopicProgressAction(
   const rawSession = cookies().get("user_session")?.value;
   const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
-  
-  await Topic.findOneAndUpdate(
+  if (!mongoose.isValidObjectId(topicId)) throw new Error("Invalid Topic ID");
+  if (status !== "in_progress" && status !== "completed") throw new Error("Invalid practice status.");
+  if (!Array.isArray(savedWrittenAnswers) || !Array.isArray(savedSpokenAnswers)) {
+    throw new Error("Invalid saved answers.");
+  }
+  const allAnswers = [...savedWrittenAnswers, ...savedSpokenAnswers];
+  if (savedWrittenAnswers.length > 10 || savedSpokenAnswers.length > 11 ||
+      allAnswers.some((answer) => typeof answer !== "string" || answer.length > 5000)) {
+    throw new Error("Saved answers exceed the allowed limits.");
+  }
+
+  const rateLimit = checkRateLimit(`topic-progress:${sessionUuid}`, 30, 60 * 1000);
+  if (!rateLimit.success) throw new Error("Too many progress updates. Please wait before trying again.");
+
+  const updatedTopic = await Topic.findOneAndUpdate(
     { _id: topicId, userId: sessionUuid },
-    { 
+    {
       practiceStatus: status,
       savedWrittenAnswers,
       savedSpokenAnswers
-    }
+    },
+    { new: true }
   );
+  if (!updatedTopic) throw new Error("Topic not found or access denied.");
 }
