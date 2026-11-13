@@ -50,3 +50,9 @@ test("AI generation and text-to-speech server actions enforce per-user rate limi
   assert.match(actions, /authoritativeSummary = topicDoc\.summary/);
   assert.match(actions, /question: textQuestions\[idx\]\.question/);
 });
+
+test("in-memory rate limiter enforces a hard cap on active key growth", () => {
+  const limiter = fs.readFileSync("src/lib/rate-limiter.ts", "utf8");
+  assert.match(limiter, /while \(hitMap\.size > MAX_KEYS\)/);
+  assert.match(limiter, /hitMap\.delete\(oldestKey\)/);
+});
