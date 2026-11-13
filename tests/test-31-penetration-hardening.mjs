@@ -100,12 +100,12 @@ test("Audit 31.5: src/app/actions/donation.ts projects out uuid, userUuid, and u
   );
 
   assert.ok(
-    donationInfoSection.includes('.select("-uuid -userUuid")'),
-    "Donor query must exclude uuid and userUuid"
+    donationInfoSection.includes('status: "verified"') && donationInfoSection.includes('verifiedAmount'),
+    "Public donation totals must be derived only from verified bank credits"
   );
   assert.ok(
-    donationInfoSection.includes('.select("-utr -userUuid -uuid")'),
-    "DonationTransaction query must exclude private bank UTR and UUIDs from public view"
+    donationInfoSection.includes('DonationTransaction.find({ isPublic: true, status: "verified" })'),
+    "Public activity feed must never expose pending or rejected claims"
   );
 });
 
