@@ -9,6 +9,7 @@ import DonationTransaction from "@/models/DonationTransaction";
 import { verifySessionCookie } from "@/lib/session";
 import crypto from "crypto";
 import { parseDonationAmount, normalizeUpiReference, normalizeVpa } from "@/lib/donation-validation";
+import { checkRateLimit } from "@/lib/rate-limiter";
 
 const ADMIN_USERNAME = "mythicalhrg";
 
@@ -102,6 +103,10 @@ export async function submitDonationUtrAction(payload: {
   const sessionUuid = verifySessionCookie(cookies().get("user_session")?.value);
   if (!sessionUuid) {
     return { success: false, error: "Authentication required. Please log in to submit a donation." };
+  }
+  const rateLimit = checkRateLimit(`donation-utr:${sessionUuid}`, 5, 10 * 60 * 1000);
+  if (!rateLimit.success) {
+    return { success: false, error: "Too many UTR submissions. Please wait before trying again." };
   }
 
   const rawUtr = normalizeUpiReference(payload?.utr);
