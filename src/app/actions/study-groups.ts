@@ -204,10 +204,9 @@ export async function sendGroupMessageAction(groupId: string, body: string) {
   const group = await StudyGroup.findById(groupId);
   if (!group) throw new Error("Study group not found.");
 
-  // Auto-join group if posting
-  if (!group.memberIds.includes(user.uuid)) {
-    group.memberIds.push(user.uuid);
-    await group.save();
+  // Membership is required before posting; sending a message must never grant access.
+  if (!group.memberIds || !group.memberIds.includes(user.uuid)) {
+    throw new Error("Join this study group before sending messages.");
   }
 
   // Strictly server time
