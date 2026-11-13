@@ -47,6 +47,8 @@ export async function getDonationInfoAction() {
   // Historical records without verifiedAmount are intentionally excluded.
   const verifiedDonations = await DonationTransaction.aggregate([
     { $match: { status: "verified", verifiedAmount: { $gt: 0 } } },
+    // $last is meaningful only with an explicit order: newest verified transaction wins.
+    { $sort: { verifiedAt: 1, _id: 1 } },
     { $group: {
       _id: "$userUuid",
       username: { $last: "$username" },
