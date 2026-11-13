@@ -40,7 +40,7 @@ const DonationTransactionSchema = new Schema<IDonationTransaction>(
     verifiedBy: { type: String },
     message: { type: String, default: "" },
     donatedAt: { type: Date, default: Date.now, index: true },
-    isPublic: { type: Boolean, default: true },
+    isPublic: { type: Boolean, default: false },
     createdAt: { type: Date, default: Date.now },
   },
   { timestamps: true }
