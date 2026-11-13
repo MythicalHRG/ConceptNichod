@@ -58,7 +58,7 @@ export async function getDonationInfoAction() {
     { $sort: { totalAmount: -1, lastDonatedAt: -1 } }
   ]);
   const donors = verifiedDonations.map((d: any) => ({
-    uuid: String(d._id),
+    uuid: crypto.createHash("sha256").update(String(d._id)).digest("hex").slice(0, 16),
     username: d.username,
     totalAmount: d.totalAmount,
     amount: d.totalAmount,
@@ -180,14 +180,14 @@ export async function reconcileDonationManuallyAction(payload: {
   }
 
   await dbConnect();
-  const setting = await DonationSetting.findOne().select("upiId").lean();
-  const expectedVpa = normalizeVpa(setting?.upiId);
-  if (!expectedVpa || recipientVpa !== expectedVpa) {
-    throw new Error("Recipient mismatch: the bank-record recipient does not match the configured donation UPI ID.");
-  }
-
   const pending = await DonationTransaction.findOne({ utr, status: "pending" });
   if (!pending) throw new Error("No pending donation was found for this reference.");
+  // Compare against the recipient captured when the payment intent was generated,
+  // not a possibly changed admin setting.
+  const expectedVpa = normalizeVpa(pending.recipientVpa);
+  if (!expectedVpa || recipientVpa !== expectedVpa) {
+    throw new Error("Recipient mismatch: the bank-record recipient does not match the UPI ID shown when this donation was submitted.");
+  }
   if (Math.round(Number(pending.amount) * 100) !== Math.round(receivedAmount * 100)) {
     throw new Error(`Amount mismatch: submitted ₹${pending.amount}; bank credited ₹${receivedAmount}. This donation remains pending for investigation.`);
   }
@@ -288,7 +288,9 @@ export async function updateDonationSettingsAction(payload: {
   if (!setting) {
     setting = new DonationSetting(payload);
   } else {
-    setting.upiId = payload.upiId?.trim() || setting.upiId;
+    const nextVpa = normalizeVpa(payload.upiId || setting?.upiId);
+  if (!nextVpa) throw new Error("Enter a valid UPI ID in name@bank format.");
+  setting.upiId = nextVpa;
     if (payload.qrCodeUrl !== undefined) {
       setting.qrCodeUrl = payload.qrCodeUrl?.trim() ?? setting.qrCodeUrl;
     }
