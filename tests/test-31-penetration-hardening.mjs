@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { verifySessionCookie, createSignedSessionCookie } from "../src/lib/session.ts";
+
 
 // ============================================================================
 // TEST 31.1: Middleware Reconnaissance & Session Verification
@@ -13,8 +13,8 @@ test("Audit 31.1: src/middleware.ts checks verified session UUID and uses case-n
   const content = fs.readFileSync(middlewarePath, "utf-8");
 
   assert.ok(
-    content.includes("verifySessionCookie"),
-    "Middleware must import and call verifySessionCookie to reject bogus session tokens"
+    content.includes("verifyEdgeSessionCookie"),
+    "Middleware must import and call the Edge-compatible HMAC verifier to reject bogus session tokens"
   );
   assert.ok(
     content.includes("toLowerCase()"),
