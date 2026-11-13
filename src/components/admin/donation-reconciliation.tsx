@@ -16,6 +16,7 @@ type PendingDonation = {
 
 export function DonationReconciliation() {
   const [items, setItems] = useState<PendingDonation[]>([]);
+  const [bankReferences, setBankReferences] = useState<Record<string, string>>({});
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [vpas, setVpas] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -41,6 +42,7 @@ export function DonationReconciliation() {
     try {
       const result = await reconcileDonationManuallyAction({
         utr: item.utr,
+        bankReference: bankReferences[item.utr] || "",
         receivedAmount: Number(amounts[item.utr]),
         recipientVpa: vpas[item.utr] || "",
       });
@@ -76,7 +78,17 @@ export function DonationReconciliation() {
             <p className="font-bold">Claimed ₹{item.claimedAmount.toFixed(2)}</p>
           </div>
           {item.message && <p className="text-sm text-muted-foreground">{item.message}</p>}
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="space-y-1 text-sm">
+              <span>Bank-record transaction reference</span>
+              <input
+                type="text"
+                value={bankReferences[item.utr] || ""}
+                onChange={(e) => setBankReferences((old) => ({ ...old, [item.utr]: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 20) }))}
+                className="w-full rounded-md border bg-background px-3 py-2 font-mono"
+                placeholder="Re-enter bank reference"
+              />
+            </label>
             <label className="space-y-1 text-sm">
               <span>Actual credited amount (₹)</span>
               <input
@@ -101,7 +113,7 @@ export function DonationReconciliation() {
           </div>
           <button
             type="button"
-            disabled={busy === item.utr || !amounts[item.utr] || !vpas[item.utr]}
+            disabled={busy === item.utr || !bankReferences[item.utr] || !amounts[item.utr] || !vpas[item.utr]}
             onClick={() => void verify(item)}
             className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
           >
