@@ -21,3 +21,11 @@ test("failed password attempts are counted once and database save errors are not
   assert.equal((login.match(/recordFailedAttempt\(loginRateKey/g) || []).length, 2);
   assert.match(login, /const isValid = await comparePassword\(password, user\.password\);[\s\S]*?if \(!isValid\) \{[\s\S]*?await user\.save\(\);/);
 });
+
+test("registration rejects expired or missing-expiry email OTP records", () => {
+  const registerStart = auth.indexOf("export async function registerAction");
+  const registerEnd = auth.indexOf("export async function loginAction", registerStart);
+  const register = auth.slice(registerStart, registerEnd);
+  assert.match(register, /!otpRecord \\|\\| !otpRecord\.isVerified \\|\\| !otpRecord\.expiresAt \\|\\| new Date\(\) > otpRecord\.expiresAt/);
+  assert.match(register, /await dbConnect\(\);[\\s\\S]*?if \(!email \\|\\| !username/);
+});
