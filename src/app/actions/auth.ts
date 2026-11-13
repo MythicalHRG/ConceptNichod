@@ -59,21 +59,21 @@ export async function validateUsername(username: string): Promise<string | null>
 }
 
 export async function registerAction(formData: FormData) {
-    await dbConnect();
-    const email = (formData.get("email") as string).toLowerCase().trim();
-    const username = (formData.get("username") as string).toLowerCase().trim();
-    const password = formData.get("password") as string;
-    const fullName = formData.get("fullName") as string;
-    const gender = formData.get("gender") as string;
-    const dob = formData.get("dob") as string;
-    const classLevel = formData.get("classLevel") as string;
-    const examFocus = formData.get("examFocus") as string | null;
-    const city = formData.get("city") as string;
-    const futureCollege = formData.get("futureCollege") as string | null;
-    const snapchat = formData.get("snapchat") as string | null;
-    const instagram = formData.get("instagram") as string | null;
+    const email = String(formData.get("email") ?? "").toLowerCase().trim();
+    const username = String(formData.get("username") ?? "").toLowerCase().trim();
+    const password = String(formData.get("password") ?? "");
+    const fullName = String(formData.get("fullName") ?? "").trim();
+    const gender = String(formData.get("gender") ?? "").trim();
+    const dob = String(formData.get("dob") ?? "").trim();
+    const classLevel = String(formData.get("classLevel") ?? "").trim();
+    const examFocus = String(formData.get("examFocus") ?? "").trim() || null;
+    const city = String(formData.get("city") ?? "").trim();
+    const futureCollege = String(formData.get("futureCollege") ?? "").trim() || null;
+    const snapchat = String(formData.get("snapchat") ?? "").trim() || null;
+    const instagram = String(formData.get("instagram") ?? "").trim() || null;
 
     try {
+        await dbConnect();
         if (!email || !username || !password || !fullName || !gender || !dob || !classLevel || !city) {
             throw new Error("Missing required fields");
         }
@@ -109,8 +109,8 @@ export async function registerAction(formData: FormData) {
 
         // Check OTP verification
         const otpRecord = await OtpVerification.findOne({ email });
-        if (!otpRecord || !otpRecord.isVerified) {
-            throw new Error("Email address has not been verified via OTP.");
+        if (!otpRecord || !otpRecord.isVerified || !otpRecord.expiresAt || new Date() > otpRecord.expiresAt) {
+            throw new Error("Email verification has expired or is invalid. Please request a new code.");
         }
 
         const escapeRegex = (string: string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
