@@ -362,15 +362,15 @@ test("Tareeka 22.5: actions.ts guards against re-submission and loads authoritat
 
   // Check authoritative topic metadata loading from DB
   assert.ok(
-    content.includes("topicDoc.name || topicName"),
+    content.includes("const authoritativeTopicName = topicDoc.name;"),
     "Must load topic name authoritatively from DB"
   );
   assert.ok(
-    content.includes("topicDoc.summary || summary"),
+    content.includes("const authoritativeSummary = topicDoc.summary;"),
     "Must load summary authoritatively from DB"
   );
   assert.ok(
-    content.includes("topicDoc.classLevel || classLevel"),
+    content.includes("const authoritativeClassLevel = topicDoc.classLevel;"),
     "Must load classLevel authoritatively from DB"
   );
 });
@@ -551,7 +551,7 @@ test("Tareeka 22.14: Atomic submission lock in runFinalAnalysisAction prevents c
     "runFinalAnalysisAction must use atomic findOneAndUpdate to prevent duplicate submissions"
   );
   assert.ok(
-    content.includes("safeWrittenAnswers") && content.includes("textQuestions[idx]?.question"),
+    content.includes("safeWrittenAnswers") && content.includes("textQuestions[idx].question"),
     "runFinalAnalysisAction must map authoritative DB question texts to prevent prompt injection"
   );
 });
