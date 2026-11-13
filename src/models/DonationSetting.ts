@@ -10,7 +10,7 @@ export interface IDonationSetting extends Document {
 
 const DonationSettingSchema = new Schema<IDonationSetting>(
   {
-    upiId: { type: String, default: "harsh.2525@ptaxis" },
+    upiId: { type: String, default: "" },
     qrCodeUrl: { type: String, default: "/qr.png" },
     customInstructions: { 
       type: String, 
