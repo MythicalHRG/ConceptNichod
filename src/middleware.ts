@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { verifySessionCookie } from '@/lib/session';
+import { verifyEdgeSessionCookie } from '@/lib/edge-session';
 
 function addSecurityHeaders(response: NextResponse): NextResponse {
   response.headers.set('X-Frame-Options', 'DENY');
@@ -25,9 +25,9 @@ const PROTECTED_PREFIXES = [
   '/leaderboard',
 ];
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const sessionCookie = request.cookies.get('user_session')?.value;
-  const verifiedSessionUuid = verifySessionCookie(sessionCookie);
+  const verifiedSessionUuid = await verifyEdgeSessionCookie(sessionCookie);
   const normalizedPath = request.nextUrl.pathname.toLowerCase();
 
   const isProtected = PROTECTED_PREFIXES.some(
