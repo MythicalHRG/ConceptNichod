@@ -2,7 +2,12 @@ import crypto from "crypto";
 
 function getSessionSecret(): string {
   const configured = process.env.ENCRYPTION_SECRET_KEY?.trim();
-  if (configured) return configured;
+  if (configured) {
+    if (process.env.NODE_ENV === "production" && Buffer.byteLength(configured, "utf8") < 32) {
+      throw new Error("ENCRYPTION_SECRET_KEY must contain at least 32 bytes in production.");
+    }
+    return configured;
+  }
   if (process.env.NODE_ENV === "production") {
     throw new Error("ENCRYPTION_SECRET_KEY must be configured with a strong random secret in production.");
   }
