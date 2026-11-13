@@ -182,7 +182,7 @@ function DonatePageContent() {
   };
 
   const handleUtrChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Only allow alphanumeric uppercase characters up to 12 digits
+    // Only allow alphanumeric uppercase characters up to 20 characters
     const clean = e.target.value.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 20);
     setUtrNumber(clean);
   };
@@ -504,7 +504,7 @@ function DonatePageContent() {
                         type="text"
                         inputMode="text"
                         autoComplete="off"
-                        maxLength={12}
+                        maxLength={20}
                         placeholder="e.g. 431289567123"
                         value={utrNumber}
                         onChange={handleUtrChange}
