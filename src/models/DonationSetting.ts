@@ -14,7 +14,7 @@ const DonationSettingSchema = new Schema<IDonationSetting>(
     qrCodeUrl: { type: String, default: "/qr.png" },
     customInstructions: { 
       type: String, 
-      default: "Scan the QR code using Google Pay, PhonePe, Paytm, or BHIM UPI. Please mention your ConceptNichod username in the transaction notes so we can celebrate your support on the Hall of Patrons!" 
+      default: "Pay using any UPI app, then submit your transaction reference. Donations appear on the Hall of Patrons only after bank reconciliation." 
     },
     thankYouNote: { 
       type: String, 
