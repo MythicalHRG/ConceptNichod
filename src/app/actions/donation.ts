@@ -86,9 +86,12 @@ export async function getDonationInfoAction() {
     _id: undefined,
   }));
 
+  const publicSettings = JSON.parse(JSON.stringify(setting));
+  if (!DONATIONS_ENABLED) publicSettings.upiId = "";
+
   return {
     success: true,
-    settings: JSON.parse(JSON.stringify({ ...setting, upiId: DONATIONS_ENABLED ? setting.upiId : "" })),
+    settings: publicSettings,
     donors: JSON.parse(JSON.stringify(donors)),
     recentTransactions: JSON.parse(JSON.stringify(recentTransactions)),
   };
