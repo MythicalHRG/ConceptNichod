@@ -353,7 +353,7 @@ function DonatePageContent() {
                   </Badge>
                 </div>
                 <CardDescription className="text-xs">
-                  Scan QR, pay with any UPI App, and submit your 12-digit UTR below for instant recognition.
+                  Pay using any UPI app, then submit the transaction reference below. Contributions are added to the Hall of Patrons only after manual bank reconciliation.
                 </CardDescription>
               </CardHeader>
 
