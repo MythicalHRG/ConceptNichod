@@ -1,8 +1,13 @@
 import crypto from "crypto";
 
-const SECRET =
-  process.env.ENCRYPTION_SECRET_KEY ||
-  "concept-nichod-default-secret-salt-2026";
+function getSessionSecret(): string {
+  const configured = process.env.ENCRYPTION_SECRET_KEY?.trim();
+  if (configured) return configured;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("ENCRYPTION_SECRET_KEY must be configured with a strong random secret in production.");
+  }
+  return "local-development-only-session-secret-not-for-production";
+}
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -10,7 +15,7 @@ export function createSignedSessionCookie(uuid: string): string {
   if (!uuid || typeof uuid !== "string") {
     throw new Error("UUID is required to create a session cookie.");
   }
-  const signature = crypto.createHmac("sha256", SECRET).update(uuid).digest("hex");
+  const signature = crypto.createHmac("sha256", getSessionSecret()).update(uuid).digest("hex");
   return `${uuid}.${signature}`;
 }
 
