@@ -42,12 +42,32 @@ export async function getDonationInfoAction() {
     });
   }
 
-  // Retrieve donors ordered by total cumulative amount descending (Leaderboard)
-  // Security Hardening: Redact internal UUIDs from public responses
-  const donors = await Donor.find({ isPublic: true })
-    .select("-uuid -userUuid")
-    .sort({ totalAmount: -1, amount: -1, lastDonatedAt: -1, createdAt: -1 })
-    .lean();
+  // Build public totals exclusively from independently bank-reconciled transactions.
+  // Historical records without verifiedAmount are intentionally excluded.
+  const verifiedDonations = await DonationTransaction.aggregate([
+    { $match: { status: "verified", verifiedAmount: { $gt: 0 } } },
+    { $group: {
+      _id: "$userUuid",
+      username: { $last: "$username" },
+      totalAmount: { $sum: "$verifiedAmount" },
+      donationCount: { $sum: 1 },
+      lastDonatedAt: { $max: "$verifiedAt" },
+      latestMessage: { $last: "$message" }
+    } },
+    { $sort: { totalAmount: -1, lastDonatedAt: -1 } }
+  ]);
+  const donors = verifiedDonations.map((d: any) => ({
+    uuid: String(d._id),
+    username: d.username,
+    totalAmount: d.totalAmount,
+    amount: d.totalAmount,
+    donationCount: d.donationCount,
+    tier: d.totalAmount >= 2500 ? "Legend" : d.totalAmount >= 1000 ? "Benefactor" : d.totalAmount >= 500 ? "Patron" : "Supporter",
+    latestMessage: d.latestMessage || "",
+    message: d.latestMessage || "",
+    lastDonatedAt: d.lastDonatedAt,
+    donatedAt: d.lastDonatedAt,
+  }));
 
   // Retrieve latest 10 verified transactions for the recent activity ticker
   // Security Hardening: Redact sensitive 12-digit bank UTR numbers and internal UUIDs from public feed
