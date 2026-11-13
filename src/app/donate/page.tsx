@@ -225,33 +225,16 @@ function DonatePageContent() {
         utr: cleanUtr,
       });
 
-      if (res.success && res.donor) {
-        setVerifiedDonor({
-          username,
-          contributed: res.contributedAmount || activeAmount,
-          totalAmount: res.totalAmount || activeAmount,
-          donationCount: res.donationCount || 1,
-          tier: res.donor.tier,
-        });
-
-        // Reset UTR input
+      if (res.success && res.status === "pending") {
         setUtrNumber("");
-
         toast({
-          title: "Payment Verified Successfully! 🎉",
-          description: `Thank you @${username}! Your contribution has been verified and added to the Hall of Patrons.`,
+          title: "Submitted for bank reconciliation",
+          description: res.message || "Your UTR is pending manual verification. It has not been added to the Hall of Patrons.",
         });
-
-        // Refresh donor list and recent transactions
-        const fresh = await getDonationInfoAction();
-        if (fresh.success) {
-          if (fresh.donors) setDonors(fresh.donors);
-          if (fresh.recentTransactions) setRecentTransactions(fresh.recentTransactions);
-        }
       } else {
         toast({
-          title: "Verification Notice",
-          description: res.error || "Could not verify UTR. Please double-check your receipt.",
+          title: "Submission not accepted",
+          description: res.error || "Could not submit this transaction reference.",
           variant: "destructive",
         });
       }
