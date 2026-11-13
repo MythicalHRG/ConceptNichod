@@ -17,8 +17,6 @@ import {
 } from "@/lib/rate-limiter";
 import { normalizeEmail, validateEmailDomain, validateEmail } from "@/lib/email-utils";
 
-const SECRET_KEY = process.env.ENCRYPTION_SECRET_KEY || "super_secret_default_key_for_encodec_12345!";
-
 function validatePassword(password: string) {
     if (password.length < 8) return "Password must be at least 8 characters long.";
     if (!/[A-Z]/.test(password)) return "Password must contain at least one uppercase letter.";
