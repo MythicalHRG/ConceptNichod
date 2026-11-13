@@ -191,7 +191,12 @@ export async function reconcileDonationManuallyAction(payload: {
   }
 
   await dbConnect();
-  const pending = await DonationTransaction.findOne({ utr, status: "pending" });
+  // Legacy records without a status are unverified claims too; allow bank-backed
+  // reconciliation instead of silently orphaning them outside the admin queue.
+  const pending = await DonationTransaction.findOne({
+    utr,
+    $or: [{ status: "pending" }, { status: { $exists: false } }],
+  });
   if (!pending) throw new Error("No pending donation was found for this reference.");
   // Compare against the recipient captured when the payment intent was generated,
   // not a possibly changed admin setting.
@@ -204,7 +209,7 @@ export async function reconcileDonationManuallyAction(payload: {
   }
 
   const verified = await DonationTransaction.findOneAndUpdate(
-    { _id: pending._id, status: "pending" },
+    { _id: pending._id, $or: [{ status: "pending" }, { status: { $exists: false } }] },
     { $set: {
       status: "verified",
       verifiedAmount: receivedAmount,
@@ -247,7 +252,9 @@ export async function reconcileDonationManuallyAction(payload: {
 export async function getPendingDonationsAdminAction() {
   await verifyAdmin();
   await dbConnect();
-  const pending = await DonationTransaction.find({ status: "pending" })
+  const pending = await DonationTransaction.find({
+    $or: [{ status: "pending" }, { status: { $exists: false } }],
+  })
     .select("utr username amount message donatedAt")
     .sort({ donatedAt: 1 })
     .limit(200)
