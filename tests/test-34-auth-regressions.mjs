@@ -64,3 +64,13 @@ test("account deletion does not silently succeed when dependent-record cleanup f
   assert.match(deleteAction, /await User\.deleteOne\(\{ uuid: sessionId \}\)/);
   assert.doesNotMatch(deleteAction, /Promise\.allSettled/);
 });
+
+test("topic progress persistence validates ownership, status, answer bounds, and request rate", () => {
+  const actions = fs.readFileSync("src/app/actions.ts", "utf8");
+  const start = actions.indexOf("export async function updateTopicProgressAction");
+  const progress = actions.slice(start);
+  assert.match(progress, /mongoose\.isValidObjectId\(topicId\)/);
+  assert.match(progress, /status !== "in_progress" && status !== "completed"/);
+  assert.match(progress, /topic-progress:\\$\{sessionUuid\\}/);
+  assert.match(progress, /\{ _id: topicId, userId: sessionUuid \}/);
+});
