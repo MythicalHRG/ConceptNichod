@@ -172,11 +172,13 @@ export async function registerAction(formData: FormData) {
 }
 
 export async function loginAction(formData: FormData) {
-    await dbConnect();
-    const rawInput = ((formData.get("email") as string) || "").trim();
-    const password = formData.get("password") as string;
+    const rawInput = String(formData.get("email") ?? "").trim();
+    const password = String(formData.get("password") ?? "");
 
     try {
+        // Keep database connection failures inside the action error boundary so
+        // the client receives a controlled error instead of a Server Components digest.
+        await dbConnect();
         if (!rawInput || !password) throw new Error("Missing email or password");
 
         const ip = getClientIp();
