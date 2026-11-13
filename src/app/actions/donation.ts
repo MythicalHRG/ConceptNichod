@@ -51,7 +51,7 @@ export async function getDonationInfoAction() {
 
   // Retrieve latest 10 verified transactions for the recent activity ticker
   // Security Hardening: Redact sensitive 12-digit bank UTR numbers and internal UUIDs from public feed
-  const recentTransactions = await DonationTransaction.find({ isPublic: true })
+  const recentTransactions = await DonationTransaction.find({ isPublic: true, status: "verified" })
     .select("-utr -userUuid -uuid")
     .sort({ donatedAt: -1 })
     .limit(10)
@@ -70,126 +70,146 @@ export async function getDonationInfoAction() {
  * Enforces strict 12-digit format, strict database deduplication,
  * and cumulative multi-payment aggregation per username.
  */
+/**
+ * Submit a UPI reference for review. A UTR and client-provided amount are claims,
+ * not proof of settlement. This action never credits a donor or marks a payment verified.
+ */
 export async function submitDonationUtrAction(payload: {
   amount: number;
   utr: string;
   message?: string;
 }) {
-  const numericAmount = Math.round(Number(payload.amount));
-  if (!Number.isFinite(numericAmount) || numericAmount < 1) {
-    return { success: false, error: "Please enter a valid amount of at least ₹1." };
+  const amount = Number(payload?.amount);
+  if (!Number.isFinite(amount) || amount < 1 || amount > 1000000 || Math.round(amount * 100) !== amount * 100) {
+    return { success: false, error: "Enter a valid donation amount between ₹1 and ₹10,00,000 (up to 2 decimal places)." };
   }
 
-  // 1. Authoritatively verify the caller's session
-  const rawSession = cookies().get("user_session")?.value;
-  const sessionUuid = verifySessionCookie(rawSession);
+  const sessionUuid = verifySessionCookie(cookies().get("user_session")?.value);
   if (!sessionUuid) {
-    return { success: false, error: "Authentication required. Please log in to your ConceptNichod account to donate." };
+    return { success: false, error: "Authentication required. Please log in to submit a donation." };
+  }
+
+  const rawUtr = String(payload?.utr || "").trim().toUpperCase();
+  // UPI reference lengths vary by bank/app. Validate conservatively without claiming
+  // that format validation proves the reference exists.
+  if (!/^[A-Z0-9]{8,20}$/.test(rawUtr)) {
+    return { success: false, error: "Enter the transaction reference exactly as shown on your UPI receipt (8–20 letters or digits)." };
   }
 
   await dbConnect();
-  const user = await User.findOne({ uuid: sessionUuid }).select("username fullName").lean();
-  if (!user) {
-    return { success: false, error: "Authenticated user account not found. Please log in again." };
+  const [user, setting, existing] = await Promise.all([
+    User.findOne({ uuid: sessionUuid }).select("username").lean(),
+    DonationSetting.findOne().select("upiId").lean(),
+    DonationTransaction.findOne({ utr: rawUtr }).select("_id").lean(),
+  ]);
+  if (!user) return { success: false, error: "Account not found. Please sign in again." };
+  if (!setting?.upiId) return { success: false, error: "The donation recipient is not configured. Please contact the administrator." };
+  if (existing) return { success: false, error: "This transaction reference has already been submitted." };
+
+  const configuredVpa = String(setting.upiId).trim().toLowerCase();
+  if (!/^[a-z0-9._-]{2,256}@[a-z0-9.-]{2,64}$/.test(configuredVpa)) {
+    return { success: false, error: "The configured donation UPI ID is invalid. Please contact the administrator." };
   }
 
-  const authenticatedUsername = user.username.trim().replace(/^@+/, "");
-
-  // 2. Strict 12-Digit UPI Reference (UTR) Format Validation
-  const rawUtr = String(payload.utr || "").trim().toUpperCase();
-  // Indian UPI UTRs are strictly 12 alphanumeric/numeric characters (NPCI standard)
-  const UTR_REGEX = /^[A-Z0-9]{12}$/;
-  if (!UTR_REGEX.test(rawUtr)) {
-    return { 
-      success: false, 
-      error: "Invalid UTR format. Please enter the exact 12-digit UPI Reference Number / UTR shown on your Google Pay, PhonePe, or Paytm receipt." 
-    };
-  }
-
-  // 3. Strict Deduplication Check: A UTR can NEVER be reused across any user or order!
-  const existingTx = await DonationTransaction.findOne({ utr: rawUtr }).lean();
-  if (existingTx) {
-    return { 
-      success: false, 
-      error: "This UPI Reference (UTR) has already been submitted or redeemed. Reusing old transactions is strictly prohibited." 
-    };
-  }
-
-  // 4. Record the fresh donation transaction
   try {
-    await DonationTransaction.create({
+    const tx = await DonationTransaction.create({
       uuid: crypto.randomUUID(),
       utr: rawUtr,
-      username: authenticatedUsername,
+      username: user.username.trim().replace(/^@+/, ""),
       userUuid: sessionUuid,
-      amount: numericAmount,
-      message: payload.message?.trim() || "ConceptNichod Patron Support",
+      amount,
+      message: String(payload.message || "").trim().slice(0, 500),
       donatedAt: new Date(),
-      isPublic: true,
+      isPublic: false,
+      status: "pending",
+      recipientVpa: configuredVpa,
     });
+    return {
+      success: true,
+      status: "pending" as const,
+      reference: tx.utr,
+      message: "Your transaction reference was submitted for manual bank reconciliation. It has not been verified or added to the Hall of Patrons yet.",
+    };
   } catch (err: any) {
     if (err?.code === 11000 || String(err?.message || "").includes("duplicate key")) {
-      return { 
-        success: false, 
-        error: "This UPI Reference (UTR) has already been submitted. Duplicate submissions cannot be accepted." 
-      };
+      return { success: false, error: "This transaction reference has already been submitted." };
     }
-    return { success: false, error: "Database error recording transaction. Please try again." };
+    console.error("[donation submission]", err);
+    return { success: false, error: "Could not submit the transaction reference. Please try again." };
+  }
+}
+
+/**
+ * Admin-only manual reconciliation. The administrator must compare the UTR,
+ * exact credited amount, and recipient against the bank's own transaction record.
+ */
+export async function reconcileDonationManuallyAction(payload: {
+  utr: string;
+  receivedAmount: number;
+  recipientVpa: string;
+}) {
+  const admin = await verifyAdmin();
+  const utr = String(payload?.utr || "").trim().toUpperCase();
+  const receivedAmount = Number(payload?.receivedAmount);
+  const recipientVpa = String(payload?.recipientVpa || "").trim().toLowerCase();
+  if (!/^[A-Z0-9]{8,20}$/.test(utr)) throw new Error("Invalid transaction reference.");
+  if (!Number.isFinite(receivedAmount) || receivedAmount < 1 || receivedAmount > 1000000 || Math.round(receivedAmount * 100) !== receivedAmount * 100) {
+    throw new Error("Enter the actual credited amount from the bank record.");
+  }
+  if (!/^[a-z0-9._-]{2,256}@[a-z0-9.-]{2,64}$/.test(recipientVpa)) {
+    throw new Error("Enter a valid recipient UPI ID from the bank record.");
   }
 
-  // 5. Cumulative Summation: Match by userUuid OR username so that changing username/email never loses donation history
-  const allUserTxs = await DonationTransaction.find({
-    $or: [{ userUuid: sessionUuid }, { username: authenticatedUsername }]
-  }).lean();
-  const totalAmount = allUserTxs.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-  const donationCount = allUserTxs.length;
+  await dbConnect();
+  const setting = await DonationSetting.findOne().select("upiId").lean();
+  const expectedVpa = String(setting?.upiId || "").trim().toLowerCase();
+  if (!expectedVpa || recipientVpa !== expectedVpa) {
+    throw new Error("Recipient mismatch: the bank-record recipient does not match the configured donation UPI ID.");
+  }
 
-  // Keep username synchronized across all past transactions for this userUuid if user changed username
-  await DonationTransaction.updateMany(
-    { userUuid: sessionUuid },
-    { $set: { username: authenticatedUsername } }
-  ).catch(() => {});
+  const pending = await DonationTransaction.findOne({ utr, status: "pending" });
+  if (!pending) throw new Error("No pending donation was found for this reference.");
+  if (Number(pending.amount) !== receivedAmount) {
+    throw new Error(`Amount mismatch: submitted ₹${pending.amount}; bank credited ₹${receivedAmount}. This donation remains pending for investigation.`);
+  }
 
-  // 6. Dynamic Tier Calculation based on cumulative totalAmount
-  let tier: "Supporter" | "Patron" | "Benefactor" | "Legend" = "Supporter";
-  if (totalAmount >= 2500) tier = "Legend";
-  else if (totalAmount >= 1000) tier = "Benefactor";
-  else if (totalAmount >= 500) tier = "Patron";
+  const verified = await DonationTransaction.findOneAndUpdate(
+    { _id: pending._id, status: "pending" },
+    { $set: {
+      status: "verified",
+      verifiedAmount: receivedAmount,
+      recipientVpa,
+      verificationMethod: "manual-bank-reconciliation",
+      verifiedAt: new Date(),
+      verifiedBy: admin.username,
+      isPublic: true,
+    } },
+    { new: true }
+  );
+  if (!verified) throw new Error("This transaction was already processed by another request.");
 
-  const latestMsg = payload.message?.trim() || "Proud supporter of ConceptNichod";
-
-  // 7. Upsert the cumulative Donor record for Hall of Patrons by userUuid or username
-  const donor = await Donor.findOneAndUpdate(
-    { $or: [{ userUuid: sessionUuid }, { username: authenticatedUsername }] },
-    {
-      $set: {
-        username: authenticatedUsername,
-        userUuid: sessionUuid,
-        totalAmount,
-        amount: totalAmount, // Synchronize legacy amount field with cumulative total
-        donationCount,
-        tier,
-        latestMessage: latestMsg,
-        message: latestMsg,
-        lastDonatedAt: new Date(),
-        donatedAt: new Date(),
-        isPublic: true,
-      },
-      $setOnInsert: {
-        uuid: crypto.randomUUID(),
-      }
-    },
+  const verifiedTransactions = await DonationTransaction.find({ userUuid: verified.userUuid, status: "verified" }).select("verifiedAmount").lean();
+  const totalAmount = verifiedTransactions.reduce((sum: number, tx: any) => sum + Number(tx.verifiedAmount || 0), 0);
+  const donationCount = verifiedTransactions.length;
+  const tier = totalAmount >= 2500 ? "Legend" : totalAmount >= 1000 ? "Benefactor" : totalAmount >= 500 ? "Patron" : "Supporter";
+  await Donor.findOneAndUpdate(
+    { userUuid: verified.userUuid },
+    { $set: {
+      username: verified.username,
+      userUuid: verified.userUuid,
+      totalAmount,
+      amount: totalAmount,
+      donationCount,
+      tier,
+      latestMessage: verified.message || "Proud supporter of ConceptNichod",
+      message: verified.message || "Proud supporter of ConceptNichod",
+      lastDonatedAt: new Date(),
+      donatedAt: new Date(),
+      isPublic: true,
+    }, $setOnInsert: { uuid: crypto.randomUUID() } },
     { upsert: true, new: true }
-  ).lean();
-
-  return {
-    success: true,
-    message: `Thank you @${authenticatedUsername}! Your contribution has been verified and added to the Hall of Patrons.`,
-    donor: JSON.parse(JSON.stringify(donor)),
-    contributedAmount: numericAmount,
-    totalAmount,
-    donationCount,
-  };
+  );
+  return { success: true, message: "Bank-reconciled donation marked verified.", verifiedAmount: receivedAmount, totalAmount, donationCount };
 }
 
 /**
