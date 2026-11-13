@@ -95,20 +95,6 @@ export async function runFinalAnalysisAction(
     throw new Error("Practice session has already been completed.");
   }
 
-  // Atomic lock against concurrent duplicate submissions
-  const lockedTopic = await Topic.findOneAndUpdate(
-    { _id: topicId, userId: sessionUuid, practiceStatus: { $ne: 'completed' } },
-    { practiceStatus: 'completed' }
-  );
-
-  if (!lockedTopic) {
-    const refreshed = await Topic.findById(topicId);
-    if (refreshed?.analysis) {
-      return { analysis: refreshed.analysis };
-    }
-    throw new Error("Practice session evaluation is already in progress or completed.");
-  }
-
   // Load authoritative topic metadata from database to prevent prompt injection
   const authoritativeTopicName = topicDoc.name;
   const authoritativeSummary = topicDoc.summary;
@@ -135,6 +121,22 @@ export async function runFinalAnalysisAction(
       : "Overall Topic Summary (2-Minute Challenge)",
     answer: ans.answer.trim(),
   }));
+
+  // Atomic lock against concurrent duplicate submissions
+  const lockedTopic = await Topic.findOneAndUpdate(
+    { _id: topicId, userId: sessionUuid, practiceStatus: { $ne: 'completed' } },
+    { practiceStatus: 'completed' }
+  );
+
+  if (!lockedTopic) {
+    const refreshed = await Topic.findById(topicId);
+    if (refreshed?.analysis) {
+      return { analysis: refreshed.analysis };
+    }
+    throw new Error("Practice session evaluation is already in progress or completed.");
+  }
+
+
 
   try {
     const result = await analyzeAnswersFlow({
