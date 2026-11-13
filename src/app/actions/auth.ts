@@ -51,6 +51,8 @@ export async function validateUsername(username: string): Promise<string | null>
         }
     } catch (err) {
         console.error("Error validating username against database:", err);
+        // Registration must fail closed if uniqueness cannot be checked.
+        return "Username availability could not be verified. Please try again.";
     }
 
     return null;
