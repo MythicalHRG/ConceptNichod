@@ -27,8 +27,7 @@ async function verifyAdmin() {
 }
 
 /**
- * Public action to retrieve donation settings, public donor leaderboard (summed),
- * and recent contributions feed.
+ * Public action to retrieve donation settings and bank-reconciled public contributions.
  */
 export async function getDonationInfoAction() {
   await dbConnect();
@@ -38,7 +37,7 @@ export async function getDonationInfoAction() {
     setting = await DonationSetting.create({
       upiId: "harsh.2525@ptaxis",
       qrCodeUrl: "/qr.png",
-      customInstructions: "Scan the QR code using Google Pay, PhonePe, Paytm, or BHIM UPI. Enter your 12-digit UTR to be instantly recognized on the Hall of Patrons!",
+      customInstructions: "Pay using any UPI app, then submit your transaction reference. Donations appear on the Hall of Patrons only after bank reconciliation.",
       thankYouNote: "Thank you for empowering free, high-quality, concept-first education for every student."
     });
   }
@@ -86,11 +85,6 @@ export async function getDonationInfoAction() {
   };
 }
 
-/**
- * Public action to submit and verify a 12-digit UPI Reference (UTR) number.
- * Enforces strict 12-digit format, strict database deduplication,
- * and cumulative multi-payment aggregation per username.
- */
 /**
  * Submit a UPI reference for review. A UTR and client-provided amount are claims,
  * not proof of settlement. This action never credits a donor or marks a payment verified.
@@ -284,13 +278,13 @@ export async function updateDonationSettingsAction(payload: {
 }) {
   await verifyAdmin();
 
+  const nextVpa = normalizeVpa(payload.upiId);
+  if (!nextVpa) throw new Error("Enter a valid UPI ID in name@bank format.");
   let setting = await DonationSetting.findOne();
   if (!setting) {
-    setting = new DonationSetting(payload);
+    setting = new DonationSetting({ ...payload, upiId: nextVpa });
   } else {
-    const nextVpa = normalizeVpa(payload.upiId || setting?.upiId);
-  if (!nextVpa) throw new Error("Enter a valid UPI ID in name@bank format.");
-  setting.upiId = nextVpa;
+    setting.upiId = nextVpa;
     if (payload.qrCodeUrl !== undefined) {
       setting.qrCodeUrl = payload.qrCodeUrl?.trim() ?? setting.qrCodeUrl;
     }
