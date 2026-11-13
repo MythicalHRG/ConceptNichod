@@ -32,7 +32,7 @@ export function verifySessionCookie(cookieValue?: string | null): string | null 
     const signature = trimmed.substring(dotIndex + 1);
 
     const expectedSignature = crypto
-      .createHmac("sha256", SECRET)
+      .createHmac("sha256", getSessionSecret())
       .update(uuid)
       .digest("hex");
     const sigBuf = Buffer.from(signature);
