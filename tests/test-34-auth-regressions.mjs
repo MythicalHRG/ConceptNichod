@@ -40,3 +40,13 @@ test("donation payments remain disabled until an explicit deployment opt-in", ()
   assert.doesNotMatch(page, /harsh\.2525@ptaxis/);
   assert.match(page, /receiverUpiId \?/);
 });
+
+test("AI generation and text-to-speech server actions enforce per-user rate limits", () => {
+  const actions = fs.readFileSync("src/app/actions.ts", "utf8");
+  assert.match(actions, /generate-content:\\$\{sessionUuid\\}/);
+  assert.match(actions, /final-analysis:\\$\{sessionUuid\\}/);
+  assert.match(actions, /text-to-speech:\\$\{sessionUuid\\}/);
+  assert.match(actions, /export async function generateAudioAction[\\s\\S]*?if \(!sessionUuid\) throw new Error\("Not authenticated"\)/);
+  assert.match(actions, /authoritativeSummary = topicDoc\.summary/);
+  assert.match(actions, /question: textQuestions\[idx\]\.question/);
+});
