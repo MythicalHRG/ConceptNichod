@@ -681,8 +681,9 @@ export async function deleteAccountAction(formData: FormData) {
     const GroupMessage = (await import("@/models/GroupMessage")).default;
     const DirectMessage = (await import("@/models/DirectMessage")).default;
 
-    await Promise.allSettled([
-        User.deleteOne({ uuid: sessionId }),
+    // Remove dependent records first. If cleanup fails, keep the account so
+    // the user can retry instead of reporting a false successful deletion.
+    await Promise.all([
         Topic.deleteMany({ userId: sessionId }),
         StudyGroup.deleteMany({ ownerId: sessionId }),
         StudyGroup.updateMany({ memberIds: sessionId }, { $pull: { memberIds: sessionId } }),
@@ -690,6 +691,7 @@ export async function deleteAccountAction(formData: FormData) {
         DirectMessage.deleteMany({ participantIds: sessionId }),
         OtpVerification.deleteOne({ email: userEmail }),
     ]);
+    await User.deleteOne({ uuid: sessionId });
 
     cookies().delete("user_session");
 
