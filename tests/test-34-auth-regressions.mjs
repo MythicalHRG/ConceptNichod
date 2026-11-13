@@ -56,3 +56,11 @@ test("in-memory rate limiter enforces a hard cap on active key growth", () => {
   assert.match(limiter, /while \(hitMap\.size > MAX_KEYS\)/);
   assert.match(limiter, /hitMap\.delete\(oldestKey\)/);
 });
+
+test("account deletion does not silently succeed when dependent-record cleanup fails", () => {
+  const deleteStart = auth.indexOf("export async function deleteAccountAction");
+  const deleteAction = auth.slice(deleteStart);
+  assert.match(deleteAction, /await Promise\.all\(\[/);
+  assert.match(deleteAction, /await User\.deleteOne\(\{ uuid: sessionId \}\)/);
+  assert.doesNotMatch(deleteAction, /Promise\.allSettled/);
+});
