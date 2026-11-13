@@ -14,7 +14,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      NODE_ENV: test
       ENCRYPTION_SECRET_KEY: ci-only-not-for-production-32-character-secret
     steps:
       - name: Checkout
@@ -30,5 +29,9 @@ jobs:
         run: npm run typecheck
       - name: Unit and regression tests
         run: npm test
+        env:
+          NODE_ENV: test
       - name: Production build
         run: npm run build
+        env:
+          NODE_ENV: production
