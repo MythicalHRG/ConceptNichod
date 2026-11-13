@@ -224,33 +224,28 @@ export async function loginAction(formData: FormData) {
         const isUsernameBanned = await Blacklist.findOne({ type: "username", value: user.username.toLowerCase() });
         if (isUsernameBanned) throw new Error("Access denied: This username is banned.");
 
-        try {
-            const isValid = await comparePassword(password, user.password);
-            if (!isValid) {
-                recordFailedAttempt(accountRateKey, 5, 15 * 60 * 1000);
-                recordFailedAttempt(loginRateKey, 5, 15 * 60 * 1000);
-                throw new Error("Invalid credentials");
-            }
-
-            // Reset failed login count on successful authentication
-            resetRateLimit(accountRateKey);
-            resetRateLimit(loginRateKey);
-
-            // Update login IP and timestamps
-            const now = new Date();
-            user.lastLoginIp = ip;
-            user.lastLoginAt = now;
-            user.lastKnownIp = ip;
-            if (!user.firstLoginIp) {
-                user.firstLoginIp = ip;
-                user.firstLoginAt = user.createdAt || now;
-            }
-            await user.save();
-        } catch (e: any) {
+        const isValid = await comparePassword(password, user.password);
+        if (!isValid) {
             recordFailedAttempt(accountRateKey, 5, 15 * 60 * 1000);
             recordFailedAttempt(loginRateKey, 5, 15 * 60 * 1000);
             throw new Error("Invalid credentials");
         }
+
+        // Reset failed login count only after the password has been verified.
+        resetRateLimit(accountRateKey);
+        resetRateLimit(loginRateKey);
+
+        // Update login IP and timestamps. Database failures must not be counted
+        // as bad-password attempts.
+        const now = new Date();
+        user.lastLoginIp = ip;
+        user.lastLoginAt = now;
+        user.lastKnownIp = ip;
+        if (!user.firstLoginIp) {
+            user.firstLoginIp = ip;
+            user.firstLoginAt = user.createdAt || now;
+        }
+        await user.save();
 
         cookies().set("user_session", createSignedSessionCookie(user.uuid), { 
             httpOnly: true, 
@@ -325,10 +320,15 @@ export async function updateProfileAction(formData: FormData) {
     const updateData: any = {};
     if (username) {
         const targetUsername = username.toLowerCase().trim();
-        const usernameError = await validateUsername(targetUsername);
-        if (usernameError) throw new Error(usernameError);
 
-        if (targetUsername === "mythicalhrg" && currentUser.username !== "mythicalhrg") {
+        // Keeping the current handle is valid; validateUsername checks global
+        // availability and would otherwise reject the user against their own row.
+        if (targetUsername !== currentUser.username.toLowerCase()) {
+            const usernameError = await validateUsername(targetUsername);
+            if (usernameError) throw new Error(usernameError);
+        }
+
+        if (targetUsername === "mythicalhrg" && currentUser.username.toLowerCase() !== "mythicalhrg") {
             throw new Error("This username is reserved for system administration.");
         }
 
