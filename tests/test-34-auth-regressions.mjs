@@ -29,3 +29,14 @@ test("registration rejects expired or missing-expiry email OTP records", () => {
   assert.match(register, /!otpRecord \\|\\| !otpRecord\.isVerified \\|\\| !otpRecord\.expiresAt \\|\\| new Date\(\) > otpRecord\.expiresAt/);
   assert.match(register, /await dbConnect\(\);[\\s\\S]*?if \(!email \\|\\| !username/);
 });
+
+test("donation payments remain disabled until an explicit deployment opt-in", () => {
+  const donation = fs.readFileSync("src/app/actions/donation.ts", "utf8");
+  const settings = fs.readFileSync("src/models/DonationSetting.ts", "utf8");
+  const page = fs.readFileSync("src/app/donate/page.tsx", "utf8");
+  assert.match(donation, /process\.env\.DONATIONS_ENABLED === "true"/);
+  assert.match(donation, /if \(!DONATIONS_ENABLED\)[\s\S]*?Donations are temporarily unavailable/);
+  assert.match(settings, /upiId: \{ type: String, default: "" \}/);
+  assert.doesNotMatch(page, /harsh\.2525@ptaxis/);
+  assert.match(page, /receiverUpiId \?/);
+});
