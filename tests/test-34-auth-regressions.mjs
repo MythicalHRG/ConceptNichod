@@ -46,7 +46,12 @@ test("AI generation and text-to-speech server actions enforce per-user rate limi
   assert.ok(actions.includes("generate-content:${sessionUuid}"));
   assert.ok(actions.includes("final-analysis:${sessionUuid}"));
   assert.ok(actions.includes("text-to-speech:${sessionUuid}"));
-  assert.match(actions, /export async function generateAudioAction[\\s\\S]*?if \(!sessionUuid\) throw new Error\("Not authenticated"\)/);
+  const audioStart = actions.indexOf("export async function generateAudioAction");
+  const audioEnd = actions.indexOf("export async function createTopicAction", audioStart);
+  assert.notEqual(audioStart, -1);
+  assert.notEqual(audioEnd, -1);
+  const audioAction = actions.slice(audioStart, audioEnd);
+  assert.ok(audioAction.includes('if (!sessionUuid) throw new Error("Not authenticated")'));
   assert.match(actions, /authoritativeSummary = topicDoc\.summary/);
   assert.match(actions, /question: textQuestions\[idx\]\.question/);
 });
