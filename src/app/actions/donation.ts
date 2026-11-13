@@ -170,14 +170,19 @@ export async function submitDonationUtrAction(payload: {
  */
 export async function reconcileDonationManuallyAction(payload: {
   utr: string;
+  bankReference: string;
   receivedAmount: number;
   recipientVpa: string;
 }) {
   const admin = await verifyAdmin();
-  const utr = String(payload?.utr || "").trim().toUpperCase();
+  const utr = normalizeUpiReference(payload?.utr);
+  const bankReference = normalizeUpiReference(payload?.bankReference);
   const receivedAmount = parseDonationAmount(payload?.receivedAmount);
   const recipientVpa = normalizeVpa(payload?.recipientVpa);
-  if (!normalizeUpiReference(utr)) throw new Error("Invalid transaction reference.");
+  if (!utr) throw new Error("Invalid submitted transaction reference.");
+  if (!bankReference || bankReference !== utr) {
+    throw new Error("Bank reference mismatch: re-enter the exact reference shown in the bank transaction record.");
+  }
   if (receivedAmount === null) {
     throw new Error("Enter the actual credited amount from the bank record.");
   }
