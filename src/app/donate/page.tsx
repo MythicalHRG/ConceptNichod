@@ -183,7 +183,7 @@ function DonatePageContent() {
 
   const handleUtrChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     // Only allow alphanumeric uppercase characters up to 12 digits
-    const clean = e.target.value.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 12);
+    const clean = e.target.value.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 20);
     setUtrNumber(clean);
   };
 
@@ -512,7 +512,7 @@ function DonatePageContent() {
                       />
                     </div>
                     <p className="text-[11px] text-muted-foreground">
-                      Enter the 12-digit UPI Reference / UTR Number found on your payment receipt.
+                      Enter the UPI transaction reference shown on your payment receipt.
                     </p>
                   </div>
 
@@ -659,7 +659,7 @@ function DonatePageContent() {
                 <Heart className="w-10 h-10 text-muted-foreground/60 mx-auto" />
                 <h3 className="text-base font-semibold">Be the First Patron</h3>
                 <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                  Scan the UPI QR code on the left, pay any amount, and enter your 12-digit UTR. Your contribution will be celebrated right here!
+                  Scan the UPI QR code, pay, and submit the transaction reference. Contributions appear after bank reconciliation.
                 </p>
               </Card>
             )}
