@@ -42,7 +42,7 @@ interface DonorCard {
 }
 
 interface RecentTransaction {
-  uuid: string;
+  publicId: string;
   username: string;
   amount: number;
   utr: string;
@@ -288,7 +288,7 @@ function DonatePageContent() {
             <div className="flex gap-2.5 overflow-x-auto pb-1.5 no-scrollbar scroll-smooth">
               {recentTransactions.map((tx) => (
                 <div 
-                  key={tx.uuid} 
+                  key={tx.publicId} 
                   className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-card border border-border/70 text-xs shrink-0 shadow-sm hover:border-primary/40 transition-colors"
                 >
                   <span className="font-bold text-foreground">@{tx.username}</span>
