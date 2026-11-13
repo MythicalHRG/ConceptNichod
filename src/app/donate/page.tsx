@@ -124,7 +124,7 @@ function DonatePageContent() {
 
   const activeAmount = customAmount !== "" ? Number(customAmount) || 0 : (selectedAmount || 100);
   const currentTier = getTierForAmount(activeAmount);
-  const receiverUpiId = settings?.upiId || "harsh.2525@ptaxis";
+  const receiverUpiId = settings?.upiId || "";
 
   // Construct dynamic UPI Intent URI
   const upiIntentUri = `upi://pay?pa=${encodeURIComponent(receiverUpiId)}&pn=${encodeURIComponent("ConceptNichod")}&am=${activeAmount}&cu=INR&tn=${encodeURIComponent(`ConceptNichod Patron ${username || "Student"}`)}`;
@@ -189,6 +189,15 @@ function DonatePageContent() {
 
   const handleSubmitUtrVerification = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!receiverUpiId) {
+      toast({
+        title: "Contributions unavailable",
+        description: "The recipient UPI account has not been enabled for payments yet.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     if (!isLoggedInUser || !username) {
       toast({
@@ -418,6 +427,8 @@ function DonatePageContent() {
                     </div>
                   </div>
 
+                  {receiverUpiId ? (
+                  <>
                   {/* Step 2: Pay via Dynamic QR Code or 1-Tap UPI Apps */}
                   <div className="space-y-3 pt-2 border-t border-border/60">
                     <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
@@ -486,6 +497,12 @@ function DonatePageContent() {
                       </a>
                     </div>
                   </div>
+                  </>
+                  ) : (
+                    <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-muted-foreground">
+                      Contributions are temporarily unavailable while the recipient UPI account is being confirmed. No payment QR or payment link is active.
+                    </div>
+                  )}
 
                   {/* Step 3: Enter 12-Digit UTR */}
                   <div className="space-y-2 pt-2 border-t border-border/60">
