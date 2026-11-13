@@ -231,6 +231,25 @@ export async function reconcileDonationManuallyAction(payload: {
   return { success: true, message: "Bank-reconciled donation marked verified.", verifiedAmount: receivedAmount, totalAmount, donationCount };
 }
 
+
+/** Admin-only queue of unverified UTR claims. */
+export async function getPendingDonationsAdminAction() {
+  await verifyAdmin();
+  await dbConnect();
+  const pending = await DonationTransaction.find({ status: "pending" })
+    .select("utr username amount message donatedAt")
+    .sort({ donatedAt: 1 })
+    .limit(200)
+    .lean();
+  return pending.map((tx: any) => ({
+    utr: tx.utr,
+    username: tx.username,
+    claimedAmount: tx.amount,
+    message: tx.message || "",
+    submittedAt: new Date(tx.donatedAt).toISOString(),
+  }));
+}
+
 /**
  * Public action to check if current visitor is logged in and retrieve their handle
  */
