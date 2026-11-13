@@ -6,7 +6,7 @@ export interface IDonationTransaction extends Document {
   username: string;
   userUuid: string;
   amount: number;
-  status: "pending" | "verified" | "rejected";
+  status?: "pending" | "verified" | "rejected";
   verifiedAmount?: number;
   recipientVpa?: string;
   verificationMethod?: "manual-bank-reconciliation";
