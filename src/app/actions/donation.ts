@@ -12,6 +12,7 @@ import { parseDonationAmount, normalizeUpiReference, normalizeVpa } from "@/lib/
 import { checkRateLimit } from "@/lib/rate-limiter";
 
 const ADMIN_USERNAME = "mythicalhrg";
+const DONATIONS_ENABLED = process.env.DONATIONS_ENABLED === "true";
 
 async function verifyAdmin() {
   await dbConnect();
@@ -36,7 +37,7 @@ export async function getDonationInfoAction() {
   let setting = await DonationSetting.findOne().lean();
   if (!setting) {
     setting = await DonationSetting.create({
-      upiId: "harsh.2525@ptaxis",
+      upiId: "",
       qrCodeUrl: "/qr.png",
       customInstructions: "Pay using any UPI app, then submit your transaction reference. Donations appear on the Hall of Patrons only after bank reconciliation.",
       thankYouNote: "Thank you for empowering free, high-quality, concept-first education for every student."
@@ -87,7 +88,7 @@ export async function getDonationInfoAction() {
 
   return {
     success: true,
-    settings: JSON.parse(JSON.stringify(setting)),
+    settings: JSON.parse(JSON.stringify({ ...setting, upiId: DONATIONS_ENABLED ? setting.upiId : "" })),
     donors: JSON.parse(JSON.stringify(donors)),
     recentTransactions: JSON.parse(JSON.stringify(recentTransactions)),
   };
@@ -102,6 +103,12 @@ export async function submitDonationUtrAction(payload: {
   utr: string;
   message?: string;
 }) {
+  // Payments stay disabled until the deployment owner explicitly confirms the
+  // recipient account and enables DONATIONS_ENABLED in the server environment.
+  if (!DONATIONS_ENABLED) {
+    return { success: false, error: "Donations are temporarily unavailable while the recipient account is being confirmed." };
+  }
+
   const amount = parseDonationAmount(payload?.amount);
   if (amount === null) {
     return { success: false, error: "Enter a valid donation amount between ₹1 and ₹10,00,000 (up to 2 decimal places)." };
