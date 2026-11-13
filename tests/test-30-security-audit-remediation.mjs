@@ -156,7 +156,7 @@ test("Audit Remediation 30.7: Study groups action does NOT leak target UUIDs in 
 test("Audit Remediation 30.8: Donor info action queries public donors safely", () => {
   const donationPath = path.resolve("src/app/actions/donation.ts");
   const content = fs.readFileSync(donationPath, "utf-8");
-  assert.ok(content.includes('Donor.find({ isPublic: true })'), "getDonationInfoAction must query public donors only");
+  assert.ok(content.includes('{ $match: { status: "verified", verifiedAmount: { $gt: 0 } } }'), "getDonationInfoAction must aggregate only bank-verified donation credits");
 });
 
 test("Audit Remediation 30.9: Rate limiting is strictly enforced on feedback, followup, and concept mirror", () => {
