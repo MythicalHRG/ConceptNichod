@@ -1,8 +1,11 @@
 export function parseDonationAmount(value: unknown): number | null {
   const amount = Number(value);
   if (!Number.isFinite(amount) || amount < 1 || amount > 1000000) return null;
-  if (Math.round(amount * 100) !== amount * 100) return null;
-  return amount;
+  const paise = Math.round(amount * 100);
+  // Floating-point representation can make valid values such as 12.34
+  // appear to have extra decimal places. Compare with a small precision tolerance.
+  if (Math.abs(amount * 100 - paise) > 1e-7) return null;
+  return paise / 100;
 }
 
 export function normalizeUpiReference(value: unknown): string | null {
