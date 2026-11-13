@@ -74,11 +74,16 @@ export async function getDonationInfoAction() {
 
   // Retrieve latest 10 verified transactions for the recent activity ticker
   // Security Hardening: Redact sensitive 12-digit bank UTR numbers and internal UUIDs from public feed
-  const recentTransactions = await DonationTransaction.find({ isPublic: true, status: "verified" })
+  const recentTransactionDocs = await DonationTransaction.find({ isPublic: true, status: "verified" })
     .select("-utr -userUuid -uuid")
     .sort({ donatedAt: -1 })
     .limit(10)
     .lean();
+  const recentTransactions = recentTransactionDocs.map((tx: any) => ({
+    ...tx,
+    publicId: crypto.createHash("sha256").update(String(tx._id)).digest("hex").slice(0, 16),
+    _id: undefined,
+  }));
 
   return {
     success: true,
