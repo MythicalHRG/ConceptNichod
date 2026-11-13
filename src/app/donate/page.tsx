@@ -209,10 +209,10 @@ function DonatePageContent() {
     }
 
     const cleanUtr = utrNumber.trim();
-    if (cleanUtr.length !== 12) {
+    if (!/^[A-Za-z0-9]{8,20}$/.test(cleanUtr)) {
       toast({
-        title: "12-Digit UTR Required",
-        description: `Please enter the complete 12-digit UPI reference number. Currently ${cleanUtr.length}/12 digits entered.`,
+        title: "Transaction Reference Required",
+        description: `Please enter the transaction reference shown on your UPI receipt.`,
         variant: "destructive",
       });
       return;
@@ -491,10 +491,10 @@ function DonatePageContent() {
                   <div className="space-y-2 pt-2 border-t border-border/60">
                     <div className="flex items-center justify-between text-xs">
                       <Label htmlFor="utr-input" className="font-semibold text-muted-foreground uppercase tracking-wider">
-                        Step 3: Enter 12-Digit UTR Number
+                        Step 3: Enter UPI Transaction Reference
                       </Label>
                       <span className={`font-mono text-xs font-bold ${utrNumber.length === 12 ? "text-emerald-500" : "text-muted-foreground"}`}>
-                        {utrNumber.length}/12 Digits
+                        {utrNumber.length}/20 Characters
                       </span>
                     </div>
 
@@ -550,13 +550,13 @@ function DonatePageContent() {
                   {/* Submit CTA Button */}
                   <Button
                     type="submit"
-                    disabled={isSubmitting || activeAmount < 1 || utrNumber.length !== 12 || !isLoggedInUser}
+                    disabled={isSubmitting || activeAmount < 1 || !/^[A-Z0-9]{8,20}$/.test(utrNumber) || !isLoggedInUser}
                     className="w-full h-11 text-sm font-bold bg-gradient-to-r from-rose-500 via-amber-500 to-primary hover:opacity-95 shadow-lg shadow-primary/20 gap-2"
                   >
                     {isSubmitting ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        Verifying UTR & Updating Leaderboard...
+                        Submitting UTR for bank reconciliation...
                       </>
                     ) : !isLoggedInUser ? (
                       <>
@@ -566,14 +566,14 @@ function DonatePageContent() {
                     ) : (
                       <>
                         <Check className="w-4 h-4" />
-                        <span>Verify UTR & Join Hall of Patrons</span>
+                        <span>Submit UTR for manual review</span>
                       </>
                     )}
                   </Button>
 
                   <div className="pt-0.5 flex items-center justify-center gap-2 text-[11px] text-muted-foreground text-center">
                     <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                    <span>Every UTR is strictly unique and verified against duplicate submissions.</span>
+                    <span>Duplicate references are blocked. Submission does not mean payment is verified; only bank-reconciled credits enter the Hall of Patrons.</span>
                   </div>
                 </form>
               </CardContent>
