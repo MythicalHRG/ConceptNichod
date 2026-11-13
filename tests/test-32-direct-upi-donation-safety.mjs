@@ -10,6 +10,9 @@ import {
 test("donation amounts reject invalid, fractional precision, and unreasonable claims", () => {
   assert.equal(parseDonationAmount(1), 1);
   assert.equal(parseDonationAmount(12.5), 12.5);
+  assert.equal(parseDonationAmount(12.34), 12.34);
+  assert.equal(parseDonationAmount(12.01), 12.01);
+  assert.equal(parseDonationAmount(1.15), 1.15);
   assert.equal(parseDonationAmount(12.345), null);
   assert.equal(parseDonationAmount(0), null);
   assert.equal(parseDonationAmount(-1), null);
