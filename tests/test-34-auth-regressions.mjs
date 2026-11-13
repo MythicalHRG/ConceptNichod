@@ -43,9 +43,9 @@ test("donation payments remain disabled until an explicit deployment opt-in", ()
 
 test("AI generation and text-to-speech server actions enforce per-user rate limits", () => {
   const actions = fs.readFileSync("src/app/actions.ts", "utf8");
-  assert.match(actions, /generate-content:\\$\{sessionUuid\\}/);
-  assert.match(actions, /final-analysis:\\$\{sessionUuid\\}/);
-  assert.match(actions, /text-to-speech:\\$\{sessionUuid\\}/);
+  assert.ok(actions.includes("generate-content:${sessionUuid}"));
+  assert.ok(actions.includes("final-analysis:${sessionUuid}"));
+  assert.ok(actions.includes("text-to-speech:${sessionUuid}"));
   assert.match(actions, /export async function generateAudioAction[\\s\\S]*?if \(!sessionUuid\) throw new Error\("Not authenticated"\)/);
   assert.match(actions, /authoritativeSummary = topicDoc\.summary/);
   assert.match(actions, /question: textQuestions\[idx\]\.question/);
@@ -71,6 +71,6 @@ test("topic progress persistence validates ownership, status, answer bounds, and
   const progress = actions.slice(start);
   assert.match(progress, /mongoose\.isValidObjectId\(topicId\)/);
   assert.match(progress, /status !== "in_progress" && status !== "completed"/);
-  assert.match(progress, /topic-progress:\\$\{sessionUuid\\}/);
+  assert.ok(progress.includes("topic-progress:${sessionUuid}"));
   assert.match(progress, /\{ _id: topicId, userId: sessionUuid \}/);
 });
