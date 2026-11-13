@@ -8,6 +8,7 @@ import Donor from "@/models/Donor";
 import DonationTransaction from "@/models/DonationTransaction";
 import { verifySessionCookie } from "@/lib/session";
 import crypto from "crypto";
+import { parseDonationAmount, normalizeUpiReference, normalizeVpa } from "@/lib/donation-validation";
 
 const ADMIN_USERNAME = "mythicalhrg";
 
@@ -99,8 +100,8 @@ export async function submitDonationUtrAction(payload: {
   utr: string;
   message?: string;
 }) {
-  const amount = Number(payload?.amount);
-  if (!Number.isFinite(amount) || amount < 1 || amount > 1000000 || Math.round(amount * 100) !== amount * 100) {
+  const amount = parseDonationAmount(payload?.amount);
+  if (amount === null) {
     return { success: false, error: "Enter a valid donation amount between ₹1 and ₹10,00,000 (up to 2 decimal places)." };
   }
 
@@ -109,10 +110,8 @@ export async function submitDonationUtrAction(payload: {
     return { success: false, error: "Authentication required. Please log in to submit a donation." };
   }
 
-  const rawUtr = String(payload?.utr || "").trim().toUpperCase();
-  // UPI reference lengths vary by bank/app. Validate conservatively without claiming
-  // that format validation proves the reference exists.
-  if (!/^[A-Z0-9]{8,20}$/.test(rawUtr)) {
+  const rawUtr = normalizeUpiReference(payload?.utr);
+  if (!rawUtr) {
     return { success: false, error: "Enter the transaction reference exactly as shown on your UPI receipt (8–20 letters or digits)." };
   }
 
@@ -126,8 +125,8 @@ export async function submitDonationUtrAction(payload: {
   if (!setting?.upiId) return { success: false, error: "The donation recipient is not configured. Please contact the administrator." };
   if (existing) return { success: false, error: "This transaction reference has already been submitted." };
 
-  const configuredVpa = String(setting.upiId).trim().toLowerCase();
-  if (!/^[a-z0-9._-]{2,256}@[a-z0-9.-]{2,64}$/.test(configuredVpa)) {
+  const configuredVpa = normalizeVpa(setting.upiId);
+  if (!configuredVpa) {
     return { success: false, error: "The configured donation UPI ID is invalid. Please contact the administrator." };
   }
 
@@ -170,26 +169,26 @@ export async function reconcileDonationManuallyAction(payload: {
 }) {
   const admin = await verifyAdmin();
   const utr = String(payload?.utr || "").trim().toUpperCase();
-  const receivedAmount = Number(payload?.receivedAmount);
-  const recipientVpa = String(payload?.recipientVpa || "").trim().toLowerCase();
-  if (!/^[A-Z0-9]{8,20}$/.test(utr)) throw new Error("Invalid transaction reference.");
-  if (!Number.isFinite(receivedAmount) || receivedAmount < 1 || receivedAmount > 1000000 || Math.round(receivedAmount * 100) !== receivedAmount * 100) {
+  const receivedAmount = parseDonationAmount(payload?.receivedAmount);
+  const recipientVpa = normalizeVpa(payload?.recipientVpa);
+  if (!normalizeUpiReference(utr)) throw new Error("Invalid transaction reference.");
+  if (receivedAmount === null) {
     throw new Error("Enter the actual credited amount from the bank record.");
   }
-  if (!/^[a-z0-9._-]{2,256}@[a-z0-9.-]{2,64}$/.test(recipientVpa)) {
+  if (!recipientVpa) {
     throw new Error("Enter a valid recipient UPI ID from the bank record.");
   }
 
   await dbConnect();
   const setting = await DonationSetting.findOne().select("upiId").lean();
-  const expectedVpa = String(setting?.upiId || "").trim().toLowerCase();
+  const expectedVpa = normalizeVpa(setting?.upiId);
   if (!expectedVpa || recipientVpa !== expectedVpa) {
     throw new Error("Recipient mismatch: the bank-record recipient does not match the configured donation UPI ID.");
   }
 
   const pending = await DonationTransaction.findOne({ utr, status: "pending" });
   if (!pending) throw new Error("No pending donation was found for this reference.");
-  if (Number(pending.amount) !== receivedAmount) {
+  if (Math.round(Number(pending.amount) * 100) !== Math.round(receivedAmount * 100)) {
     throw new Error(`Amount mismatch: submitted ₹${pending.amount}; bank credited ₹${receivedAmount}. This donation remains pending for investigation.`);
   }
 
