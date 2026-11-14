@@ -1,3 +1,7 @@
+import { createHash } from "crypto";
+import dbConnect from "@/lib/mongoose";
+import RateLimitCounter from "@/models/RateLimitCounter";
+
 export interface RateLimitResult {
   success: boolean;
   limit: number;
@@ -127,9 +131,6 @@ export function resetRateLimit(key: string): void {
  * Unlike the process-local helpers above (kept for isolated unit tests),
  * this stores counters centrally so all Vercel instances share one quota.
  */
-import dbConnect from "@/lib/mongoose";
-import RateLimitCounter from "@/models/RateLimitCounter";
-
 let rateLimitIndexesReady: Promise<unknown> | null = null;
 
 async function ensureRateLimitIndexes() {
@@ -149,8 +150,9 @@ function getWindow(key: string, windowMs: number, now: number) {
   if (!key || !Number.isSafeInteger(windowMs) || windowMs <= 0) {
     throw new Error("Invalid rate-limit key or window");
   }
+  const hashedKey = createHash("sha256").update(key).digest("hex");
   const windowStart = Math.floor(now / windowMs) * windowMs;
-  return { key, windowStart, expiresAt: new Date(windowStart + windowMs * 2) };
+  return { key: hashedKey, windowStart, expiresAt: new Date(windowStart + windowMs * 2) };
 }
 
 export async function checkDistributedRateLimit(
