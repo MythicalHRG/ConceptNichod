@@ -10,10 +10,10 @@ import crypto from "crypto";
 import { getClientIp } from "@/lib/ip";
 import { createSignedSessionCookie, verifySessionCookie } from "@/lib/session";
 import {
-  checkRateLimit,
-  peekRateLimit,
-  recordFailedAttempt,
-  resetRateLimit,
+  checkDistributedRateLimit,
+  peekDistributedRateLimit,
+  recordDistributedFailedAttempt,
+  resetDistributedRateLimit,
 } from "@/lib/rate-limiter";
 import { normalizeEmail, validateEmailDomain, validateEmail } from "@/lib/email-utils";
 
@@ -93,7 +93,7 @@ export async function registerAction(formData: FormData) {
         if (passwordError) throw new Error(passwordError);
 
         const ip = getClientIp();
-        const regRate = checkRateLimit(`register:${ip}`, 3, 60 * 60 * 1000);
+        const regRate = await checkDistributedRateLimit(`register:${ip}`, 3, 60 * 60 * 1000);
         if (!regRate.success) {
             throw new Error("Too many registration attempts from this IP. Please try again later.");
         }
@@ -185,12 +185,12 @@ export async function loginAction(formData: FormData) {
         const accountRateKey = `login:account:${rawInput.toLowerCase()}`;
         const loginRateKey = `login:${ip}:${rawInput.toLowerCase()}`;
 
-        const accountRateStatus = peekRateLimit(accountRateKey, 5, 15 * 60 * 1000);
+        const accountRateStatus = await peekDistributedRateLimit(accountRateKey, 5, 15 * 60 * 1000);
         if (!accountRateStatus.success) {
             throw new Error("This account has experienced too many failed login attempts. Please try again after 15 minutes.");
         }
 
-        const loginRateStatus = peekRateLimit(loginRateKey, 5, 15 * 60 * 1000);
+        const loginRateStatus = await peekDistributedRateLimit(loginRateKey, 5, 15 * 60 * 1000);
         if (!loginRateStatus.success) {
             throw new Error("Too many failed login attempts. Please try again after 15 minutes.");
         }
@@ -215,8 +215,8 @@ export async function loginAction(formData: FormData) {
         });
 
         if (!user) {
-            recordFailedAttempt(accountRateKey, 5, 15 * 60 * 1000);
-            recordFailedAttempt(loginRateKey, 5, 15 * 60 * 1000);
+            await recordDistributedFailedAttempt(accountRateKey, 5, 15 * 60 * 1000);
+            await recordDistributedFailedAttempt(loginRateKey, 5, 15 * 60 * 1000);
             throw new Error("Invalid credentials");
         }
 
@@ -228,14 +228,14 @@ export async function loginAction(formData: FormData) {
 
         const isValid = await comparePassword(password, user.password);
         if (!isValid) {
-            recordFailedAttempt(accountRateKey, 5, 15 * 60 * 1000);
-            recordFailedAttempt(loginRateKey, 5, 15 * 60 * 1000);
+            await recordDistributedFailedAttempt(accountRateKey, 5, 15 * 60 * 1000);
+            await recordDistributedFailedAttempt(loginRateKey, 5, 15 * 60 * 1000);
             throw new Error("Invalid credentials");
         }
 
         // Reset failed login count only after the password has been verified.
-        resetRateLimit(accountRateKey);
-        resetRateLimit(loginRateKey);
+        await resetDistributedRateLimit(accountRateKey);
+        await resetDistributedRateLimit(loginRateKey);
 
         // Update login IP and timestamps. Database failures must not be counted
         // as bad-password attempts.
