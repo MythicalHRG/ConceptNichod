@@ -3,7 +3,7 @@
 import { cookies } from 'next/headers';
 import { callOpenRouter } from '@/lib/openrouter';
 import { verifySessionCookie } from '@/lib/session';
-import { checkRateLimit } from '@/lib/rate-limiter';
+import { checkDistributedRateLimit } from '@/lib/rate-limiter';
 
 type Message = {
   role: 'user' | 'assistant';
@@ -33,7 +33,7 @@ export async function askFollowUpAction(input: FollowUpInput): Promise<{ answer:
 
   // Rate limiting: 15 requests per minute per user session
   const rateLimitKey = `followup:${sessionUuid}`;
-  const rateCheck = checkRateLimit(rateLimitKey, 15, 60 * 1000);
+  const rateCheck = await checkDistributedRateLimit(rateLimitKey, 15, 60 * 1000);
   if (!rateCheck.success) {
     throw new Error('You are asking questions too fast. Please wait a moment before sending another message.');
   }
