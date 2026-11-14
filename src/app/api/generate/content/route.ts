@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { generateContentAction } from '@/app/actions';
 import { verifySessionCookie } from '@/lib/session';
 import { getClientIp } from '@/lib/ip';
-import { checkRateLimit } from '@/lib/rate-limiter';
+import { checkDistributedRateLimit } from '@/lib/rate-limiter';
 
 const ContentSchema = z.object({
   topicId: z.string().min(1, 'topicId is required'),
@@ -24,7 +24,7 @@ export async function POST(req: Request) {
     // 2. Rate limiting (10 requests per minute per IP/user)
     const ip = getClientIp(req.headers);
     const rateLimitKey = `gen:${sessionUuid || ip}`;
-    const rateStatus = checkRateLimit(rateLimitKey, 10, 60 * 1000);
+    const rateStatus = await checkDistributedRateLimit(rateLimitKey, 10, 60 * 1000);
     if (!rateStatus.success) {
       return NextResponse.json(
         { error: 'Rate limit exceeded. Please wait a minute before generating more content.' },
