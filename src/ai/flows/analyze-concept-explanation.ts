@@ -6,7 +6,7 @@ import { verifySessionCookie } from '@/lib/session';
 import dbConnect from '@/lib/mongoose';
 import ConceptMirror from '@/models/ConceptMirror';
 import MistakeEntry from '@/models/MistakeEntry';
-import { checkRateLimit } from '@/lib/rate-limiter';
+import { checkDistributedRateLimit } from '@/lib/rate-limiter';
 
 export type DetectedMistake = {
   title: string;
@@ -47,7 +47,7 @@ export async function analyzeConceptExplanation(input: AnalyzeConceptExplanation
 
   // Rate limiting: 6 oral defense evaluations per minute per user session
   const rateLimitKey = `concept-mirror:${sessionUuid}`;
-  const rateCheck = checkRateLimit(rateLimitKey, 6, 60 * 1000);
+  const rateCheck = await checkDistributedRateLimit(rateLimitKey, 6, 60 * 1000);
   if (!rateCheck.success) {
     throw new Error('Rate limit reached: Maximum 6 oral defenses per minute. Please take a moment to reflect before submitting your next defense.');
   }
