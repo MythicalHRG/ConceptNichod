@@ -420,9 +420,9 @@ test("Tareeka 22.7: /api/auth/otp enforces per-email rate limiting", () => {
   const content = fs.readFileSync(otpRoutePath, "utf-8");
 
   assert.ok(
-    content.includes("checkRateLimit(`otp:email:${email}`") ||
-    content.includes('checkRateLimit(`otp:email:${email}`') ||
-    content.includes("checkRateLimit(`otp:email:"),
+    content.includes("checkDistributedRateLimit(`otp:email:${email}`") ||
+    content.includes('checkDistributedRateLimit(`otp:email:${email}`') ||
+    content.includes("checkDistributedRateLimit(`otp:email:"),
     "Must invoke checkRateLimit with per-email key"
   );
 
@@ -577,7 +577,7 @@ test("Tareeka 22.16: OTP verify endpoint enforces IP rate limiting", () => {
   const content = fs.readFileSync(otpRoutePath, "utf-8");
 
   assert.ok(
-    content.includes("checkRateLimit(`otp:verify:${ip}`") || content.includes('checkRateLimit(`otp:verify:${ip}`'),
+    content.includes("checkDistributedRateLimit(`otp:verify:${ip}`") || content.includes('checkDistributedRateLimit(`otp:verify:${ip}`'),
     "/api/auth/otp must rate limit verification attempts by IP"
   );
 });
