@@ -5,7 +5,7 @@ import User from "@/models/User";
 import { sendEmail } from "@/services/email";
 import { verifySessionCookie } from "@/lib/session";
 import { getClientIp } from "@/lib/ip";
-import { checkDistributedRateLimit } from "@/lib/rate-limiter";
+import { checkDistributedRateLimit } from "@/lib/distributed-rate-limiter";
 
 function escapeHtml(str: string): string {
   return (str || "")
