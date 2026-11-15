@@ -16,8 +16,8 @@ const AnalysisSchema = z.object({
   classLevel: z.string().min(1, 'classLevel is required'),
   summary: z.string().min(1, 'summary is required'),
   topicId: z.string().min(1, 'topicId is required'),
-  writtenAnswers: z.array(AnswerSchema).optional().default([]),
-  spokenAnswers: z.array(AnswerSchema).optional().default([]),
+  writtenAnswers: z.array(AnswerSchema).max(50).optional().default([]),
+  spokenAnswers: z.array(AnswerSchema).max(50).optional().default([]),
 });
 
 export async function POST(req: Request) {
