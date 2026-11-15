@@ -163,7 +163,7 @@ export async function checkDistributedRateLimit(
   await ensureRateLimitIndexes();
   const now = Date.now();
   const window = getWindow(key, windowMs, now);
-  let counter;
+  let counter: { count: number } | null = null;
   try {
     counter = await RateLimitCounter.findOneAndUpdate(
       { key: window.key, windowStart: window.windowStart },
