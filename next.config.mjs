@@ -1,7 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    serverComponentsExternalPackages: [
+  serverExternalPackages: [
       '@genkit-ai/core', 
       'genkit', 
       '@opentelemetry/sdk-node', 
@@ -9,8 +8,7 @@ const nextConfig = {
       'pino-pretty', 
       'lokijs', 
       'encoding'
-    ],
-  },
+  ],
   productionBrowserSourceMaps: false,
   poweredByHeader: false,
   compiler: {
