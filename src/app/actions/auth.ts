@@ -90,7 +90,7 @@ export async function registerAction(formData: FormData) {
         const passwordError = validatePassword(password);
         if (passwordError) throw new Error(passwordError);
 
-        const ip = getClientIp();
+        const ip = await getClientIp();
         const regRate = await checkDistributedRateLimit(`register:${ip}`, 3, 60 * 60 * 1000);
         if (!regRate.success) {
             throw new Error("Too many registration attempts from this IP. Please try again later.");
