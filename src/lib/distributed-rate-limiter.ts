@@ -62,7 +62,10 @@ export async function checkDistributedRateLimit(
       { new: true }
     ).lean();
   }
-  const count = counter?.count ?? 0;
+  if (!counter || !Number.isSafeInteger(counter.count) || counter.count < 1) {
+    throw new Error("Rate-limit counter could not be confirmed; request denied");
+  }
+  const count = counter.count;
   return {
     success: count <= limit,
     limit,
