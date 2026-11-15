@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     }
 
     // 2. Rate limiting (10 requests per minute per IP/user)
-    const ip = getClientIp(req.headers);
+    const ip = await getClientIp(req.headers);
     const rateLimitKey = `gen:${sessionUuid || ip}`;
     const rateStatus = await checkDistributedRateLimit(rateLimitKey, 10, 60 * 1000);
     if (!rateStatus.success) {
