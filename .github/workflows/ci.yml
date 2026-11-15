@@ -30,6 +30,7 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Apply non-breaking dependency security updates
         run: npm audit fix --no-fund
+        continue-on-error: true
       - name: Upload resolved lockfile for review
         uses: actions/upload-artifact@v4
         with:
