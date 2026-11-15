@@ -150,7 +150,7 @@ test("Audit 31.7: src/app/actions/auth.ts enforces global per-account rate limit
     "loginAction must track failed login attempts globally per account"
   );
   assert.ok(
-    loginSection.includes("recordDistributedFailedAttempt(accountRateKey"),
+    loginSection.includes("checkDistributedRateLimit(accountRateKey"),
     "loginAction must record failed attempts on the account key"
   );
   assert.ok(
