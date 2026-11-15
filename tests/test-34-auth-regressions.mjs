@@ -17,8 +17,8 @@ test("failed password attempts are counted once and database save errors are not
   assert.notEqual(loginStart, -1);
   assert.notEqual(loginEnd, -1);
   const login = auth.slice(loginStart, loginEnd);
-  assert.equal((login.match(/recordFailedAttempt\(accountRateKey/g) || []).length, 2);
-  assert.equal((login.match(/recordFailedAttempt\(loginRateKey/g) || []).length, 2);
+  assert.equal((login.match(/checkDistributedRateLimit\(accountRateKey/g) || []).length, 1);
+  assert.equal((login.match(/checkDistributedRateLimit\(loginRateKey/g) || []).length, 1);
   assert.match(login, /const isValid = await comparePassword\(password, user\.password\);[\s\S]*?if \(!isValid\) \{[\s\S]*?await user\.save\(\);/);
 });
 
