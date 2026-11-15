@@ -1,11 +1,11 @@
 import { createHash } from "crypto";
+import type { RateLimitResult } from "@/lib/rate-limiter";
 import dbConnect from "@/lib/mongoose";
 import RateLimitCounter from "@/models/RateLimitCounter";
 
 /**
  * Shared MongoDB-backed fixed-window limiter for serverless production.
- * Unlike the process-local helpers above (kept for isolated unit tests),
- * this stores counters centrally so all Vercel instances share one quota.
+ * Process-local helpers remain in rate-limiter.ts for isolated unit tests.
  */
 let rateLimitIndexesReady: Promise<unknown> | null = null;
 
@@ -22,19 +22,27 @@ async function ensureRateLimitIndexes() {
   await rateLimitIndexesReady;
 }
 
+function hashKey(key: string) {
+  if (!key) throw new Error("Invalid rate-limit key");
+  return createHash("sha256").update(key).digest("hex");
+}
+
 function getWindow(key: string, windowMs: number, now: number) {
-  if (!key || !Number.isSafeInteger(windowMs) || windowMs <= 0) {
-    throw new Error("Invalid rate-limit key or window");
+  if (!Number.isSafeInteger(windowMs) || windowMs <= 0) {
+    throw new Error("Invalid rate-limit window");
   }
-  const hashedKey = createHash("sha256").update(key).digest("hex");
   const windowStart = Math.floor(now / windowMs) * windowMs;
-  return { key: hashedKey, windowStart, expiresAt: new Date(windowStart + windowMs * 2) };
+  return { key: hashKey(key), windowStart, expiresAt: new Date(windowStart + windowMs * 2) };
+}
+
+function validateLimit(limit: number) {
+  if (!Number.isSafeInteger(limit) || limit < 1) throw new Error("Invalid rate limit");
 }
 
 export async function checkDistributedRateLimit(
   key: string, limit: number, windowMs: number
 ): Promise<RateLimitResult> {
-  if (!Number.isSafeInteger(limit) || limit < 1) throw new Error("Invalid rate limit");
+  validateLimit(limit);
   await dbConnect();
   await ensureRateLimitIndexes();
   const now = Date.now();
@@ -47,7 +55,6 @@ export async function checkDistributedRateLimit(
       { upsert: true, new: true, setDefaultsOnInsert: true }
     ).lean();
   } catch (error: any) {
-    // Concurrent first writes can race on the unique compound index.
     if (error?.code !== 11000) throw error;
     counter = await RateLimitCounter.findOneAndUpdate(
       { key: window.key, windowStart: window.windowStart },
@@ -56,18 +63,18 @@ export async function checkDistributedRateLimit(
     ).lean();
   }
   const count = counter?.count ?? 0;
-  const resetMs = Math.max(0, window.windowStart + windowMs - now);
   return {
     success: count <= limit,
     limit,
     remaining: Math.max(0, limit - count),
-    resetMs,
+    resetMs: Math.max(0, window.windowStart + windowMs - now),
   };
 }
 
 export async function peekDistributedRateLimit(
   key: string, limit: number, windowMs: number
 ): Promise<RateLimitResult> {
+  validateLimit(limit);
   await dbConnect();
   await ensureRateLimitIndexes();
   const now = Date.now();
@@ -92,5 +99,5 @@ export async function recordDistributedFailedAttempt(
 
 export async function resetDistributedRateLimit(key: string): Promise<void> {
   await dbConnect();
-  await RateLimitCounter.deleteMany({ key });
+  await RateLimitCounter.deleteMany({ key: hashKey(key) });
 }
