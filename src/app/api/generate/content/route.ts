@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { generateContentAction } from '@/app/actions';
 import { verifySessionCookie } from '@/lib/session';
 import { getClientIp } from '@/lib/ip';
-import { checkDistributedRateLimit } from '@/lib/rate-limiter';
+import { checkDistributedRateLimit } from '@/lib/distributed-rate-limiter';
 
 const ContentSchema = z.object({
   topicId: z.string().min(1, 'topicId is required'),
