@@ -75,7 +75,7 @@ export async function getPublicDonationPageData() {
         upiId: settings.upiId || process.env.NEXT_PUBLIC_UPI_ID || "",
         payeeName: settings.payeeName || "ConceptNichod",
         qrCodeUrl: settings.qrCodeUrl || "/qr.png",
-        isEnabled: settings.isEnabled ?? true,
+        isEnabled: Boolean(settings.isEnabled) && process.env.DONATIONS_ENABLED === "true",
         headline:
           settings.headline || "Support ConceptNichod & Join the Hall of Patrons",
         subtext:
@@ -94,7 +94,7 @@ export async function getPublicDonationPageData() {
         upiId: process.env.NEXT_PUBLIC_UPI_ID || "",
         payeeName: process.env.NEXT_PUBLIC_UPI_NAME || "ConceptNichod",
         qrCodeUrl: "/qr.png",
-        isEnabled: true,
+        isEnabled: process.env.DONATIONS_ENABLED === "true",
         headline: "Support ConceptNichod & Join the Hall of Patrons",
         subtext:
           "Scan the UPI QR code to contribute any amount, then submit your 12-digit UTR and Transaction ID below.",
@@ -320,7 +320,7 @@ export async function getAdminDonationDashboard(filterStatus?: string, search?: 
         upiId: (settingsRaw as any)?.upiId || process.env.NEXT_PUBLIC_UPI_ID || "",
         payeeName: (settingsRaw as any)?.payeeName || "ConceptNichod",
         qrCodeUrl: (settingsRaw as any)?.qrCodeUrl || "/qr.png",
-        isEnabled: (settingsRaw as any)?.isEnabled ?? true,
+        isEnabled: Boolean((settingsRaw as any)?.isEnabled) && process.env.DONATIONS_ENABLED === "true",
       },
     };
   } catch (error: any) {
@@ -588,6 +588,8 @@ export async function adminUpdateDonationSettings(input: {
   payeeName: string;
   qrCodeUrl?: string;
   isEnabled?: boolean;
+  customInstructions?: string;
+  thankYouNote?: string;
 }) {
   try {
     const adminUser = await requireAdminSession();
@@ -665,7 +667,7 @@ export async function getCurrentUserDonationContextAction() {
   } catch { return { success:false, username:null }; }
 }
 export async function updateDonationSettingsAction(payload: { upiId:string; qrCodeUrl?:string; customInstructions?:string; thankYouNote?:string }) {
-  return adminUpdateDonationSettings({ upiId:payload.upiId, payeeName:"ConceptNichod", qrCodeUrl:payload.qrCodeUrl || "/qr.png", isEnabled:true });
+  return adminUpdateDonationSettings({ upiId:payload.upiId, payeeName:"ConceptNichod", qrCodeUrl:payload.qrCodeUrl || "/qr.png", isEnabled:true, customInstructions:payload.customInstructions, thankYouNote:payload.thankYouNote });
 }
 export async function addDonorCardAction(payload: { username:string; amount:number; tier?:"Supporter"|"Patron"|"Benefactor"|"Legend"; message?:string }) {
   return adminAddManualPatron({ name:payload.username, amount:payload.amount, tier:payload.tier, message:payload.message });
