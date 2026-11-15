@@ -21,6 +21,7 @@ import {
 } from "@/lib/donation-validation";
 
 const VALID_TIERS: PatronTier[] = ["LEGEND", "DIAMOND", "GOLD", "SILVER", "SUPPORTER"];
+const DONATIONS_ENABLED = process.env.DONATIONS_ENABLED === "true";
 
 async function requireAdminSession() {
   await connectToDatabase();
@@ -128,7 +129,7 @@ export async function submitDonationTransaction(formData: {
     }
 
     const clientIp = await getClientIp();
-    if (process.env.DONATIONS_ENABLED !== "true") return { success: false, error: "Donations are temporarily unavailable while the recipient account is being confirmed." };
+    if (!DONATIONS_ENABLED) return { success: false, error: "Donations are temporarily unavailable while the recipient account is being confirmed." };
     const rateLimit = await checkDistributedRateLimit(`donate_submit:${clientIp}`, 5, 15 * 60 * 1000);
     if (!rateLimit.success) {
       return {
