@@ -668,7 +668,7 @@ export async function getDonationInfoAction() {
     donatedAt: d.donatedAt || d.lastDonatedAt || null,
   }));
   const recentTransactionDocs = await DonationTransaction.find({ isPublic: true, status: "verified" })
-    .select("-utr -userUuid -uuid")
+    .select("-utr -transactionId -userUuid -uuid")
     .sort({ donatedAt: -1 }).limit(10).lean();
   const recentTransactions = recentTransactionDocs.map((tx:any)=>({
     ...tx,
