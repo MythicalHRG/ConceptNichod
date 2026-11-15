@@ -1,7 +1,3 @@
-import { createHash } from "crypto";
-import dbConnect from "@/lib/mongoose";
-import RateLimitCounter from "@/models/RateLimitCounter";
-
 export interface RateLimitResult {
   success: boolean;
   limit: number;
