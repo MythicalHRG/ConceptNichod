@@ -104,6 +104,8 @@ export default function DonatePage() {
     load();
   }, []);
 
+  const receiverUpiId = settings.upiId;
+
   const handleCopyUpi = async () => {
     await navigator.clipboard.writeText(settings.upiId);
     setCopiedUpi(true);
