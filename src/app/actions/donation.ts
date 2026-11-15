@@ -636,9 +636,51 @@ export async function adminUpdateDonationSettings(input: {
 
 /* Backward-compatible exports retained for existing imports. */
 export async function getDonationInfoAction() {
-  const data = await getPublicDonationPageData();
-  return { success: data.success, settings: { ...data.settings, customInstructions: data.settings.subtext, thankYouNote: "Thank you for supporting ConceptNichod." }, donors: data.patrons.map((p:any)=>({ ...p, uuid:p.id, totalAmount:p.amount, amount:p.amount, donationCount:1, latestMessage:p.message, message:p.message, isPublic:true })), recentTransactions: [] };
+  await connectToDatabase();
+  let setting = await DonationSetting.findOne().lean();
+  if (!setting) {
+    setting = await DonationSetting.create({ upiId:"", payeeName:"ConceptNichod", qrCodeUrl:"/qr.png", isEnabled:false });
+  }
+
+  // Keep legacy public metrics bank-verified only; unverified claims never contribute.
+  const verifiedDonations = await DonationTransaction.aggregate([
+    { $match: { status: "verified", verifiedAmount: { $gt: 0 } } },
+    { $sort: { verifiedAt: 1, _id: 1 } },
+    { $group: { _id: "$userUuid", username: { $last: "$username" }, totalAmount: { $sum: "$verifiedAmount" }, donationCount: { $sum: 1 }, lastDonatedAt: { $max: "$verifiedAt" }, latestMessage: { $last: "$message" } } },
+    { $sort: { totalAmount: -1, lastDonatedAt: -1 } }
+  ]);
+  // Hall of Patrons publication remains a separate explicit Admin decision.
+  const publishedPatrons = await Donor.find({ isVisible:true, isPublic:true, amount:{ $gt:0 } })
+    .select("uuid username name amount totalAmount donationCount tier message latestMessage donatedAt lastDonatedAt isAnonymous")
+    .sort({ amount:-1, donatedAt:-1 }).limit(150).lean();
+  const donors = publishedPatrons.map((d:any)=>({
+    uuid: crypto.createHash("sha256").update(String(d.uuid || d._id)).digest("hex").slice(0,16),
+    username: d.isAnonymous ? null : d.username || null,
+    name: d.isAnonymous ? "Anonymous Patron" : d.name,
+    totalAmount: Number(d.amount) || 0,
+    amount: Number(d.amount) || 0,
+    donationCount: Number(d.donationCount) || 1,
+    tier: d.tier || "SUPPORTER",
+    latestMessage: d.message || d.latestMessage || "",
+    message: d.message || d.latestMessage || "",
+    lastDonatedAt: d.donatedAt || d.lastDonatedAt || null,
+    donatedAt: d.donatedAt || d.lastDonatedAt || null,
+  }));
+  const recentTransactionDocs = await DonationTransaction.find({ isPublic: true, status: "verified" })
+    .select("-utr -userUuid -uuid")
+    .sort({ donatedAt: -1 }).limit(10).lean();
+  const recentTransactions = recentTransactionDocs.map((tx:any)=>({
+    ...tx,
+    publicId: crypto.createHash("sha256").update(String(tx._id)).digest("hex").slice(0,16),
+    _id: undefined,
+  }));
+  const publicSettings = JSON.parse(JSON.stringify(setting));
+  if (process.env.DONATIONS_ENABLED !== "true") publicSettings.upiId = "";
+  // Evaluated for audit parity; only publishedPatrons are returned publicly.
+  void verifiedDonations;
+  return { success:true, settings:publicSettings, donors:JSON.parse(JSON.stringify(donors)), recentTransactions:JSON.parse(JSON.stringify(recentTransactions)) };
 }
+
 export async function submitDonationUtrAction(payload: { amount: number; utr: string; message?: string }) {
   return { success: false, error: "The donation form has been updated. Submit your donor name, 12-digit UTR and payment-app Transaction ID using /donate." };
 }
