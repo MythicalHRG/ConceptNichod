@@ -41,7 +41,7 @@ export async function getLeaderboardDataAction(
   examFilter: string = "All"
 ) {
   await dbConnect();
-  const rawSession = cookies().get("user_session")?.value;
+  const rawSession = (await cookies()).get("user_session")?.value;
   const currentUuid = verifySessionCookie(rawSession);
 
   const now = new Date();
