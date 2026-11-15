@@ -8,7 +8,7 @@ import { DonationReconciliation } from "@/components/admin/donation-reconciliati
 export const dynamic = "force-dynamic";
 
 export default async function AdminDonationsPage() {
-  const sessionUuid = verifySessionCookie(cookies().get("user_session")?.value);
+  const sessionUuid = verifySessionCookie((await cookies()).get("user_session")?.value);
   if (!sessionUuid) notFound();
   await dbConnect();
   const user = await User.findOne({ uuid: sessionUuid }).select("username").lean();
