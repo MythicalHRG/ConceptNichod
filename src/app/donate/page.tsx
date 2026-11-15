@@ -238,7 +238,7 @@ export default function DonatePage() {
                   Official UPI ID
                 </p>
                 <p className="text-sm font-mono font-bold text-slate-200 truncate">
-                  {settings.upiId}
+                  {receiverUpiId ? receiverUpiId : "Recipient UPI ID will appear once enabled."}
                 </p>
               </div>
               <button
