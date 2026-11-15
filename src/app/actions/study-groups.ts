@@ -7,7 +7,7 @@ import StudyGroup from "@/models/StudyGroup";
 import GroupMessage from "@/models/GroupMessage";
 import DirectMessage from "@/models/DirectMessage";
 import { verifySessionCookie } from "@/lib/session";
-import { checkDistributedRateLimit } from "@/lib/rate-limiter";
+import { checkDistributedRateLimit } from "@/lib/distributed-rate-limiter";
 import { recordUserStudyActivity } from "@/lib/streak";
 
 function escapeHtml(str: string): string {
