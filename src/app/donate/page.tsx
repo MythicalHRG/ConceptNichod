@@ -62,10 +62,10 @@ const TIER_CONFIG: Record<
 
 export default function DonatePage() {
   const [settings, setSettings] = useState({
-    upiId: "conceptnichod@upi",
+    upiId: "",
     payeeName: "ConceptNichod",
     qrCodeUrl: "/qr.png",
-    isEnabled: true,
+    isEnabled: false,
     headline: "Support ConceptNichod & Join the Hall of Patrons",
     subtext:
       "Scan the UPI QR code to contribute any amount, then submit your 12-digit UTR & Transaction ID below. Our Admin will verify it manually, enter the confirmed amount, and feature you in the Hall of Patrons!",
@@ -396,13 +396,11 @@ export default function DonatePage() {
 
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || !settings.isEnabled}
               className="w-full py-3 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 transition"
             >
               <Send className="w-4 h-4" />
-              {submitting
-                ? "Submitting UTR & Transaction ID..."
-                : "Submit UTR & Transaction ID to Admin"}
+              {!settings.isEnabled ? "Donations Temporarily Unavailable" : submitting ? "Submitting UTR & Transaction ID..." : "Submit UTR & Transaction ID to Admin"}
             </button>
           </form>
         </div>
