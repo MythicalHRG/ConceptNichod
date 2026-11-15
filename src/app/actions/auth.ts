@@ -12,7 +12,7 @@ import { createSignedSessionCookie, verifySessionCookie } from "@/lib/session";
 import {
   checkDistributedRateLimit,
   resetDistributedRateLimit,
-} from "@/lib/rate-limiter";
+} from "@/lib/distributed-rate-limiter";
 import { normalizeEmail, validateEmailDomain, validateEmail } from "@/lib/email-utils";
 
 function validatePassword(password: string) {
