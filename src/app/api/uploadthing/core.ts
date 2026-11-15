@@ -12,7 +12,7 @@ export const ourFileRouter = {
   broadcastAttachment: f({ blob: { maxFileSize: "512MB" } })
     .middleware(async ({ req }) => {
       await dbConnect();
-      const rawSession = cookies().get("user_session")?.value;
+      const rawSession = (await cookies()).get("user_session")?.value;
       const sessionUuid = verifySessionCookie(rawSession);
       if (!sessionUuid) throw new Error("Unauthorized");
 
