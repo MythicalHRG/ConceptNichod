@@ -3,7 +3,7 @@
 import { cookies } from 'next/headers';
 import { callOpenRouter } from '@/lib/openrouter';
 import { verifySessionCookie } from '@/lib/session';
-import { checkDistributedRateLimit } from '@/lib/rate-limiter';
+import { checkDistributedRateLimit } from '@/lib/distributed-rate-limiter';
 
 type Message = {
   role: 'user' | 'assistant';
