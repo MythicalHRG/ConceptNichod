@@ -25,7 +25,7 @@ const MAX_SUMMARY_CHARS = 4000;
 
 export async function askFollowUpAction(input: FollowUpInput): Promise<{ answer: string }> {
   // Authentication check to prevent unauthenticated bot AI-scraping and token draining
-  const rawSession = cookies().get('user_session')?.value;
+  const rawSession = (await cookies()).get('user_session')?.value;
   const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) {
     throw new Error('Please log in to ask follow-up questions.');
