@@ -1,10 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   serverExternalPackages: [
-      '@genkit-ai/core', 
-      'genkit', 
-      '@opentelemetry/sdk-node', 
-      '@opentelemetry/exporter-jaeger',
       'pino-pretty', 
       'lokijs', 
       'encoding'
