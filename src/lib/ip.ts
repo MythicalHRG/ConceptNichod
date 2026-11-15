@@ -54,10 +54,10 @@ function resolveClientIp(customHeaders: HeaderInput): string {
 }
 
 /** Synchronous when request headers are supplied; async in Server Actions using Next's request context. */
-export function getClientIp(customHeaders: HeaderInput): string;
+export function getClientIp(customHeaders: HeaderInput | null | undefined): string;
 export function getClientIp(): Promise<string>;
-export function getClientIp(customHeaders?: HeaderInput): string | Promise<string> {
-  if (customHeaders) return resolveClientIp(customHeaders);
+export function getClientIp(customHeaders?: HeaderInput | null): string | Promise<string> {
+  if (arguments.length > 0) return customHeaders ? resolveClientIp(customHeaders) : "127.0.0.1";
   const requestHeaders = headers();
   if (!requestHeaders || typeof (requestHeaders as any).then !== "function") {
     return Promise.resolve("127.0.0.1");
