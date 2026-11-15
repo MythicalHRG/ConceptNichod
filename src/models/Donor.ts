@@ -32,7 +32,7 @@ const DonorSchema = new Schema<IDonor>({
   userId: { type: String, default: null, index: true },
   userUuid: { type: String, default: null, index: true },
   username: { type: String, trim: true, default: null },
-  name: { type: String, required: true, trim: true, maxlength: 60 },
+  name: { type: String, required: function (this: any) { return this.isNew; }, trim: true, maxlength: 60 },
   amount: { type: Number, required: true, min: [1, "Verified patron amount must be at least ₹1"] },
   // Old title-case tiers remain accepted for legacy records.
   tier: { type: String, enum: ["LEGEND", "DIAMOND", "GOLD", "SILVER", "SUPPORTER", "Legend", "Benefactor", "Patron", "Supporter"], default: "SUPPORTER" },
