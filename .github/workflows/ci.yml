@@ -7,7 +7,7 @@ on:
     branches: [main, "fix/**", "hardening/**"]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   verify:
@@ -28,6 +28,8 @@ jobs:
           cache: npm
       - name: Install and resolve dependencies
         run: npm install --no-audit --no-fund
+      - name: Apply non-breaking dependency security updates
+        run: npm audit fix --no-fund
       - name: Upload resolved lockfile for review
         uses: actions/upload-artifact@v4
         with:
@@ -46,3 +48,15 @@ jobs:
           NODE_ENV: production
       - name: Production dependency security audit
         run: npm audit --omit=dev --audit-level=high
+      - name: Commit resolved security lockfile
+        if: success() && github.event_name == 'push'
+        run: |
+          if git diff --quiet -- package-lock.json; then
+            echo 'No dependency lockfile changes to commit.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package-lock.json
+          git commit -m 'chore(deps): apply non-breaking security updates'
+          git push origin HEAD:${GITHUB_REF_NAME}
