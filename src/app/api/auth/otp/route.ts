@@ -6,7 +6,7 @@ import User from '@/models/User';
 import Blacklist from '@/models/Blacklist';
 import nodemailer from 'nodemailer';
 import { getClientIp } from '@/lib/ip';
-import { checkDistributedRateLimit } from '@/lib/rate-limiter';
+import { checkDistributedRateLimit } from '@/lib/distributed-rate-limiter';
 
 const MAX_VERIFY_ATTEMPTS = 5;
 const RESEND_COOLDOWN_MS = 60 * 1000; // 60 seconds cooldown
