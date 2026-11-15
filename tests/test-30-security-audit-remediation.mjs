@@ -168,9 +168,9 @@ test("Audit Remediation 30.9: Rate limiting is strictly enforced on feedback, fo
   const followupContent = fs.readFileSync(followupPath, "utf-8");
   const mirrorContent = fs.readFileSync(mirrorPath, "utf-8");
 
-  assert.ok(feedbackContent.includes("checkRateLimit"), "Feedback action must enforce checkRateLimit");
-  assert.ok(followupContent.includes("checkRateLimit"), "Follow-up action must enforce checkRateLimit");
-  assert.ok(mirrorContent.includes("checkRateLimit"), "Concept mirror must enforce checkRateLimit");
+  assert.ok(feedbackContent.includes("checkDistributedRateLimit"), "Feedback action must enforce checkRateLimit");
+  assert.ok(followupContent.includes("checkDistributedRateLimit"), "Follow-up action must enforce checkRateLimit");
+  assert.ok(mirrorContent.includes("checkDistributedRateLimit"), "Concept mirror must enforce checkRateLimit");
 });
 
 test("Audit Remediation 30.10: Concept Mirror prompt defends against prompt injection with XML delimiters", () => {
