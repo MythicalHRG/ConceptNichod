@@ -10,7 +10,7 @@ const ADMIN_USERNAME = "mythicalhrg";
 
 async function verifyAdmin() {
   await dbConnect();
-  const rawSession = cookies().get("user_session")?.value;
+  const rawSession = (await cookies()).get("user_session")?.value;
   const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
 
@@ -47,7 +47,7 @@ export async function createBroadcastAction(formData: FormData) {
 
 export async function getActiveBroadcastsAction() {
   await dbConnect();
-  const rawSession = cookies().get("user_session")?.value;
+  const rawSession = (await cookies()).get("user_session")?.value;
   const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
 
@@ -61,7 +61,7 @@ export async function getActiveBroadcastsAction() {
 
 export async function markBroadcastsAsReadAction() {
   await dbConnect();
-  const rawSession = cookies().get("user_session")?.value;
+  const rawSession = (await cookies()).get("user_session")?.value;
   const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
 
@@ -76,7 +76,7 @@ export async function markBroadcastsAsReadAction() {
 
 export async function getUnreadCountAction() {
   await dbConnect();
-  const rawSession = cookies().get("user_session")?.value;
+  const rawSession = (await cookies()).get("user_session")?.value;
   const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) return { success: true, count: 0 };
 
