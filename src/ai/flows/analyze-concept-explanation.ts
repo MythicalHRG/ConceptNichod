@@ -39,7 +39,7 @@ export type AnalyzeConceptExplanationInput = {
 
 export async function analyzeConceptExplanation(input: AnalyzeConceptExplanationInput): Promise<MasteryReportOutput> {
   // Authentication check to prevent unauthenticated bot AI-scraping and token draining
-  const rawSession = cookies().get('user_session')?.value;
+  const rawSession = (await cookies()).get('user_session')?.value;
   const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) {
     throw new Error('Please log in to analyze your concept explanation.');
