@@ -29,7 +29,7 @@ export async function POST(req: Request) {
 
     await dbConnect();
 
-    const ip = getClientIp(req.headers);
+    const ip = await getClientIp(req.headers);
 
     // Blacklist enforcement
     const isIpBanned = await Blacklist.findOne({ type: "ip", value: ip });
