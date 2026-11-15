@@ -8,7 +8,7 @@ import { verifySessionCookie } from "@/lib/session";
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
-  const rawSession = cookies().get("user_session")?.value;
+  const rawSession = (await cookies()).get("user_session")?.value;
   const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) {
     notFound();
