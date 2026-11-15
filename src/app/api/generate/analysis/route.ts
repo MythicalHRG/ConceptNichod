@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { runFinalAnalysisAction } from '@/app/actions';
 import { verifySessionCookie } from '@/lib/session';
 import { getClientIp } from '@/lib/ip';
-import { checkRateLimit } from '@/lib/rate-limiter';
+import { checkDistributedRateLimit } from '@/lib/distributed-rate-limiter';
 
 const AnswerSchema = z.object({
   question: z.string(),
@@ -16,23 +16,23 @@ const AnalysisSchema = z.object({
   classLevel: z.string().min(1, 'classLevel is required'),
   summary: z.string().min(1, 'summary is required'),
   topicId: z.string().min(1, 'topicId is required'),
-  writtenAnswers: z.array(AnswerSchema).optional().default([]),
-  spokenAnswers: z.array(AnswerSchema).optional().default([]),
+  writtenAnswers: z.array(AnswerSchema).max(50).optional().default([]),
+  spokenAnswers: z.array(AnswerSchema).max(50).optional().default([]),
 });
 
 export async function POST(req: Request) {
   try {
     // 1. Session authentication check
-    const rawSession = cookies().get('user_session')?.value;
+    const rawSession = (await cookies()).get('user_session')?.value;
     const sessionUuid = verifySessionCookie(rawSession);
     if (!sessionUuid) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // 2. Rate limiting (10 requests per minute per IP/user)
-    const ip = getClientIp(req.headers);
+    const ip = await getClientIp(req.headers);
     const rateLimitKey = `gen:${sessionUuid || ip}`;
-    const rateStatus = checkRateLimit(rateLimitKey, 10, 60 * 1000);
+    const rateStatus = await checkDistributedRateLimit(rateLimitKey, 10, 60 * 1000);
     if (!rateStatus.success) {
       return NextResponse.json(
         { error: 'Rate limit exceeded. Please wait a minute before generating more content.' },

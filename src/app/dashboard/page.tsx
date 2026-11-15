@@ -23,7 +23,7 @@ function formatDob(dobStr?: string | null) {
 }
 
 export default async function DashboardPage() {
-  const rawSession = cookies().get("user_session")?.value;
+  const rawSession = (await cookies()).get("user_session")?.value;
   const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) {
     redirect("/?login=true");
@@ -63,7 +63,7 @@ export default async function DashboardPage() {
   }
 
   if (!user) {
-    cookies().delete("user_session");
+    (await cookies()).delete("user_session");
     redirect("/?login=true");
   }
 

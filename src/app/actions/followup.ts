@@ -3,7 +3,7 @@
 import { cookies } from 'next/headers';
 import { callOpenRouter } from '@/lib/openrouter';
 import { verifySessionCookie } from '@/lib/session';
-import { checkRateLimit } from '@/lib/rate-limiter';
+import { checkDistributedRateLimit } from '@/lib/distributed-rate-limiter';
 
 type Message = {
   role: 'user' | 'assistant';
@@ -25,7 +25,7 @@ const MAX_SUMMARY_CHARS = 4000;
 
 export async function askFollowUpAction(input: FollowUpInput): Promise<{ answer: string }> {
   // Authentication check to prevent unauthenticated bot AI-scraping and token draining
-  const rawSession = cookies().get('user_session')?.value;
+  const rawSession = (await cookies()).get('user_session')?.value;
   const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) {
     throw new Error('Please log in to ask follow-up questions.');
@@ -33,7 +33,7 @@ export async function askFollowUpAction(input: FollowUpInput): Promise<{ answer:
 
   // Rate limiting: 15 requests per minute per user session
   const rateLimitKey = `followup:${sessionUuid}`;
-  const rateCheck = checkRateLimit(rateLimitKey, 15, 60 * 1000);
+  const rateCheck = await checkDistributedRateLimit(rateLimitKey, 15, 60 * 1000);
   if (!rateCheck.success) {
     throw new Error('You are asking questions too fast. Please wait a moment before sending another message.');
   }

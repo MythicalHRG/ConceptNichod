@@ -6,7 +6,7 @@ import User from '@/models/User';
 import Blacklist from '@/models/Blacklist';
 import nodemailer from 'nodemailer';
 import { getClientIp } from '@/lib/ip';
-import { checkRateLimit } from '@/lib/rate-limiter';
+import { checkDistributedRateLimit } from '@/lib/distributed-rate-limiter';
 
 const MAX_VERIFY_ATTEMPTS = 5;
 const RESEND_COOLDOWN_MS = 60 * 1000; // 60 seconds cooldown
@@ -29,7 +29,7 @@ export async function POST(req: Request) {
 
     await dbConnect();
 
-    const ip = getClientIp(req.headers);
+    const ip = await getClientIp(req.headers);
 
     // Blacklist enforcement
     const isIpBanned = await Blacklist.findOne({ type: "ip", value: ip });
@@ -47,7 +47,7 @@ export async function POST(req: Request) {
 
     if (action === 'send') {
       // IP Rate limiting: 5 requests per 15 minutes
-      const rateLimit = checkRateLimit(`otp:${ip}`, 5, 15 * 60 * 1000);
+      const rateLimit = await checkDistributedRateLimit(`otp:${ip}`, 5, 15 * 60 * 1000);
       if (!rateLimit.success) {
         return NextResponse.json(
           { error: 'Too many OTP requests from this IP. Please try again later.' },
@@ -56,7 +56,7 @@ export async function POST(req: Request) {
       }
 
       // Per-email Rate limiting: 5 requests per 15 minutes
-      const emailRateLimit = checkRateLimit(`otp:email:${email}`, 5, 15 * 60 * 1000);
+      const emailRateLimit = await checkDistributedRateLimit(`otp:email:${email}`, 5, 15 * 60 * 1000);
       if (!emailRateLimit.success) {
         return NextResponse.json(
           { error: 'Too many OTP requests for this email address. Please try again later.' },
@@ -196,7 +196,7 @@ export async function POST(req: Request) {
 
     if (action === 'verify') {
       // IP Rate limiting for verification attempts: 15 attempts per 15 minutes
-      const verifyRateLimit = checkRateLimit(`otp:verify:${ip}`, 15, 15 * 60 * 1000);
+      const verifyRateLimit = await checkDistributedRateLimit(`otp:verify:${ip}`, 15, 15 * 60 * 1000);
       if (!verifyRateLimit.success) {
         return NextResponse.json(
           { error: 'Too many verification attempts from this IP. Please wait a few minutes before trying again.' },

@@ -5,7 +5,7 @@ import User from "@/models/User";
 import { sendEmail } from "@/services/email";
 import { verifySessionCookie } from "@/lib/session";
 import { getClientIp } from "@/lib/ip";
-import { checkRateLimit } from "@/lib/rate-limiter";
+import { checkDistributedRateLimit } from "@/lib/distributed-rate-limiter";
 
 function escapeHtml(str: string): string {
   return (str || "")
@@ -25,11 +25,11 @@ export async function submitFeedbackAction(formData: FormData) {
   }
 
   // Rate limiting: 3 submissions per 15 minutes per IP
-  const ip = getClientIp();
-  const rawSession = cookies().get("user_session")?.value;
+  const ip = await getClientIp();
+  const rawSession = (await cookies()).get("user_session")?.value;
   const sessionUuid = verifySessionCookie(rawSession);
   const rateLimitKey = `feedback:${sessionUuid || ip}`;
-  const rateCheck = checkRateLimit(rateLimitKey, 3, 15 * 60 * 1000);
+  const rateCheck = await checkDistributedRateLimit(rateLimitKey, 3, 15 * 60 * 1000);
   if (!rateCheck.success) {
     throw new Error("Too many feedback submissions. Please wait a few minutes before submitting again.");
   }

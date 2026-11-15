@@ -11,6 +11,7 @@ const MAX_KEYS = 5000;
 
 function cleanupOldEntries(now: number) {
   if (hitMap.size <= MAX_KEYS) return;
+
   for (const [key, timestamps] of hitMap.entries()) {
     if (
       timestamps.length === 0 ||
@@ -18,6 +19,14 @@ function cleanupOldEntries(now: number) {
     ) {
       hitMap.delete(key);
     }
+  }
+
+  // Expired-key cleanup alone cannot enforce a bound during a burst of
+  // distinct active keys. Evict oldest inserted keys to cap process memory.
+  while (hitMap.size > MAX_KEYS) {
+    const oldestKey = hitMap.keys().next().value;
+    if (oldestKey === undefined) break;
+    hitMap.delete(oldestKey);
   }
 }
 

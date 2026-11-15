@@ -156,7 +156,7 @@ test("Audit Remediation 30.7: Study groups action does NOT leak target UUIDs in 
 test("Audit Remediation 30.8: Donor info action queries public donors safely", () => {
   const donationPath = path.resolve("src/app/actions/donation.ts");
   const content = fs.readFileSync(donationPath, "utf-8");
-  assert.ok(content.includes('Donor.find({ isPublic: true })'), "getDonationInfoAction must query public donors only");
+  assert.ok(content.includes('{ $match: { status: "verified", verifiedAmount: { $gt: 0 } } }'), "getDonationInfoAction must aggregate only bank-verified donation credits");
 });
 
 test("Audit Remediation 30.9: Rate limiting is strictly enforced on feedback, followup, and concept mirror", () => {
@@ -168,9 +168,9 @@ test("Audit Remediation 30.9: Rate limiting is strictly enforced on feedback, fo
   const followupContent = fs.readFileSync(followupPath, "utf-8");
   const mirrorContent = fs.readFileSync(mirrorPath, "utf-8");
 
-  assert.ok(feedbackContent.includes("checkRateLimit"), "Feedback action must enforce checkRateLimit");
-  assert.ok(followupContent.includes("checkRateLimit"), "Follow-up action must enforce checkRateLimit");
-  assert.ok(mirrorContent.includes("checkRateLimit"), "Concept mirror must enforce checkRateLimit");
+  assert.ok(feedbackContent.includes("checkDistributedRateLimit"), "Feedback action must enforce checkRateLimit");
+  assert.ok(followupContent.includes("checkDistributedRateLimit"), "Follow-up action must enforce checkRateLimit");
+  assert.ok(mirrorContent.includes("checkDistributedRateLimit"), "Concept mirror must enforce checkRateLimit");
 });
 
 test("Audit Remediation 30.10: Concept Mirror prompt defends against prompt injection with XML delimiters", () => {

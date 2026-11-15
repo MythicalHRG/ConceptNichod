@@ -5,7 +5,7 @@ import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
 import MistakeEntry from "@/models/MistakeEntry";
 import { verifySessionCookie } from "@/lib/session";
-import { checkRateLimit } from "@/lib/rate-limiter";
+import { checkDistributedRateLimit } from "@/lib/distributed-rate-limiter";
 import { recordUserStudyActivity } from "@/lib/streak";
 import { callOpenRouter, parseJsonResponse } from "@/lib/openrouter";
 
@@ -21,7 +21,7 @@ function sanitize(str: string): string {
 
 async function getAuthenticatedUser() {
   await dbConnect();
-  const rawSession = cookies().get("user_session")?.value;
+  const rawSession = (await cookies()).get("user_session")?.value;
   const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) {
     throw new Error("Authentication required.");
@@ -129,7 +129,7 @@ export async function createMistakeAction(input: {
 }) {
   const user = await getAuthenticatedUser();
 
-  const rateCheck = checkRateLimit(`mistake-create:${user.uuid}`, 20, 3600000);
+  const rateCheck = await checkDistributedRateLimit(`mistake-create:${user.uuid}`, 20, 3600000);
   if (!rateCheck.success) {
     throw new Error("You have reached the hourly limit for logging mistakes.");
   }

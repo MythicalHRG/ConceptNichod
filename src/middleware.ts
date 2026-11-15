@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { verifySessionCookie } from '@/lib/session';
+import { verifyEdgeSessionCookie } from '@/lib/edge-session';
 
 function addSecurityHeaders(response: NextResponse): NextResponse {
   response.headers.set('X-Frame-Options', 'DENY');
@@ -12,7 +12,7 @@ function addSecurityHeaders(response: NextResponse): NextResponse {
   );
   response.headers.set(
     'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https: blob:; font-src 'self' data: https:; media-src 'self' https: data: blob:; connect-src 'self' https:; frame-ancestors 'none';"
+    "default-src 'self'; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https: blob:; font-src 'self' data: https:; media-src 'self' https: data: blob:; connect-src 'self' https:; frame-ancestors 'none';"
   );
   return response;
 }
@@ -25,9 +25,9 @@ const PROTECTED_PREFIXES = [
   '/leaderboard',
 ];
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const sessionCookie = request.cookies.get('user_session')?.value;
-  const verifiedSessionUuid = verifySessionCookie(sessionCookie);
+  const verifiedSessionUuid = await verifyEdgeSessionCookie(sessionCookie);
   const normalizedPath = request.nextUrl.pathname.toLowerCase();
 
   const isProtected = PROTECTED_PREFIXES.some(

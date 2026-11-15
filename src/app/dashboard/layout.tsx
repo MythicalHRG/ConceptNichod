@@ -28,7 +28,7 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const rawSession = cookies().get("user_session")?.value;
+  const rawSession = (await cookies()).get("user_session")?.value;
   const userId = verifySessionCookie(rawSession);
   if (!userId) {
     redirect("/?login=true");

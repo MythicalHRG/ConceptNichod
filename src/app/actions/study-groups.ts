@@ -7,7 +7,7 @@ import StudyGroup from "@/models/StudyGroup";
 import GroupMessage from "@/models/GroupMessage";
 import DirectMessage from "@/models/DirectMessage";
 import { verifySessionCookie } from "@/lib/session";
-import { checkRateLimit } from "@/lib/rate-limiter";
+import { checkDistributedRateLimit } from "@/lib/distributed-rate-limiter";
 import { recordUserStudyActivity } from "@/lib/streak";
 
 function escapeHtml(str: string): string {
@@ -21,7 +21,7 @@ function escapeHtml(str: string): string {
 
 async function getAuthenticatedUser() {
   await dbConnect();
-  const rawSession = cookies().get("user_session")?.value;
+  const rawSession = (await cookies()).get("user_session")?.value;
   const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) {
     throw new Error("Authentication required.");
@@ -92,7 +92,7 @@ export async function createStudyGroupAction(input: {
 }) {
   const user = await getAuthenticatedUser();
 
-  const rateCheck = checkRateLimit(`group-create:${user.uuid}`, 5, 3600000);
+  const rateCheck = await checkDistributedRateLimit(`group-create:${user.uuid}`, 5, 3600000);
   if (!rateCheck.success) {
     throw new Error("You have reached the limit for creating groups (5/hr). Please try again later.");
   }
@@ -191,7 +191,7 @@ export async function getGroupMessagesAction(groupId: string) {
 export async function sendGroupMessageAction(groupId: string, body: string) {
   const user = await getAuthenticatedUser();
 
-  const rateCheck = checkRateLimit(`chat-msg:${user.uuid}`, 30, 60000);
+  const rateCheck = await checkDistributedRateLimit(`chat-msg:${user.uuid}`, 30, 60000);
   if (!rateCheck.success) {
     throw new Error("Slow down! You can send up to 30 messages per minute.");
   }
@@ -204,10 +204,9 @@ export async function sendGroupMessageAction(groupId: string, body: string) {
   const group = await StudyGroup.findById(groupId);
   if (!group) throw new Error("Study group not found.");
 
-  // Auto-join group if posting
-  if (!group.memberIds.includes(user.uuid)) {
-    group.memberIds.push(user.uuid);
-    await group.save();
+  // Membership is required before posting; sending a message must never grant access.
+  if (!group.memberIds || !group.memberIds.includes(user.uuid)) {
+    throw new Error("Join this study group before sending messages.");
   }
 
   // Strictly server time
@@ -318,7 +317,7 @@ export async function getDirectMessagesAction(targetUsername: string) {
 export async function sendDirectMessageAction(targetUsername: string, body: string) {
   const user = await getAuthenticatedUser();
 
-  const rateCheck = checkRateLimit(`dm-msg:${user.uuid}`, 30, 60000);
+  const rateCheck = await checkDistributedRateLimit(`dm-msg:${user.uuid}`, 30, 60000);
   if (!rateCheck.success) {
     throw new Error("Slow down! You can send up to 30 messages per minute.");
   }

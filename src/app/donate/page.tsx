@@ -1,702 +1,516 @@
+// src/app/donate/page.tsx
 "use client";
 
-import React, { useState, useEffect, Suspense } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { useToast } from "@/hooks/use-toast";
-import { 
-  Heart, Copy, Check, ArrowLeft, QrCode, Sparkles, ShieldCheck, 
-  Award, Star, Users, ExternalLink, ArrowRight, Loader2, Zap,
-  CheckCircle2, Info, Lock, LogIn, Smartphone, History, Trophy
-} from "lucide-react";
-import { IndianRupee } from "lucide-react";
 import { Rupee } from "@/components/ui/rupee-symbol";
-import { 
-  getDonationInfoAction, 
-  submitDonationUtrAction,
-  getCurrentUserDonationContextAction
+import {
+  getPublicDonationPageData,
+  submitDonationTransaction,
 } from "@/app/actions/donation";
+import {
+  Copy,
+  CheckCircle2,
+  ShieldCheck,
+  Award,
+  Heart,
+  Sparkles,
+  ArrowLeft,
+  Send,
+  AlertCircle,
+} from "lucide-react";
 
-interface DonationSettings {
-  upiId: string;
-  qrCodeUrl: string;
-  customInstructions: string;
-  thankYouNote: string;
-}
-
-interface DonorCard {
-  uuid: string;
-  username: string;
-  totalAmount?: number;
+interface PatronItem {
+  id: string;
+  name: string;
+  username?: string | null;
   amount: number;
-  donationCount?: number;
-  tier: "Supporter" | "Patron" | "Benefactor" | "Legend";
-  latestMessage?: string;
+  tier: "LEGEND" | "DIAMOND" | "GOLD" | "SILVER" | "SUPPORTER";
   message?: string;
-  lastDonatedAt?: string;
   donatedAt: string;
 }
 
-interface RecentTransaction {
-  uuid: string;
-  username: string;
-  amount: number;
-  utr: string;
-  donatedAt: string;
-  message?: string;
-}
+const TIER_CONFIG: Record<
+  PatronItem["tier"],
+  { title: string; badgeClass: string; cardBorder: string }
+> = {
+  LEGEND: {
+    title: "👑 Legend Patron",
+    badgeClass: "bg-amber-500/20 text-amber-300 border-amber-400/50",
+    cardBorder: "border-amber-500/50 shadow-[0_0_25px_rgba(245,158,11,0.15)]",
+  },
+  DIAMOND: {
+    title: "💎 Diamond Patron",
+    badgeClass: "bg-cyan-500/20 text-cyan-300 border-cyan-400/50",
+    cardBorder: "border-cyan-500/40 shadow-[0_0_20px_rgba(6,182,212,0.12)]",
+  },
+  GOLD: {
+    title: "🥇 Gold Patron",
+    badgeClass: "bg-yellow-500/20 text-yellow-300 border-yellow-400/40",
+    cardBorder: "border-yellow-500/40",
+  },
+  SILVER: {
+    title: "🥈 Silver Patron",
+    badgeClass: "bg-slate-400/20 text-slate-200 border-slate-400/40",
+    cardBorder: "border-slate-700",
+  },
+  SUPPORTER: {
+    title: "❤️ Supporter",
+    badgeClass: "bg-emerald-500/20 text-emerald-300 border-emerald-400/40",
+    cardBorder: "border-slate-800",
+  },
+};
 
-const PRESET_AMOUNTS = [
-  { value: 50, tier: "Supporter" },
-  { value: 100, tier: "Supporter" },
-  { value: 250, tier: "Supporter" },
-  { value: 500, tier: "Patron" },
-  { value: 1000, tier: "Benefactor" },
-  { value: 2500, tier: "Legend" },
-];
+export default function DonatePage() {
+  const [settings, setSettings] = useState({
+    upiId: "",
+    payeeName: "ConceptNichod",
+    qrCodeUrl: "/qr.png",
+    isEnabled: false,
+    headline: "Support ConceptNichod & Join the Hall of Patrons",
+    subtext:
+      "Scan the UPI QR code to contribute any amount, then submit your 12-digit UTR & Transaction ID below. Our Admin will verify it manually, enter the confirmed amount, and feature you in the Hall of Patrons!",
+  });
 
-function getTierBadgeStyle(tier: string) {
-  switch (tier) {
-    case "Legend":
-      return "bg-gradient-to-r from-purple-500/20 to-pink-500/20 border-purple-500 text-purple-600 dark:text-purple-300";
-    case "Benefactor":
-      return "bg-amber-500/10 border-amber-500 text-amber-600 dark:text-amber-400";
-    case "Patron":
-      return "bg-emerald-500/10 border-emerald-500 text-emerald-600 dark:text-emerald-400";
-    default:
-      return "bg-blue-500/10 border-blue-500 text-blue-600 dark:text-blue-400";
-  }
-}
+  const [patrons, setPatrons] = useState<PatronItem[]>([]);
+  const [totalRaised, setTotalRaised] = useState(0);
+  const [loadingData, setLoadingData] = useState(true);
 
-function getTierForAmount(amt: number): "Supporter" | "Patron" | "Benefactor" | "Legend" {
-  if (amt >= 2500) return "Legend";
-  if (amt >= 1000) return "Benefactor";
-  if (amt >= 500) return "Patron";
-  return "Supporter";
-}
+  // Form Inputs
+  const [donorName, setDonorName] = useState("");
+  const [utr, setUtr] = useState("");
+  const [transactionId, setTransactionId] = useState("");
+  const [message, setMessage] = useState("");
+  const [isAnonymous, setIsAnonymous] = useState(false);
+  const [honeypot, setHoneypot] = useState("");
 
-function formatRelativeTime(dateString: string) {
-  try {
-    const diff = Date.now() - new Date(dateString).getTime();
-    const minutes = Math.floor(diff / 60000);
-    if (minutes < 1) return "Just now";
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    if (days < 30) return `${days}d ago`;
-    return new Date(dateString).toLocaleDateString("en-IN", { month: "short", day: "numeric" });
-  } catch {
-    return "Recently";
-  }
-}
-
-function DonatePageContent() {
-  const { toast } = useToast();
-
-  // Settings, Donors & Recent Activity state
-  const [settings, setSettings] = useState<DonationSettings | null>(null);
-  const [donors, setDonors] = useState<DonorCard[]>([]);
-  const [recentTransactions, setRecentTransactions] = useState<RecentTransaction[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [copied, setCopied] = useState(false);
-
-  // Form State
-  const [selectedAmount, setSelectedAmount] = useState<number | null>(100);
-  const [customAmount, setCustomAmount] = useState<string>("");
-  const [utrNumber, setUtrNumber] = useState<string>("");
-  const [username, setUsername] = useState<string>("");
-  const [isLoggedInUser, setIsLoggedInUser] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Success Celebration State
-  const [verifiedDonor, setVerifiedDonor] = useState<{
-    username: string;
-    contributed: number;
-    totalAmount: number;
-    donationCount: number;
-    tier: string;
+  // Submission State
+  const [submitting, setSubmitting] = useState(false);
+  const [copiedUpi, setCopiedUpi] = useState(false);
+  const [statusBanner, setStatusBanner] = useState<{
+    type: "success" | "error";
+    text: string;
   } | null>(null);
 
-  const activeAmount = customAmount !== "" ? Number(customAmount) || 0 : (selectedAmount || 100);
-  const currentTier = getTierForAmount(activeAmount);
-  const receiverUpiId = settings?.upiId || "harsh.2525@ptaxis";
-
-  // Construct dynamic UPI Intent URI
-  const upiIntentUri = `upi://pay?pa=${encodeURIComponent(receiverUpiId)}&pn=${encodeURIComponent("ConceptNichod")}&am=${activeAmount}&cu=INR&tn=${encodeURIComponent(`ConceptNichod Patron ${username || "Student"}`)}`;
-  const dynamicQrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=8&data=${encodeURIComponent(upiIntentUri)}`;
-
-  // Load initial settings, donors, and current user context
   useEffect(() => {
-    Promise.all([
-      getDonationInfoAction(),
-      getCurrentUserDonationContextAction()
-    ])
-      .then(([donationRes, userRes]) => {
-        if (donationRes.success) {
-          if (donationRes.settings) setSettings(donationRes.settings);
-          if (donationRes.donors) setDonors(donationRes.donors);
-          if (donationRes.recentTransactions) setRecentTransactions(donationRes.recentTransactions);
-        }
-        if (userRes.success && userRes.username) {
-          setUsername(userRes.username);
-          setIsLoggedInUser(true);
-        }
-      })
-      .catch((err) => {
-        console.error("Failed to load donation context:", err);
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
+    async function load() {
+      setLoadingData(true);
+      const res = await getPublicDonationPageData();
+      if (res.settings) setSettings(res.settings);
+      if (res.patrons) setPatrons(res.patrons as PatronItem[]);
+      if (typeof res.totalRaised === "number") setTotalRaised(res.totalRaised);
+      setLoadingData(false);
+    }
+    load();
   }, []);
 
-  const handleCopyUpi = () => {
-    if (!receiverUpiId) return;
-    navigator.clipboard.writeText(receiverUpiId);
-    setCopied(true);
-    toast({
-      title: "UPI ID Copied!",
-      description: `${receiverUpiId} copied to clipboard.`,
-    });
-    setTimeout(() => setCopied(false), 2500);
+  const receiverUpiId = settings.upiId;
+
+  const handleCopyUpi = async () => {
+    await navigator.clipboard.writeText(settings.upiId);
+    setCopiedUpi(true);
+    setTimeout(() => setCopiedUpi(false), 2000);
   };
 
-  const handleSelectPreset = (val: number) => {
-    setSelectedAmount(val);
-    setCustomAmount("");
-  };
-
-  const handleCustomAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value.replace(/[^0-9]/g, "");
-    setCustomAmount(val);
-    if (val !== "") {
-      setSelectedAmount(null);
-    } else {
-      setSelectedAmount(100);
-    }
-  };
-
-  const handleUtrChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Only allow alphanumeric uppercase characters up to 12 digits
-    const clean = e.target.value.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 12);
-    setUtrNumber(clean);
-  };
-
-  const handleSubmitUtrVerification = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setStatusBanner(null);
 
-    if (!isLoggedInUser || !username) {
-      toast({
-        title: "Sign In Required",
-        description: "Please sign in with your ConceptNichod account to verify your donation.",
-        variant: "destructive",
-      });
-      return;
-    }
+    const cleanUtr = utr.replace(/\D/g, "");
+    const cleanTxn = transactionId.replace(/\s+/g, "").toUpperCase();
 
-    if (activeAmount < 1) {
-      toast({
-        title: "Invalid Amount",
-        description: "Please enter an amount of at least ₹1.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const cleanUtr = utrNumber.trim();
     if (cleanUtr.length !== 12) {
-      toast({
-        title: "12-Digit UTR Required",
-        description: `Please enter the complete 12-digit UPI reference number. Currently ${cleanUtr.length}/12 digits entered.`,
-        variant: "destructive",
+      setStatusBanner({
+        type: "error",
+        text: "Please enter a valid 12-digit numeric UPI UTR / Reference Number.",
       });
       return;
     }
 
-    setIsSubmitting(true);
+    if (cleanTxn.length < 6) {
+      setStatusBanner({
+        type: "error",
+        text: "Please enter a valid Transaction ID (at least 6 alphanumeric characters).",
+      });
+      return;
+    }
+
+    setSubmitting(true);
     try {
-      const res = await submitDonationUtrAction({
-        amount: activeAmount,
+      const result = await submitDonationTransaction({
+        donorName,
         utr: cleanUtr,
+        transactionId: cleanTxn,
+        message,
+        isAnonymous,
+        honeypot,
       });
 
-      if (res.success && res.donor) {
-        setVerifiedDonor({
-          username,
-          contributed: res.contributedAmount || activeAmount,
-          totalAmount: res.totalAmount || activeAmount,
-          donationCount: res.donationCount || 1,
-          tier: res.donor.tier,
+      if (!result.success) {
+        setStatusBanner({
+          type: "error",
+          text: result.error || "Could not submit your transaction details.",
         });
-
-        // Reset UTR input
-        setUtrNumber("");
-
-        toast({
-          title: "Payment Verified Successfully! 🎉",
-          description: `Thank you @${username}! Your contribution has been verified and added to the Hall of Patrons.`,
-        });
-
-        // Refresh donor list and recent transactions
-        const fresh = await getDonationInfoAction();
-        if (fresh.success) {
-          if (fresh.donors) setDonors(fresh.donors);
-          if (fresh.recentTransactions) setRecentTransactions(fresh.recentTransactions);
-        }
       } else {
-        toast({
-          title: "Verification Notice",
-          description: res.error || "Could not verify UTR. Please double-check your receipt.",
-          variant: "destructive",
+        setStatusBanner({
+          type: "success",
+          text:
+            result.message ||
+            "UTR & Transaction ID sent to Admin Panel! Once verified, you will appear in the Hall of Patrons.",
         });
+        setDonorName("");
+        setUtr("");
+        setTransactionId("");
+        setMessage("");
+        setIsAnonymous(false);
       }
-    } catch (err: any) {
-      toast({
-        title: "Verification Error",
-        description: err?.message || "An unexpected error occurred while verifying your UTR.",
-        variant: "destructive",
+    } catch {
+      setStatusBanner({
+        type: "error",
+        text: "An unexpected error occurred. Please try again.",
       });
     } finally {
-      setIsSubmitting(false);
+      setSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground py-6 sm:py-10 px-3.5 sm:px-6 lg:px-8 pb-safe">
-      <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8">
-        
-        {/* Top Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-border/60 pb-6">
-          <div className="space-y-1">
-            <Link 
-              href="/dashboard" 
-              className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground mb-2 transition-colors"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" /> Back to Dashboard
-            </Link>
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight flex items-center gap-2.5 sm:gap-3 font-headline break-words">
-              <Heart className="w-7 h-7 sm:w-8 sm:h-8 text-rose-500 fill-rose-500 animate-pulse shrink-0" />
-              <span>Support ConceptNichod</span>
-            </h1>
-            <p className="text-sm sm:text-base text-muted-foreground max-w-2xl">
-              100% free, concept-first education for competitive aspirants across India. Your direct patronage sustains our servers, database, and AI compute.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="px-3 py-1 text-xs border-primary/30 bg-primary/5 text-primary flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5" /> Direct UPI • 0% Commission
-            </Badge>
-          </div>
+    <div className="min-h-screen bg-slate-950 text-slate-100 py-10 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-6xl mx-auto space-y-14">
+        {/* Top Back Link */}
+        <div className="flex items-center justify-between">
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center gap-2 text-xs sm:text-sm font-medium text-slate-400 hover:text-white transition"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Dashboard
+          </Link>
+          <a
+            href="#hall-of-patrons"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-400 hover:text-amber-300"
+          >
+            <Award className="w-4 h-4" />
+            View Hall of Patrons ({patrons.length})
+          </a>
         </div>
 
-        {/* Live Recent Transactions Feed Banner */}
-        {recentTransactions.length > 0 && (
-          <div className="bg-muted/30 border border-border/80 rounded-2xl p-3.5 sm:p-4 overflow-hidden">
-            <div className="flex items-center gap-2 mb-2.5 text-xs font-bold text-muted-foreground uppercase tracking-wider">
-              <History className="w-3.5 h-3.5 text-primary animate-spin-slow" />
-              <span>Recent Contributions</span>
-            </div>
-            <div className="flex gap-2.5 overflow-x-auto pb-1.5 no-scrollbar scroll-smooth">
-              {recentTransactions.map((tx) => (
-                <div 
-                  key={tx.uuid} 
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-card border border-border/70 text-xs shrink-0 shadow-sm hover:border-primary/40 transition-colors"
-                >
-                  <span className="font-bold text-foreground">@{tx.username}</span>
-                  <span className="text-muted-foreground">contributed</span>
-                  <span className="font-black text-primary flex items-center">
-                    <Rupee amount={tx.amount} className="w-3 h-3 stroke-[2.8]" />
-                  </span>
-                  <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded font-mono">
-                    {formatRelativeTime(tx.donatedAt)}
-                  </span>
-                </div>
-              ))}
-            </div>
+        {/* Hero Section */}
+        <div className="text-center max-w-3xl mx-auto space-y-4">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs font-semibold">
+            <Sparkles className="w-3.5 h-3.5" />
+            100% Direct Student-First Support
           </div>
-        )}
+          <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white">
+            {settings.headline}
+          </h1>
+          <p className="text-slate-400 text-sm sm:text-base leading-relaxed">
+            {settings.subtext}
+          </p>
+        </div>
 
-        {/* Celebration Banner after successful verification */}
-        {verifiedDonor && (
-          <Card className="border-emerald-500/50 bg-emerald-500/10 shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-4 duration-500">
-            <CardContent className="p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4 justify-between">
-              <div className="flex items-center gap-3.5">
-                <div className="p-3 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 shrink-0">
-                  <CheckCircle2 className="w-7 h-7" />
-                </div>
-                <div>
-                  <h3 className="text-base sm:text-lg font-bold text-foreground flex items-center gap-2">
-                    Payment Verified & Celebrated!
-                    <Sparkles className="w-4 h-4 text-amber-500" />
-                  </h3>
-                  <p className="text-xs sm:text-sm text-muted-foreground flex flex-wrap items-center gap-1">
-                    <span>Thank you <strong>@{verifiedDonor.username}</strong>! You just contributed</span>
-                    <strong className="text-foreground inline-flex items-center"><Rupee amount={verifiedDonor.contributed} className="w-3.5 h-3.5 stroke-[2.6]" /></strong>.
-                    <span>Your cumulative patronage is now</span>
-                    <strong className="text-primary font-bold inline-flex items-center"><Rupee amount={verifiedDonor.totalAmount} className="w-3.5 h-3.5 stroke-[2.6]" /></strong>
-                    <span>across {verifiedDonor.donationCount} contribution{verifiedDonor.donationCount > 1 ? "s" : ""}.</span>
-                  </p>
-                </div>
-              </div>
-              <Badge className="bg-emerald-600 text-white px-3.5 py-1 text-xs shrink-0 font-bold">
-                {verifiedDonor.tier} Patron
-              </Badge>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Main Grid: Direct UPI Payment Widget + Hall of Patrons */}
+        {/* Main 2-Column Section: Step 1 (QR Code) + Step 2 (Submit UTR & Transaction ID) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          
-          {/* Left Column: Direct In-App Payment & UTR Entry (5 Cols) */}
-          <div className="lg:col-span-5 space-y-6">
-            
-            <Card className="border-primary/40 shadow-xl bg-gradient-to-b from-card via-card to-card/95 overflow-hidden">
-              <div className="h-2 bg-gradient-to-r from-rose-500 via-amber-500 to-primary" />
-              
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between gap-2">
-                  <CardTitle className="text-xl font-bold flex items-center gap-2 font-headline">
-                    <Zap className="w-5 h-5 text-amber-500" /> Direct UPI Contribution
-                  </CardTitle>
-                  <Badge variant="outline" className={`text-[10px] font-bold ${getTierBadgeStyle(currentTier)}`}>
-                    {currentTier} Tier
-                  </Badge>
-                </div>
-                <CardDescription className="text-xs">
-                  Scan QR, pay with any UPI App, and submit your 12-digit UTR below for instant recognition.
-                </CardDescription>
-              </CardHeader>
+          {/* Step 1: Direct UPI QR Card */}
+          <div className="lg:col-span-5 bg-slate-900/90 border border-slate-800 rounded-2xl p-6 sm:p-8 space-y-6">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">
+                Step 1 • Scan & Pay Any Amount
+              </span>
+              <span className="text-[11px] text-slate-400">Direct UPI</span>
+            </div>
 
-              <CardContent className="space-y-5">
-                <form onSubmit={handleSubmitUtrVerification} className="space-y-5">
-                  
-                  {/* Step 1: Select Amount */}
-                  <div className="space-y-2">
-                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Step 1: Select Contribution Amount
-                    </Label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {PRESET_AMOUNTS.map((preset) => {
-                        const isSelected = selectedAmount === preset.value && customAmount === "";
-                        return (
-                          <button
-                            key={preset.value}
-                            type="button"
-                            onClick={() => handleSelectPreset(preset.value)}
-                            className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl border text-xs font-bold transition-all ${
-                              isSelected
-                                ? "border-primary bg-primary text-primary-foreground shadow-md ring-2 ring-primary/20 scale-[1.02]"
-                                : "border-border/80 bg-muted/40 hover:bg-muted text-foreground"
-                            }`}
-                          >
-                            <span className="text-sm font-black flex items-center gap-0.5">
-                              <IndianRupee className="w-3.5 h-3.5 stroke-[2.6]" />
-                              <span>{preset.value}</span>
-                            </span>
-                            <span className={`text-[9px] font-normal opacity-85 ${isSelected ? "text-primary-foreground" : "text-muted-foreground"}`}>
-                              {preset.tier}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Custom Amount Input */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-xs">
-                      <Label htmlFor="custom-amount" className="font-semibold text-muted-foreground flex items-center gap-1">
-                        <span>Or Custom Amount</span>
-                      </Label>
-                      {activeAmount > 0 && (
-                        <span className="text-muted-foreground">
-                          Qualifies as <strong className="text-foreground">{currentTier}</strong>
-                        </span>
-                      )}
-                    </div>
-                    <div className="relative">
-                      <IndianRupee className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground stroke-[2.4]" />
-                      <Input
-                        id="custom-amount"
-                        type="text"
-                        inputMode="numeric"
-                        placeholder="Enter amount (e.g. 500)"
-                        value={customAmount}
-                        onChange={handleCustomAmountChange}
-                        className="pl-8 text-base font-semibold"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Step 2: Pay via Dynamic QR Code or 1-Tap UPI Apps */}
-                  <div className="space-y-3 pt-2 border-t border-border/60">
-                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
-                      <span>Step 2: Scan QR or Tap UPI App</span>
-                      <span className="text-primary font-bold font-mono inline-flex items-center">
-                        <Rupee amount={activeAmount} className="w-3.5 h-3.5 stroke-[2.6]" />
-                      </span>
-                    </Label>
-
-                    {/* Dynamic QR Box */}
-                    <div className="p-3 bg-white rounded-2xl shadow-sm border border-border/60 flex flex-col items-center justify-center max-w-[210px] mx-auto w-full aspect-square relative group">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img 
-                        src={dynamicQrCodeUrl} 
-                        alt="ConceptNichod UPI Payment QR" 
-                        className="w-full h-full object-contain rounded-lg"
-                      />
-                      <span className="text-[10px] text-slate-500 font-mono mt-1 font-semibold">
-                        Scan with GPay / PhonePe / Paytm
-                      </span>
-                    </div>
-
-                    {/* VPA Display & Copy */}
-                    <div className="flex items-center gap-2 p-2 bg-muted/60 rounded-xl border border-border/80">
-                      <span className="text-xs text-muted-foreground font-semibold pl-1">VPA:</span>
-                      <span className="font-mono text-xs font-bold text-foreground px-1 truncate flex-1">
-                        {receiverUpiId}
-                      </span>
-                      <Button 
-                        size="sm" 
-                        type="button"
-                        variant="outline"
-                        onClick={handleCopyUpi} 
-                        className="shrink-0 gap-1.5 h-7 text-xs"
-                      >
-                        {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                        {copied ? "Copied" : "Copy"}
-                      </Button>
-                    </div>
-
-                    {/* 1-Tap Mobile Intent Buttons */}
-                    <div className="grid grid-cols-2 gap-2 pt-1">
-                      <a 
-                        href={`phonepe://pay?pa=${encodeURIComponent(receiverUpiId)}&pn=ConceptNichod&am=${activeAmount}&cu=INR`}
-                        className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-purple-500/40 bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-300 text-xs font-bold transition-colors"
-                      >
-                        <Smartphone className="w-3.5 h-3.5" /> PhonePe
-                      </a>
-                      <a 
-                        href={`gpay://upi/pay?pa=${encodeURIComponent(receiverUpiId)}&pn=ConceptNichod&am=${activeAmount}&cu=INR`}
-                        className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-blue-500/40 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-300 text-xs font-bold transition-colors"
-                      >
-                        <Smartphone className="w-3.5 h-3.5" /> Google Pay
-                      </a>
-                      <a 
-                        href={`paytmmp://pay?pa=${encodeURIComponent(receiverUpiId)}&pn=ConceptNichod&am=${activeAmount}&cu=INR`}
-                        className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-sky-500/40 bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 dark:text-sky-300 text-xs font-bold transition-colors"
-                      >
-                        <Smartphone className="w-3.5 h-3.5" /> Paytm
-                      </a>
-                      <a 
-                        href={upiIntentUri}
-                        className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold transition-colors"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" /> Any UPI App
-                      </a>
-                    </div>
-                  </div>
-
-                  {/* Step 3: Enter 12-Digit UTR */}
-                  <div className="space-y-2 pt-2 border-t border-border/60">
-                    <div className="flex items-center justify-between text-xs">
-                      <Label htmlFor="utr-input" className="font-semibold text-muted-foreground uppercase tracking-wider">
-                        Step 3: Enter 12-Digit UTR Number
-                      </Label>
-                      <span className={`font-mono text-xs font-bold ${utrNumber.length === 12 ? "text-emerald-500" : "text-muted-foreground"}`}>
-                        {utrNumber.length}/12 Digits
-                      </span>
-                    </div>
-
-                    <div className="relative">
-                      <Input
-                        id="utr-input"
-                        type="text"
-                        inputMode="text"
-                        autoComplete="off"
-                        maxLength={12}
-                        placeholder="e.g. 431289567123"
-                        value={utrNumber}
-                        onChange={handleUtrChange}
-                        className="font-mono text-base tracking-wider font-bold"
-                      />
-                    </div>
-                    <p className="text-[11px] text-muted-foreground">
-                      Enter the 12-digit UPI Reference / UTR Number found on your payment receipt.
-                    </p>
-                  </div>
-
-                  {/* Username Display / Auth Requirement */}
-                  <div className="space-y-1.5">
-                    {isLoggedInUser ? (
-                      <div className="flex items-center justify-between gap-3 p-2.5 bg-muted/60 rounded-xl border border-border/80">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center font-black text-xs shrink-0">
-                            @
-                          </span>
-                          <span className="font-mono text-xs font-bold text-foreground truncate">
-                            {username}
-                          </span>
-                        </div>
-                        <Badge variant="outline" className="text-[10px] gap-1 shrink-0 bg-background/80 font-mono text-emerald-600 dark:text-emerald-400">
-                          <Check className="w-2.5 h-2.5" /> Verified Account
-                        </Badge>
-                      </div>
-                    ) : (
-                      <div className="p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-2">
-                        <div className="flex items-center gap-2 text-xs font-semibold text-amber-600 dark:text-amber-400">
-                          <Info className="w-4 h-4 shrink-0" />
-                          <span>Sign in required to record your donation</span>
-                        </div>
-                        <Link href="/login?redirect=/donate" className="block">
-                          <Button type="button" variant="outline" size="sm" className="w-full gap-2 text-xs h-8">
-                            <LogIn className="w-3.5 h-3.5" /> Sign In to Donate
-                          </Button>
-                        </Link>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Submit CTA Button */}
-                  <Button
-                    type="submit"
-                    disabled={isSubmitting || activeAmount < 1 || utrNumber.length !== 12 || !isLoggedInUser}
-                    className="w-full h-11 text-sm font-bold bg-gradient-to-r from-rose-500 via-amber-500 to-primary hover:opacity-95 shadow-lg shadow-primary/20 gap-2"
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Verifying UTR & Updating Leaderboard...
-                      </>
-                    ) : !isLoggedInUser ? (
-                      <>
-                        <Lock className="w-4 h-4" />
-                        Sign In to Submit UTR
-                      </>
-                    ) : (
-                      <>
-                        <Check className="w-4 h-4" />
-                        <span>Verify UTR & Join Hall of Patrons</span>
-                      </>
-                    )}
-                  </Button>
-
-                  <div className="pt-0.5 flex items-center justify-center gap-2 text-[11px] text-muted-foreground text-center">
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                    <span>Every UTR is strictly unique and verified against duplicate submissions.</span>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-
-          </div>
-
-          {/* Right Column: Hall of Patrons / Cumulative Leaderboard (7 Cols) */}
-          <div className="lg:col-span-7 space-y-6">
-            <div className="flex items-center justify-between border-b border-border/60 pb-3">
-              <div className="flex items-center gap-2">
-                <Trophy className="w-5 h-5 text-amber-500" />
-                <h2 className="text-xl font-bold font-headline">Hall of Patrons</h2>
-              </div>
-              <span className="text-xs text-muted-foreground bg-muted px-2.5 py-1 rounded-full font-medium">
-                {donors.length} Honored Patron{donors.length === 1 ? "" : "s"}
+            <div className="bg-white p-4 rounded-2xl flex flex-col items-center justify-center max-w-[240px] mx-auto shadow-xl">
+              <img
+                src={settings.qrCodeUrl || "/qr.png"}
+                alt="ConceptNichod UPI QR Code"
+                className="w-48 h-48 object-contain rounded-lg"
+              />
+              <span className="mt-2 text-xs font-bold text-slate-800">
+                Pay to {settings.payeeName}
               </span>
             </div>
 
-            {donors.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {donors.map((donor, index) => {
-                  const displayTotal = donor.totalAmount !== undefined ? donor.totalAmount : donor.amount;
-                  const count = donor.donationCount || 1;
-                  const isTopRank = index < 3;
-
-                  return (
-                    <Card 
-                      key={donor.uuid || donor.username} 
-                      className={`border transition-all duration-300 hover:shadow-md ${
-                        verifiedDonor && donor.username === verifiedDonor.username
-                          ? "border-emerald-500 ring-2 ring-emerald-500/20 bg-emerald-500/5 scale-[1.01]"
-                          : isTopRank
-                          ? "border-amber-500/30 bg-card"
-                          : "border-border/80 hover:border-primary/40 bg-card"
-                      }`}
-                    >
-                      <CardHeader className="p-4 pb-2">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="space-y-0.5 min-w-0">
-                            <CardTitle className="text-base font-bold flex items-center gap-1.5 font-headline truncate">
-                              {index === 0 && <span className="text-amber-500 text-sm">🥇</span>}
-                              {index === 1 && <span className="text-slate-400 text-sm">🥈</span>}
-                              {index === 2 && <span className="text-amber-700 text-sm">🥉</span>}
-                              <span>@{donor.username}</span>
-                            </CardTitle>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground font-mono">
-                              <span>
-                                {donor.lastDonatedAt || donor.donatedAt 
-                                  ? formatRelativeTime(donor.lastDonatedAt || donor.donatedAt)
-                                  : "Supporter"}
-                              </span>
-                              {count > 1 && (
-                                <span className="bg-primary/10 text-primary px-1.5 py-0.2 rounded text-[10px] font-bold">
-                                  {count} donations
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          <Badge variant="outline" className={`text-[10px] font-bold shrink-0 ${getTierBadgeStyle(donor.tier)}`}>
-                            {donor.tier}
-                          </Badge>
-                        </div>
-                      </CardHeader>
-
-                      <CardContent className="p-4 pt-2 space-y-2">
-                        <div className="text-lg font-black text-primary flex items-center gap-1">
-                          <Rupee amount={displayTotal} className="w-4 h-4 stroke-[2.8]" />
-                        </div>
-                        {(donor.latestMessage || donor.message) && (
-                          <p className="text-xs text-muted-foreground italic line-clamp-2">
-                            "{donor.latestMessage || donor.message}"
-                          </p>
-                        )}
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
-            ) : (
-              <Card className="p-8 text-center border-dashed border-border/80 bg-muted/10 space-y-3">
-                <Heart className="w-10 h-10 text-muted-foreground/60 mx-auto" />
-                <h3 className="text-base font-semibold">Be the First Patron</h3>
-                <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                  Scan the UPI QR code on the left, pay any amount, and enter your 12-digit UTR. Your contribution will be celebrated right here!
+            {/* Copyable UPI ID Box */}
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[11px] text-slate-500 uppercase font-semibold">
+                  Official UPI ID
                 </p>
-              </Card>
-            )}
+                <p className="text-sm font-mono font-bold text-slate-200 truncate">
+                  {receiverUpiId ? receiverUpiId : "Recipient UPI ID will appear once enabled."}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCopyUpi}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition shrink-0"
+              >
+                {copiedUpi ? (
+                  <>
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5" />
+                    Copy ID
+                  </>
+                )}
+              </button>
+            </div>
+
+            <div className="bg-indigo-950/30 border border-indigo-500/20 rounded-xl p-4 space-y-2 text-xs text-slate-300">
+              <div className="flex items-center gap-2 font-semibold text-indigo-300">
+                <ShieldCheck className="w-4 h-4 shrink-0" />
+                Manual Admin Reconciliation
+              </div>
+              <p className="text-slate-400 leading-relaxed">
+                After paying via GPay, PhonePe, Paytm, or BHIM, copy your{" "}
+                <strong className="text-slate-200">12-digit UTR</strong> and{" "}
+                <strong className="text-slate-200">Transaction ID</strong>. Our Admin manually
+                verifies every transaction in the Admin Panel, enters the exact amount received,
+                and promotes your profile to the <strong className="text-amber-300">Hall of Patrons</strong>.
+              </p>
+            </div>
           </div>
 
+          {/* Step 2: Submit UTR + Transaction ID Form */}
+          <form
+            onSubmit={handleSubmit}
+            className="lg:col-span-7 bg-slate-900/90 border border-slate-800 rounded-2xl p-6 sm:p-8 space-y-5"
+          >
+            <div>
+              <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">
+                Step 2 • Send UTR & Transaction ID to Admin Panel
+              </span>
+              <h2 className="text-xl sm:text-2xl font-bold text-white mt-1">
+                Submit Payment Reference for Verification
+              </h2>
+            </div>
+
+            {statusBanner && (
+              <div
+                className={`p-4 rounded-xl border text-xs sm:text-sm flex items-start gap-2.5 ${
+                  statusBanner.type === "success"
+                    ? "bg-emerald-950/60 border-emerald-500/40 text-emerald-200"
+                    : "bg-rose-950/60 border-rose-500/40 text-rose-200"
+                }`}
+              >
+                {statusBanner.type === "success" ? (
+                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                ) : (
+                  <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+                )}
+                <span>{statusBanner.text}</span>
+              </div>
+            )}
+
+            {/* Honeypot field */}
+            <input
+              type="text"
+              name="honeypot"
+              value={honeypot}
+              onChange={(e) => setHoneypot(e.target.value)}
+              className="hidden"
+              tabIndex={-1}
+              autoComplete="off"
+            />
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                Your Name (for Hall of Patrons) <span className="text-rose-400">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                maxLength={60}
+                placeholder="Enter your full name"
+                value={donorName}
+                onChange={(e) => setDonorName(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  12-Digit UTR / UPI Ref No. <span className="text-rose-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  inputMode="numeric"
+                  maxLength={12}
+                  placeholder="e.g. 431987654321"
+                  value={utr}
+                  onChange={(e) => setUtr(e.target.value.replace(/\D/g, "").slice(0, 12))}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 font-mono text-sm text-white focus:outline-none focus:border-indigo-500"
+                />
+                <p className="text-[11px] text-slate-500 mt-1">
+                  12-digit numeric UPI Reference ({utr.length}/12 digits)
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Transaction ID <span className="text-rose-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  maxLength={45}
+                  placeholder="e.g. T2611151423598812"
+                  value={transactionId}
+                  onChange={(e) => setTransactionId(e.target.value.toUpperCase())}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 font-mono text-sm text-white focus:outline-none focus:border-indigo-500"
+                />
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Alphanumeric Transaction ID from your UPI app
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                Message for Hall of Patrons <span className="text-slate-500">(Optional)</span>
+              </label>
+              <textarea
+                rows={3}
+                maxLength={250}
+                placeholder="Write a message to display on your Patron card..."
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <label className="flex items-center gap-2.5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={isAnonymous}
+                onChange={(e) => setIsAnonymous(e.target.checked)}
+                className="w-4 h-4 rounded border-slate-700 bg-slate-950 text-indigo-600"
+              />
+              <span className="text-xs text-slate-300">
+                Show me as <strong>Anonymous Patron</strong> in the public Hall of Patrons
+              </span>
+            </label>
+
+            <button
+              type="submit"
+              disabled={submitting || !settings.isEnabled}
+              className="w-full py-3 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 transition"
+            >
+              <Send className="w-4 h-4" />
+              {!settings.isEnabled ? "Donations Temporarily Unavailable" : submitting ? "Submitting UTR & Transaction ID..." : "Submit UTR & Transaction ID to Admin"}
+            </button>
+          </form>
         </div>
 
+        {/* Hall of Patrons Leaderboard */}
+        <section id="hall-of-patrons" className="pt-10 border-t border-slate-800/80 space-y-8">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+            <div>
+              <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-amber-400">
+                <Award className="w-4 h-4" />
+                Hall of Patrons
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-white mt-1">
+                Verified Patrons & Supporters
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-400 mt-1">
+                Manually verified by the Admin after UTR & Transaction ID reconciliation.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-5 bg-slate-900 border border-slate-800 rounded-2xl px-5 py-3">
+              <div>
+                <p className="text-[11px] text-slate-400">Total Verified Support</p>
+                <p className="text-xl font-extrabold text-emerald-400">
+                  ₹{totalRaised.toLocaleString("en-IN")}
+                </p>
+              </div>
+              <div className="h-8 w-px bg-slate-800" />
+              <div>
+                <p className="text-[11px] text-slate-400">Verified Patrons</p>
+                <p className="text-xl font-extrabold text-white">{patrons.length}</p>
+              </div>
+            </div>
+          </div>
+
+          {loadingData ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="h-36 rounded-2xl bg-slate-900/50 border border-slate-800 animate-pulse"
+                />
+              ))}
+            </div>
+          ) : patrons.length === 0 ? (
+            <div className="text-center py-12 bg-slate-900/40 border border-slate-800 rounded-2xl space-y-2">
+              <Heart className="w-8 h-8 text-rose-400 mx-auto" />
+              <p className="text-sm font-semibold text-slate-200">
+                Be the first verified supporter in the Hall of Patrons!
+              </p>
+              <p className="text-xs text-slate-400">
+                Submit your UTR & Transaction ID above after completing a UPI contribution.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {patrons.map((patron) => {
+                const cfg = TIER_CONFIG[patron.tier] || TIER_CONFIG.SUPPORTER;
+                return (
+                  <div
+                    key={patron.id}
+                    className={`bg-slate-900/90 border ${cfg.cardBorder} rounded-2xl p-5 flex flex-col justify-between space-y-4`}
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${cfg.badgeClass}`}
+                        >
+                          {cfg.title}
+                        </span>
+                        <span className="text-base font-extrabold text-emerald-400">
+                          <Rupee />{patron.amount.toLocaleString("en-IN")}
+                        </span>
+                      </div>
+
+                      <div>
+                        <h3 className="text-base font-bold text-white truncate">
+                          {patron.name}
+                        </h3>
+                        {patron.username && (
+                          <Link
+                            href={`/profile/${patron.username}`}
+                            className="text-xs text-indigo-400 hover:underline"
+                          >
+                            @{patron.username}
+                          </Link>
+                        )}
+                      </div>
+
+                      {patron.message && (
+                        <p className="text-xs text-slate-300 italic bg-slate-950/70 p-3 rounded-xl border border-slate-800">
+                          &ldquo;{patron.message}&rdquo;
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-800/70">
+                      <span className="text-emerald-400 font-medium">✔ Admin Verified</span>
+                      <span>{new Date(patron.donatedAt).toLocaleDateString("en-IN")}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
       </div>
     </div>
-  );
-}
-
-export default function DonatePage() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-background flex items-center justify-center p-6">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    }>
-      <DonatePageContent />
-    </Suspense>
   );
 }

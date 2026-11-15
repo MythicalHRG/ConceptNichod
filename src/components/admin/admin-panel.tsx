@@ -82,6 +82,7 @@ import {
 import { UploadButton } from "@/utils/uploadthing";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { DonationReconciliation } from "@/components/admin/donation-reconciliation";
 
 function parseSemver(v: string) {
   if (!v) return null;
@@ -1301,6 +1302,7 @@ export function AdminPanel() {
 
         {/* DONATIONS & UPI CONFIG TAB */}
         <TabsContent value="donations">
+          <div className="mb-8"><DonationReconciliation /></div>
           <div className="max-w-2xl mx-auto space-y-6">
             <Card className="border-border/80 shadow-md">
               <CardHeader>

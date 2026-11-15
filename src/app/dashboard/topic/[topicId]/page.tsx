@@ -12,7 +12,7 @@ export default async function TopicPage({ params }: { params: { topicId: string 
     return <div>Invalid Topic ID</div>;
   }
 
-  const rawSession = cookies().get("user_session")?.value;
+  const rawSession = (await cookies()).get("user_session")?.value;
   const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) {
     redirect("/?login=true");

@@ -10,14 +10,10 @@ import crypto from "crypto";
 import { getClientIp } from "@/lib/ip";
 import { createSignedSessionCookie, verifySessionCookie } from "@/lib/session";
 import {
-  checkRateLimit,
-  peekRateLimit,
-  recordFailedAttempt,
-  resetRateLimit,
-} from "@/lib/rate-limiter";
+  checkDistributedRateLimit,
+  resetDistributedRateLimit,
+} from "@/lib/distributed-rate-limiter";
 import { normalizeEmail, validateEmailDomain, validateEmail } from "@/lib/email-utils";
-
-const SECRET_KEY = process.env.ENCRYPTION_SECRET_KEY || "super_secret_default_key_for_encodec_12345!";
 
 function validatePassword(password: string) {
     if (password.length < 8) return "Password must be at least 8 characters long.";
@@ -53,27 +49,29 @@ export async function validateUsername(username: string): Promise<string | null>
         }
     } catch (err) {
         console.error("Error validating username against database:", err);
+        // Registration must fail closed if uniqueness cannot be checked.
+        return "Username availability could not be verified. Please try again.";
     }
 
     return null;
 }
 
 export async function registerAction(formData: FormData) {
-    await dbConnect();
-    const email = (formData.get("email") as string).toLowerCase().trim();
-    const username = (formData.get("username") as string).toLowerCase().trim();
-    const password = formData.get("password") as string;
-    const fullName = formData.get("fullName") as string;
-    const gender = formData.get("gender") as string;
-    const dob = formData.get("dob") as string;
-    const classLevel = formData.get("classLevel") as string;
-    const examFocus = formData.get("examFocus") as string | null;
-    const city = formData.get("city") as string;
-    const futureCollege = formData.get("futureCollege") as string | null;
-    const snapchat = formData.get("snapchat") as string | null;
-    const instagram = formData.get("instagram") as string | null;
+    const email = String(formData.get("email") ?? "").toLowerCase().trim();
+    const username = String(formData.get("username") ?? "").toLowerCase().trim();
+    const password = String(formData.get("password") ?? "");
+    const fullName = String(formData.get("fullName") ?? "").trim();
+    const gender = String(formData.get("gender") ?? "").trim();
+    const dob = String(formData.get("dob") ?? "").trim();
+    const classLevel = String(formData.get("classLevel") ?? "").trim();
+    const examFocus = String(formData.get("examFocus") ?? "").trim() || null;
+    const city = String(formData.get("city") ?? "").trim();
+    const futureCollege = String(formData.get("futureCollege") ?? "").trim() || null;
+    const snapchat = String(formData.get("snapchat") ?? "").trim() || null;
+    const instagram = String(formData.get("instagram") ?? "").trim() || null;
 
     try {
+        await dbConnect();
         if (!email || !username || !password || !fullName || !gender || !dob || !classLevel || !city) {
             throw new Error("Missing required fields");
         }
@@ -92,8 +90,8 @@ export async function registerAction(formData: FormData) {
         const passwordError = validatePassword(password);
         if (passwordError) throw new Error(passwordError);
 
-        const ip = getClientIp();
-        const regRate = checkRateLimit(`register:${ip}`, 3, 60 * 60 * 1000);
+        const ip = await getClientIp();
+        const regRate = await checkDistributedRateLimit(`register:${ip}`, 3, 60 * 60 * 1000);
         if (!regRate.success) {
             throw new Error("Too many registration attempts from this IP. Please try again later.");
         }
@@ -109,8 +107,8 @@ export async function registerAction(formData: FormData) {
 
         // Check OTP verification
         const otpRecord = await OtpVerification.findOne({ email });
-        if (!otpRecord || !otpRecord.isVerified) {
-            throw new Error("Email address has not been verified via OTP.");
+        if (!otpRecord || !otpRecord.isVerified || !otpRecord.expiresAt || new Date() > otpRecord.expiresAt) {
+            throw new Error("Email verification has expired or is invalid. Please request a new code.");
         }
 
         const escapeRegex = (string: string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -156,7 +154,7 @@ export async function registerAction(formData: FormData) {
         // Delete OTP record after successful registration to prevent reuse (Account Takeover)
         await OtpVerification.deleteOne({ email });
 
-        cookies().set("user_session", createSignedSessionCookie(uuid), { 
+        (await cookies()).set("user_session", createSignedSessionCookie(uuid), { 
             httpOnly: true, 
             secure: process.env.NODE_ENV === "production", 
             sameSite: "lax",
@@ -172,23 +170,25 @@ export async function registerAction(formData: FormData) {
 }
 
 export async function loginAction(formData: FormData) {
-    await dbConnect();
-    const rawInput = ((formData.get("email") as string) || "").trim();
-    const password = formData.get("password") as string;
+    const rawInput = String(formData.get("email") ?? "").trim();
+    const password = String(formData.get("password") ?? "");
 
     try {
+        // Keep database connection failures inside the action error boundary so
+        // the client receives a controlled error instead of a Server Components digest.
+        await dbConnect();
         if (!rawInput || !password) throw new Error("Missing email or password");
 
-        const ip = getClientIp();
+        const ip = await getClientIp();
         const accountRateKey = `login:account:${rawInput.toLowerCase()}`;
         const loginRateKey = `login:${ip}:${rawInput.toLowerCase()}`;
 
-        const accountRateStatus = peekRateLimit(accountRateKey, 5, 15 * 60 * 1000);
+        const accountRateStatus = await checkDistributedRateLimit(accountRateKey, 5, 15 * 60 * 1000);
         if (!accountRateStatus.success) {
             throw new Error("This account has experienced too many failed login attempts. Please try again after 15 minutes.");
         }
 
-        const loginRateStatus = peekRateLimit(loginRateKey, 5, 15 * 60 * 1000);
+        const loginRateStatus = await checkDistributedRateLimit(loginRateKey, 5, 15 * 60 * 1000);
         if (!loginRateStatus.success) {
             throw new Error("Too many failed login attempts. Please try again after 15 minutes.");
         }
@@ -213,8 +213,6 @@ export async function loginAction(formData: FormData) {
         });
 
         if (!user) {
-            recordFailedAttempt(accountRateKey, 5, 15 * 60 * 1000);
-            recordFailedAttempt(loginRateKey, 5, 15 * 60 * 1000);
             throw new Error("Invalid credentials");
         }
 
@@ -224,35 +222,28 @@ export async function loginAction(formData: FormData) {
         const isUsernameBanned = await Blacklist.findOne({ type: "username", value: user.username.toLowerCase() });
         if (isUsernameBanned) throw new Error("Access denied: This username is banned.");
 
-        try {
-            const isValid = await comparePassword(password, user.password);
-            if (!isValid) {
-                recordFailedAttempt(accountRateKey, 5, 15 * 60 * 1000);
-                recordFailedAttempt(loginRateKey, 5, 15 * 60 * 1000);
-                throw new Error("Invalid credentials");
-            }
-
-            // Reset failed login count on successful authentication
-            resetRateLimit(accountRateKey);
-            resetRateLimit(loginRateKey);
-
-            // Update login IP and timestamps
-            const now = new Date();
-            user.lastLoginIp = ip;
-            user.lastLoginAt = now;
-            user.lastKnownIp = ip;
-            if (!user.firstLoginIp) {
-                user.firstLoginIp = ip;
-                user.firstLoginAt = user.createdAt || now;
-            }
-            await user.save();
-        } catch (e: any) {
-            recordFailedAttempt(accountRateKey, 5, 15 * 60 * 1000);
-            recordFailedAttempt(loginRateKey, 5, 15 * 60 * 1000);
+        const isValid = await comparePassword(password, user.password);
+        if (!isValid) {
             throw new Error("Invalid credentials");
         }
 
-        cookies().set("user_session", createSignedSessionCookie(user.uuid), { 
+        // Reset failed login count only after the password has been verified.
+        await resetDistributedRateLimit(accountRateKey);
+        await resetDistributedRateLimit(loginRateKey);
+
+        // Update login IP and timestamps. Database failures must not be counted
+        // as bad-password attempts.
+        const now = new Date();
+        user.lastLoginIp = ip;
+        user.lastLoginAt = now;
+        user.lastKnownIp = ip;
+        if (!user.firstLoginIp) {
+            user.firstLoginIp = ip;
+            user.firstLoginAt = user.createdAt || now;
+        }
+        await user.save();
+
+        (await cookies()).set("user_session", createSignedSessionCookie(user.uuid), { 
             httpOnly: true, 
             secure: process.env.NODE_ENV === "production", 
             sameSite: "lax",
@@ -271,13 +262,13 @@ export async function loginAction(formData: FormData) {
 }
 
 export async function logoutAction() {
-    cookies().delete("user_session");
+    (await cookies()).delete("user_session");
     return { success: true };
 }
 
 export async function meAction() {
     try {
-        const rawSession = cookies().get("user_session")?.value;
+        const rawSession = (await cookies()).get("user_session")?.value;
         const sessionUuid = verifySessionCookie(rawSession);
         if (!sessionUuid) return { user: null };
 
@@ -306,7 +297,7 @@ export async function meAction() {
 
 export async function updateProfileAction(formData: FormData) {
     await dbConnect();
-    const rawSession = cookies().get("user_session")?.value;
+    const rawSession = (await cookies()).get("user_session")?.value;
     const sessionUuid = verifySessionCookie(rawSession);
     if (!sessionUuid) throw new Error("Not authenticated");
 
@@ -325,10 +316,15 @@ export async function updateProfileAction(formData: FormData) {
     const updateData: any = {};
     if (username) {
         const targetUsername = username.toLowerCase().trim();
-        const usernameError = await validateUsername(targetUsername);
-        if (usernameError) throw new Error(usernameError);
 
-        if (targetUsername === "mythicalhrg" && currentUser.username !== "mythicalhrg") {
+        // Keeping the current handle is valid; validateUsername checks global
+        // availability and would otherwise reject the user against their own row.
+        if (targetUsername !== currentUser.username.toLowerCase()) {
+            const usernameError = await validateUsername(targetUsername);
+            if (usernameError) throw new Error(usernameError);
+        }
+
+        if (targetUsername === "mythicalhrg" && currentUser.username.toLowerCase() !== "mythicalhrg") {
             throw new Error("This username is reserved for system administration.");
         }
 
@@ -359,7 +355,7 @@ export async function updateProfileAction(formData: FormData) {
 
 export async function requestEmailChangeOtpAction(newEmail: string, currentPassword?: string) {
     await dbConnect();
-    const rawSession = cookies().get("user_session")?.value;
+    const rawSession = (await cookies()).get("user_session")?.value;
     const sessionUuid = verifySessionCookie(rawSession);
     if (!sessionUuid) throw new Error("Not authenticated");
 
@@ -432,7 +428,7 @@ export async function requestEmailChangeOtpAction(newEmail: string, currentPassw
 
 export async function confirmEmailChangeAction(newEmail: string, otp: string) {
     await dbConnect();
-    const rawSession = cookies().get("user_session")?.value;
+    const rawSession = (await cookies()).get("user_session")?.value;
     const sessionUuid = verifySessionCookie(rawSession);
     if (!sessionUuid) throw new Error("Not authenticated");
 
@@ -487,7 +483,7 @@ export async function resetPasswordAction(formData: FormData) {
     const passwordError = validatePassword(newPassword);
     if (passwordError) throw new Error(passwordError);
 
-    const ip = getClientIp();
+    const ip = await getClientIp();
     const isIpBanned = await Blacklist.findOne({ type: "ip", value: ip });
     if (isIpBanned) throw new Error("Access denied: Your IP address is banned.");
 
@@ -513,7 +509,7 @@ export async function resetPasswordAction(formData: FormData) {
 
 export async function changePasswordAction(formData: FormData) {
     await dbConnect();
-    const rawSession = cookies().get("user_session")?.value;
+    const rawSession = (await cookies()).get("user_session")?.value;
     const sessionId = verifySessionCookie(rawSession);
     if (!sessionId) throw new Error("Not authenticated");
 
@@ -544,7 +540,7 @@ export async function changePasswordAction(formData: FormData) {
 
 export async function requestDeleteAccountOtpAction(currentPassword: string) {
     await dbConnect();
-    const rawSession = cookies().get("user_session")?.value;
+    const rawSession = (await cookies()).get("user_session")?.value;
     const sessionUuid = verifySessionCookie(rawSession);
     if (!sessionUuid) throw new Error("Authentication required.");
 
@@ -622,7 +618,7 @@ export async function requestDeleteAccountOtpAction(currentPassword: string) {
 
 export async function deleteAccountAction(formData: FormData) {
     await dbConnect();
-    const rawSession = cookies().get("user_session")?.value;
+    const rawSession = (await cookies()).get("user_session")?.value;
     const sessionId = verifySessionCookie(rawSession);
     if (!sessionId) throw new Error("Not authenticated");
 
@@ -681,8 +677,9 @@ export async function deleteAccountAction(formData: FormData) {
     const GroupMessage = (await import("@/models/GroupMessage")).default;
     const DirectMessage = (await import("@/models/DirectMessage")).default;
 
-    await Promise.allSettled([
-        User.deleteOne({ uuid: sessionId }),
+    // Remove dependent records first. If cleanup fails, keep the account so
+    // the user can retry instead of reporting a false successful deletion.
+    await Promise.all([
         Topic.deleteMany({ userId: sessionId }),
         StudyGroup.deleteMany({ ownerId: sessionId }),
         StudyGroup.updateMany({ memberIds: sessionId }, { $pull: { memberIds: sessionId } }),
@@ -690,8 +687,9 @@ export async function deleteAccountAction(formData: FormData) {
         DirectMessage.deleteMany({ participantIds: sessionId }),
         OtpVerification.deleteOne({ email: userEmail }),
     ]);
+    await User.deleteOne({ uuid: sessionId });
 
-    cookies().delete("user_session");
+    (await cookies()).delete("user_session");
 
     return { success: true };
 }

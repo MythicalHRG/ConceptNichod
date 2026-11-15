@@ -1,16 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    serverComponentsExternalPackages: [
-      '@genkit-ai/core', 
-      'genkit', 
-      '@opentelemetry/sdk-node', 
-      '@opentelemetry/exporter-jaeger',
+  serverExternalPackages: [
       'pino-pretty', 
       'lokijs', 
       'encoding'
-    ],
-  },
+  ],
   productionBrowserSourceMaps: false,
   poweredByHeader: false,
   compiler: {
@@ -47,7 +41,7 @@ const nextConfig = {
           },
           {
             key: 'Content-Security-Policy',
-            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https: blob:; font-src 'self' data: https:; media-src 'self' https: data: blob:; connect-src 'self' https:; frame-ancestors 'none';"
+            value: "default-src 'self'; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https: blob:; font-src 'self' data: https:; media-src 'self' https: data: blob:; connect-src 'self' https:; frame-ancestors 'none';"
           }
         ]
       }
@@ -55,9 +49,6 @@ const nextConfig = {
   },
   typescript: {
     ignoreBuildErrors: false,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
   },
   images: {
     remotePatterns: [
