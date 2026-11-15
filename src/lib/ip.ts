@@ -58,5 +58,9 @@ export function getClientIp(customHeaders: HeaderInput): string;
 export function getClientIp(): Promise<string>;
 export function getClientIp(customHeaders?: HeaderInput): string | Promise<string> {
   if (customHeaders) return resolveClientIp(customHeaders);
-  return headers().then(resolveClientIp).catch(() => "127.0.0.1");
+  const requestHeaders = headers();
+  if (!requestHeaders || typeof (requestHeaders as any).then !== "function") {
+    return Promise.resolve("127.0.0.1");
+  }
+  return requestHeaders.then(resolveClientIp).catch(() => "127.0.0.1");
 }
