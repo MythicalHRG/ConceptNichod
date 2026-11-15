@@ -10,7 +10,7 @@ const ADMIN_USERNAME = "mythicalhrg";
 
 async function verifyAdmin() {
   await dbConnect();
-  const rawSession = cookies().get("user_session")?.value;
+  const rawSession = (await cookies()).get("user_session")?.value;
   const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
 
@@ -24,7 +24,7 @@ async function verifyAdmin() {
 export async function checkIsAdminAction(): Promise<boolean> {
   try {
     await dbConnect();
-    const rawSession = cookies().get("user_session")?.value;
+    const rawSession = (await cookies()).get("user_session")?.value;
     const sessionUuid = verifySessionCookie(rawSession);
     if (!sessionUuid) return false;
     const user = await User.findOne({ uuid: sessionUuid }).lean();
