@@ -612,8 +612,9 @@ export async function adminUpdateDonationSettings(input: {
     settings.qrCodeUrl = qrCodeUrl;
     settings.isEnabled = input.isEnabled ?? true;
     settings.updatedBy = (adminUser as any).username || "Admin";
+    if (input.customInstructions !== undefined) settings.subtext = sanitizeDonationText(input.customInstructions, 500);
     settings.customInstructions = settings.subtext || settings.customInstructions;
-    settings.thankYouNote = settings.thankYouNote || "Thank you for supporting ConceptNichod.";
+    if (input.thankYouNote !== undefined) settings.thankYouNote = sanitizeDonationText(input.thankYouNote, 500);
 
     await settings.save();
 
