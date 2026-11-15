@@ -44,7 +44,7 @@ const subjectsList = [
 ];
 
 const topicSchema = z.object({
-  subject: z.string({ required_error: "Please select a subject." }).min(2, "Subject must be at least 2 characters.").max(50),
+  subject: z.string({ error: "Please select a subject." }).min(2, "Subject must be at least 2 characters.").max(50),
   chapter: z.string().min(2, "Chapter must be at least 2 characters.").max(100),
   topic: z.string().min(3, "Topic name must be at least 3 characters.").max(100),
 });
