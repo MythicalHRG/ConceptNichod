@@ -387,8 +387,8 @@ export async function adminVerifyDonationAndSetAmount(payload: {
         isAnonymous: tx.isAnonymous,
         isVisible: true,
         utr: tx.utr,
-        transactionId: tx.transactionId,
-        transactionRef: tx._id,
+        transactionId: tx.transactionId || undefined,
+        transactionRef: String(tx._id),
         verifiedBy: tx.verifiedBy,
         donatedAt: tx.createdAt || new Date(),
         lastDonatedAt: tx.createdAt || new Date(),
@@ -401,7 +401,7 @@ export async function adminVerifyDonationAndSetAmount(payload: {
       if (tx.donorRecordId) {
         await Donor.findByIdAndUpdate(tx.donorRecordId, patronData, { new: true });
       } else {
-        const existingDonor = await Donor.findOne({ transactionRef: tx._id });
+        const existingDonor = await Donor.findOne({ transactionRef: String(tx._id) });
         if (existingDonor) {
           Object.assign(existingDonor, patronData);
           await existingDonor.save();
@@ -494,7 +494,7 @@ export async function adminToggleHallOfPatrons(
           isVisible: true,
           utr: tx.utr,
           transactionId: tx.transactionId,
-          transactionRef: tx._id,
+          transactionRef: String(tx._id),
           verifiedBy: (adminUser as any).username || "Admin",
           donatedAt: tx.createdAt || new Date(),
           lastDonatedAt: tx.createdAt || new Date(),
