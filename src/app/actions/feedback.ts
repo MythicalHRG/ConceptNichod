@@ -25,7 +25,7 @@ export async function submitFeedbackAction(formData: FormData) {
   }
 
   // Rate limiting: 3 submissions per 15 minutes per IP
-  const ip = getClientIp();
+  const ip = await getClientIp();
   const rawSession = cookies().get("user_session")?.value;
   const sessionUuid = verifySessionCookie(rawSession);
   const rateLimitKey = `feedback:${sessionUuid || ip}`;
