@@ -15,7 +15,7 @@ const ContentSchema = z.object({
 export async function POST(req: Request) {
   try {
     // 1. Session authentication check
-    const rawSession = cookies().get('user_session')?.value;
+    const rawSession = (await cookies()).get('user_session')?.value;
     const sessionUuid = verifySessionCookie(rawSession);
     if (!sessionUuid) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
