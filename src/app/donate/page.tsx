@@ -3,6 +3,7 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import { Rupee } from "@/components/ui/rupee-symbol";
 import {
   getPublicDonationPageData,
   submitDonationTransaction,
@@ -472,7 +473,7 @@ export default function DonatePage() {
                           {cfg.title}
                         </span>
                         <span className="text-base font-extrabold text-emerald-400">
-                          ₹{patron.amount.toLocaleString("en-IN")}
+                          <Rupee />{patron.amount.toLocaleString("en-IN")}
                         </span>
                       </div>
 
