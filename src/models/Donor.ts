@@ -18,7 +18,7 @@ export interface IDonor extends Document {
   isVisible: boolean;
   isPublic: boolean;
   utr?: string;
-  transactionId?: string;
+  transactionId?: string | null;
   transactionRef?: string | null;
   verifiedBy?: string | null;
   donatedAt: Date;
@@ -28,7 +28,7 @@ export interface IDonor extends Document {
 }
 
 const DonorSchema = new Schema<IDonor>({
-  uuid: { type: String, required: true, unique: true, default: randomUUID },
+  uuid: { type: String, required: true, unique: true, default: () => randomUUID() },
   userId: { type: String, default: null, index: true },
   userUuid: { type: String, default: null, index: true },
   username: { type: String, trim: true, default: null },
