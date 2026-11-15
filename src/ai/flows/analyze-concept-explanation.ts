@@ -6,7 +6,7 @@ import { verifySessionCookie } from '@/lib/session';
 import dbConnect from '@/lib/mongoose';
 import ConceptMirror from '@/models/ConceptMirror';
 import MistakeEntry from '@/models/MistakeEntry';
-import { checkDistributedRateLimit } from '@/lib/rate-limiter';
+import { checkDistributedRateLimit } from '@/lib/distributed-rate-limiter';
 
 export type DetectedMistake = {
   title: string;
