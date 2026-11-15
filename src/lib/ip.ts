@@ -40,9 +40,9 @@ export function sanitizeIp(ip: string): string {
   return "127.0.0.1";
 }
 
-export function getClientIp(
+export async function getClientIp(
   customHeaders?: Headers | Record<string, string | string[] | undefined> | null
-): string {
+): Promise<string> {
   try {
     let headerList: { get: (name: string) => string | null } | null = null;
 
@@ -61,7 +61,7 @@ export function getClientIp(
         };
       }
     } else {
-      headerList = headers();
+      headerList = await headers();
     }
 
     if (!headerList) return "127.0.0.1";
