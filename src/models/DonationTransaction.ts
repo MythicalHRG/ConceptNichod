@@ -35,7 +35,7 @@ export interface IDonationTransaction extends Document {
 }
 
 const DonationTransactionSchema = new Schema<IDonationTransaction>({
-  uuid: { type: String, required: true, unique: true, default: randomUUID },
+  uuid: { type: String, required: true, unique: true, default: () => randomUUID() },
   // Both IDs remain strings: ConceptNichod uses UUID strings, not Mongo ObjectIds.
   userId: { type: String, default: null, index: true },
   userUuid: { type: String, default: null, index: true },
@@ -68,7 +68,7 @@ const DonationTransactionSchema = new Schema<IDonationTransaction>({
 DonationTransactionSchema.index({ status: 1, createdAt: -1 });
 DonationTransactionSchema.index({ status: 1, isPublishedToPatrons: 1, verifiedAmount: -1 });
 
-DonationTransactionSchema.pre("save", function (next) {
+DonationTransactionSchema.pre("save", function (this: IDonationTransaction) {
   if (this.status !== "verified" || !this.verifiedAmount || this.verifiedAmount <= 0) {
     this.isPublishedToPatrons = false;
     this.isPublic = false;
@@ -78,7 +78,6 @@ DonationTransactionSchema.pre("save", function (next) {
     this.isPublic = Boolean(this.isPublishedToPatrons);
     if (!this.patronTier) this.patronTier = computePatronTier(this.verifiedAmount);
   }
-  next();
 });
 
 export const DonationTransaction: Model<IDonationTransaction> =
