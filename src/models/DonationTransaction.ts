@@ -45,7 +45,7 @@ const DonationTransactionSchema = new Schema<IDonationTransaction>({
   isAnonymous: { type: Boolean, default: false },
   utr: { type: String, required: true, unique: true, trim: true, match: [/^\d{12}$/, "UTR must be an exact 12-digit number"] },
   // Sparse unique index allows legacy rows without a Transaction ID.
-  transactionId: { type: String, required: false, unique: true, sparse: true, trim: true, uppercase: true, minlength: 6, maxlength: 45, match: /^[A-Z0-9_-]{6,45}$/ },
+  transactionId: { type: String, required: function (this: any) { return this.isNew; }, unique: true, sparse: true, trim: true, uppercase: true, minlength: 6, maxlength: 45, match: /^[A-Z0-9_-]{6,45}$/ },
   message: { type: String, trim: true, maxlength: 250, default: "" },
   claimedAmount: { type: Number, default: null, min: 0 },
   amount: { type: Number, default: null, min: 0 },
