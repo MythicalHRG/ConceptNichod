@@ -179,7 +179,7 @@ export async function loginAction(formData: FormData) {
         await dbConnect();
         if (!rawInput || !password) throw new Error("Missing email or password");
 
-        const ip = getClientIp();
+        const ip = await getClientIp();
         const accountRateKey = `login:account:${rawInput.toLowerCase()}`;
         const loginRateKey = `login:${ip}:${rawInput.toLowerCase()}`;
 
@@ -483,7 +483,7 @@ export async function resetPasswordAction(formData: FormData) {
     const passwordError = validatePassword(newPassword);
     if (passwordError) throw new Error(passwordError);
 
-    const ip = getClientIp();
+    const ip = await getClientIp();
     const isIpBanned = await Blacklist.findOne({ type: "ip", value: ip });
     if (isIpBanned) throw new Error("Access denied: Your IP address is banned.");
 
