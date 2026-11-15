@@ -16,7 +16,7 @@ const DONATIONS_ENABLED = process.env.DONATIONS_ENABLED === "true";
 
 async function verifyAdmin() {
   await dbConnect();
-  const rawSession = cookies().get("user_session")?.value;
+  const rawSession = (await cookies()).get("user_session")?.value;
   const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
 
@@ -117,7 +117,7 @@ export async function submitDonationUtrAction(payload: {
     return { success: false, error: "Enter a valid donation amount between ₹1 and ₹10,00,000 (up to 2 decimal places)." };
   }
 
-  const sessionUuid = verifySessionCookie(cookies().get("user_session")?.value);
+  const sessionUuid = verifySessionCookie((await cookies()).get("user_session")?.value);
   if (!sessionUuid) {
     return { success: false, error: "Authentication required. Please log in to submit a donation." };
   }
@@ -283,7 +283,7 @@ export async function getPendingDonationsAdminAction() {
  */
 export async function getCurrentUserDonationContextAction() {
   try {
-    const rawSession = cookies().get("user_session")?.value;
+    const rawSession = (await cookies()).get("user_session")?.value;
     const sessionUuid = verifySessionCookie(rawSession);
     if (!sessionUuid) return { success: false, username: null };
 
