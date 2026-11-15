@@ -21,7 +21,7 @@ function sanitize(str: string): string {
 
 async function getAuthenticatedUser() {
   await dbConnect();
-  const rawSession = cookies().get("user_session")?.value;
+  const rawSession = (await cookies()).get("user_session")?.value;
   const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) {
     throw new Error("Authentication required.");
