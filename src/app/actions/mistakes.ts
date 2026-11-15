@@ -5,7 +5,7 @@ import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
 import MistakeEntry from "@/models/MistakeEntry";
 import { verifySessionCookie } from "@/lib/session";
-import { checkDistributedRateLimit } from "@/lib/rate-limiter";
+import { checkDistributedRateLimit } from "@/lib/distributed-rate-limiter";
 import { recordUserStudyActivity } from "@/lib/streak";
 import { callOpenRouter, parseJsonResponse } from "@/lib/openrouter";
 
