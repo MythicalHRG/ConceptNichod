@@ -11,8 +11,6 @@ import { getClientIp } from "@/lib/ip";
 import { createSignedSessionCookie, verifySessionCookie } from "@/lib/session";
 import {
   checkDistributedRateLimit,
-  peekDistributedRateLimit,
-  recordDistributedFailedAttempt,
   resetDistributedRateLimit,
 } from "@/lib/rate-limiter";
 import { normalizeEmail, validateEmailDomain, validateEmail } from "@/lib/email-utils";
@@ -185,12 +183,12 @@ export async function loginAction(formData: FormData) {
         const accountRateKey = `login:account:${rawInput.toLowerCase()}`;
         const loginRateKey = `login:${ip}:${rawInput.toLowerCase()}`;
 
-        const accountRateStatus = await peekDistributedRateLimit(accountRateKey, 5, 15 * 60 * 1000);
+        const accountRateStatus = await checkDistributedRateLimit(accountRateKey, 5, 15 * 60 * 1000);
         if (!accountRateStatus.success) {
             throw new Error("This account has experienced too many failed login attempts. Please try again after 15 minutes.");
         }
 
-        const loginRateStatus = await peekDistributedRateLimit(loginRateKey, 5, 15 * 60 * 1000);
+        const loginRateStatus = await checkDistributedRateLimit(loginRateKey, 5, 15 * 60 * 1000);
         if (!loginRateStatus.success) {
             throw new Error("Too many failed login attempts. Please try again after 15 minutes.");
         }
@@ -215,8 +213,6 @@ export async function loginAction(formData: FormData) {
         });
 
         if (!user) {
-            await recordDistributedFailedAttempt(accountRateKey, 5, 15 * 60 * 1000);
-            await recordDistributedFailedAttempt(loginRateKey, 5, 15 * 60 * 1000);
             throw new Error("Invalid credentials");
         }
 
@@ -228,8 +224,6 @@ export async function loginAction(formData: FormData) {
 
         const isValid = await comparePassword(password, user.password);
         if (!isValid) {
-            await recordDistributedFailedAttempt(accountRateKey, 5, 15 * 60 * 1000);
-            await recordDistributedFailedAttempt(loginRateKey, 5, 15 * 60 * 1000);
             throw new Error("Invalid credentials");
         }
 
