@@ -154,7 +154,7 @@ export async function registerAction(formData: FormData) {
         // Delete OTP record after successful registration to prevent reuse (Account Takeover)
         await OtpVerification.deleteOne({ email });
 
-        cookies().set("user_session", createSignedSessionCookie(uuid), { 
+        (await cookies()).set("user_session", createSignedSessionCookie(uuid), { 
             httpOnly: true, 
             secure: process.env.NODE_ENV === "production", 
             sameSite: "lax",
@@ -243,7 +243,7 @@ export async function loginAction(formData: FormData) {
         }
         await user.save();
 
-        cookies().set("user_session", createSignedSessionCookie(user.uuid), { 
+        (await cookies()).set("user_session", createSignedSessionCookie(user.uuid), { 
             httpOnly: true, 
             secure: process.env.NODE_ENV === "production", 
             sameSite: "lax",
@@ -262,13 +262,13 @@ export async function loginAction(formData: FormData) {
 }
 
 export async function logoutAction() {
-    cookies().delete("user_session");
+    (await cookies()).delete("user_session");
     return { success: true };
 }
 
 export async function meAction() {
     try {
-        const rawSession = cookies().get("user_session")?.value;
+        const rawSession = (await cookies()).get("user_session")?.value;
         const sessionUuid = verifySessionCookie(rawSession);
         if (!sessionUuid) return { user: null };
 
@@ -297,7 +297,7 @@ export async function meAction() {
 
 export async function updateProfileAction(formData: FormData) {
     await dbConnect();
-    const rawSession = cookies().get("user_session")?.value;
+    const rawSession = (await cookies()).get("user_session")?.value;
     const sessionUuid = verifySessionCookie(rawSession);
     if (!sessionUuid) throw new Error("Not authenticated");
 
@@ -355,7 +355,7 @@ export async function updateProfileAction(formData: FormData) {
 
 export async function requestEmailChangeOtpAction(newEmail: string, currentPassword?: string) {
     await dbConnect();
-    const rawSession = cookies().get("user_session")?.value;
+    const rawSession = (await cookies()).get("user_session")?.value;
     const sessionUuid = verifySessionCookie(rawSession);
     if (!sessionUuid) throw new Error("Not authenticated");
 
@@ -428,7 +428,7 @@ export async function requestEmailChangeOtpAction(newEmail: string, currentPassw
 
 export async function confirmEmailChangeAction(newEmail: string, otp: string) {
     await dbConnect();
-    const rawSession = cookies().get("user_session")?.value;
+    const rawSession = (await cookies()).get("user_session")?.value;
     const sessionUuid = verifySessionCookie(rawSession);
     if (!sessionUuid) throw new Error("Not authenticated");
 
@@ -509,7 +509,7 @@ export async function resetPasswordAction(formData: FormData) {
 
 export async function changePasswordAction(formData: FormData) {
     await dbConnect();
-    const rawSession = cookies().get("user_session")?.value;
+    const rawSession = (await cookies()).get("user_session")?.value;
     const sessionId = verifySessionCookie(rawSession);
     if (!sessionId) throw new Error("Not authenticated");
 
@@ -540,7 +540,7 @@ export async function changePasswordAction(formData: FormData) {
 
 export async function requestDeleteAccountOtpAction(currentPassword: string) {
     await dbConnect();
-    const rawSession = cookies().get("user_session")?.value;
+    const rawSession = (await cookies()).get("user_session")?.value;
     const sessionUuid = verifySessionCookie(rawSession);
     if (!sessionUuid) throw new Error("Authentication required.");
 
@@ -618,7 +618,7 @@ export async function requestDeleteAccountOtpAction(currentPassword: string) {
 
 export async function deleteAccountAction(formData: FormData) {
     await dbConnect();
-    const rawSession = cookies().get("user_session")?.value;
+    const rawSession = (await cookies()).get("user_session")?.value;
     const sessionId = verifySessionCookie(rawSession);
     if (!sessionId) throw new Error("Not authenticated");
 
@@ -689,7 +689,7 @@ export async function deleteAccountAction(formData: FormData) {
     ]);
     await User.deleteOne({ uuid: sessionId });
 
-    cookies().delete("user_session");
+    (await cookies()).delete("user_session");
 
     return { success: true };
 }
