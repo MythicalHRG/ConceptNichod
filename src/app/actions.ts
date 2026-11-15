@@ -15,7 +15,7 @@ import { checkRateLimit } from "@/lib/rate-limiter";
 export async function generateContentAction(topicId: string, topicName:string, classLevel: string) {
   await dbConnect();
   
-  const rawSession = cookies().get("user_session")?.value;
+  const rawSession = (await cookies()).get("user_session")?.value;
   const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
   const rateLimit = checkRateLimit(`generate-content:${sessionUuid}`, 3, 10 * 60 * 1000);
@@ -65,7 +65,7 @@ export async function runFinalAnalysisAction(
   spokenAnswers: { question: string; answer: string }[],
   topicId: string
 ): Promise<{ analysis: FinalAnalysisOutput }> {
-  const rawSession = cookies().get("user_session")?.value;
+  const rawSession = (await cookies()).get("user_session")?.value;
   const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
   const rateLimit = checkRateLimit(`final-analysis:${sessionUuid}`, 5, 15 * 60 * 1000);
@@ -163,7 +163,7 @@ export async function runFinalAnalysisAction(
 }
 
 export async function generateAudioAction(text: string): Promise<string> {
-    const rawSession = cookies().get("user_session")?.value;
+    const rawSession = (await cookies()).get("user_session")?.value;
     const sessionUuid = verifySessionCookie(rawSession);
     if (!sessionUuid) throw new Error("Not authenticated");
 
@@ -192,7 +192,7 @@ export async function getDeepgramSessionKey(): Promise<{ key?: string; error?: s
 
 export async function createTopicAction(data: { name: string, subject: string, chapter: string }) {
   await dbConnect();
-  const rawSession = cookies().get("user_session")?.value;
+  const rawSession = (await cookies()).get("user_session")?.value;
   const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
   const rateLimit = checkRateLimit(`create-topic:${sessionUuid}`, 20, 60 * 60 * 1000);
@@ -221,7 +221,7 @@ export async function createTopicAction(data: { name: string, subject: string, c
 
 export async function markSummaryViewedAction(topicId: string) {
   await dbConnect();
-  const rawSession = cookies().get("user_session")?.value;
+  const rawSession = (await cookies()).get("user_session")?.value;
   const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
   
@@ -239,7 +239,7 @@ export async function updateTopicProgressAction(
   savedSpokenAnswers: string[]
 ) {
   await dbConnect();
-  const rawSession = cookies().get("user_session")?.value;
+  const rawSession = (await cookies()).get("user_session")?.value;
   const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
   if (!mongoose.isValidObjectId(topicId)) throw new Error("Invalid Topic ID");
