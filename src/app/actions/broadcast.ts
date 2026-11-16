@@ -1,4 +1,6 @@
 "use server";
+
+import { isPlatformOwner } from "@/lib/owner-access";
 import { cookies } from "next/headers";
 import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
@@ -8,20 +10,20 @@ import { verifySessionCookie } from "@/lib/session";
 
 const ADMIN_USERNAME = "mythicalhrg";
 
-async function verifyAdmin() {
+async function verifyOwner() {
   await dbConnect();
   const rawSession = (await cookies()).get("user_session")?.value;
   const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
 
   const user = await User.findOne({ uuid: sessionUuid }).lean();
-  if (!user || user.username !== ADMIN_USERNAME) {
+  if (!isPlatformOwner(user)) {
     throw new Error("Forbidden: Admin access only");
   }
 }
 
 export async function createBroadcastAction(formData: FormData) {
-  await verifyAdmin();
+  await verifyOwner();
   
   const subject = formData.get("subject") as string;
   const message = formData.get("message") as string;
@@ -93,7 +95,7 @@ export async function getUnreadCountAction() {
 }
 
 export async function deleteBroadcastAction(id: string) {
-  await verifyAdmin();
+  await verifyOwner();
   await Broadcast.findByIdAndDelete(id);
   return { success: true };
 }

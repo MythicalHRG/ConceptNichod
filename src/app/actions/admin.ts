@@ -1,4 +1,6 @@
 "use server";
+
+import { isPlatformOwner } from "@/lib/owner-access";
 import { cookies } from "next/headers";
 import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
@@ -10,16 +12,16 @@ import Donor from "@/models/Donor";
 import StudyGroup from "@/models/StudyGroup";
 import { verifySessionCookie } from "@/lib/session";
 
-const ADMIN_USERNAME = "mythicalhrg";
+const PLATFORM_OWNER_USERNAME = "mythicalhrg";
 
-async function verifyAdmin() {
+async function verifyOwner() {
   await dbConnect();
   const rawSession = (await cookies()).get("user_session")?.value;
   const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
 
   const user = await User.findOne({ uuid: sessionUuid });
-  if (!user || (user.username !== ADMIN_USERNAME && user.email?.toLowerCase() !== "mythicalhrg@gmail.com")) {
+  if (!isPlatformOwner(user)) {
     throw new Error("Forbidden: Admin access only");
   }
 
@@ -30,18 +32,18 @@ async function verifyAdmin() {
 }
 
 export async function getAllUsersAction() {
-  await verifyAdmin();
+  await verifyOwner();
   // Security: Exclude password hashes from serialization
   const users = await User.find({}).select("-password").sort({ createdAt: -1 }).lean();
   return { success: true, users: JSON.parse(JSON.stringify(users)) };
 }
 
 export async function deleteUserAction(uuid: string) {
-  await verifyAdmin();
+  await verifyOwner();
   
   // Protect admin from self-deletion
   const userToDelete = await User.findOne({ uuid }).lean();
-  if (userToDelete && userToDelete.username === ADMIN_USERNAME) {
+  if (userToDelete && userToDelete.username === PLATFORM_OWNER_USERNAME) {
     throw new Error("Cannot delete admin account");
   }
 
@@ -52,9 +54,9 @@ export async function deleteUserAction(uuid: string) {
 }
 
 export async function banEntityAction(type: "ip" | "email" | "username", value: string, reason?: string) {
-  await verifyAdmin();
+  await verifyOwner();
   
-  if (type === "username" && value.toLowerCase().trim() === ADMIN_USERNAME) {
+  if (type === "username" && value.toLowerCase().trim() === PLATFORM_OWNER_USERNAME) {
     throw new Error("Cannot ban admin username");
   }
 
@@ -70,13 +72,13 @@ export async function banEntityAction(type: "ip" | "email" | "username", value: 
 }
 
 export async function unbanEntityAction(id: string) {
-  await verifyAdmin();
+  await verifyOwner();
   await Blacklist.findByIdAndDelete(id);
   return { success: true };
 }
 
 export async function getBansAction() {
-  await verifyAdmin();
+  await verifyOwner();
   const bans = await Blacklist.find({}).sort({ createdAt: -1 }).lean();
   return { success: true, bans: JSON.parse(JSON.stringify(bans)) };
 }
@@ -86,8 +88,8 @@ export async function updateUserCredentialsAction(params: {
   newUsername?: string;
   newEmail?: string;
 }) {
-  const adminUser = await verifyAdmin();
-  if (adminUser.username !== ADMIN_USERNAME) {
+  const ownerUser = await verifyOwner();
+  if (ownerUser.username !== PLATFORM_OWNER_USERNAME) {
     throw new Error("Unauthorized: Only the platform owner can modify user credentials.");
   }
 
@@ -115,12 +117,12 @@ export async function updateUserCredentialsAction(params: {
       throw new Error("Username must be 3-30 characters and contain only letters, numbers, underscores (_), and periods (.).");
     }
 
-    if (trimmedUsername.toLowerCase() === ADMIN_USERNAME.toLowerCase() && targetUser.username.toLowerCase() !== ADMIN_USERNAME.toLowerCase()) {
-      throw new Error(`Username "${ADMIN_USERNAME}" is reserved for the platform owner.`);
+    if (trimmedUsername.toLowerCase() === PLATFORM_OWNER_USERNAME.toLowerCase() && targetUser.username.toLowerCase() !== PLATFORM_OWNER_USERNAME.toLowerCase()) {
+      throw new Error(`Username "${PLATFORM_OWNER_USERNAME}" is reserved for the platform owner.`);
     }
 
-    if (targetUser.username.toLowerCase() === ADMIN_USERNAME.toLowerCase() && trimmedUsername.toLowerCase() !== ADMIN_USERNAME.toLowerCase()) {
-      throw new Error(`The root platform owner username "${ADMIN_USERNAME}" cannot be changed.`);
+    if (targetUser.username.toLowerCase() === PLATFORM_OWNER_USERNAME.toLowerCase() && trimmedUsername.toLowerCase() !== PLATFORM_OWNER_USERNAME.toLowerCase()) {
+      throw new Error(`The root platform owner username "${PLATFORM_OWNER_USERNAME}" cannot be changed.`);
     }
 
     // Check collision with another user
@@ -198,7 +200,7 @@ export async function updateUserCredentialsAction(params: {
 }
 
 export async function getAllStudyGroupsAdminAction() {
-  await verifyAdmin();
+  await verifyOwner();
   await dbConnect();
 
   const groups = await StudyGroup.find({}).sort({ createdAt: -1 }).lean();
@@ -235,8 +237,8 @@ export async function getAllStudyGroupsAdminAction() {
 }
 
 export async function deleteStudyGroupAdminAction(groupId: string) {
-  const admin = await verifyAdmin();
-  if (admin.username !== ADMIN_USERNAME) {
+  const owner = await verifyOwner();
+  if (owner.username !== PLATFORM_OWNER_USERNAME) {
     throw new Error("Forbidden: Only @mythicalhrg can delete study groups.");
   }
 

@@ -1,5 +1,7 @@
 "use server";
 
+
+import { isPlatformOwner } from "@/lib/owner-access";
 import { cookies } from "next/headers";
 import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
@@ -366,7 +368,7 @@ export async function sendDirectMessageAction(targetUsername: string, body: stri
 
 export async function adminDeleteStudyGroupAction(groupId: string) {
   const user = await getAuthenticatedUser();
-  if (user.username !== "mythicalhrg") {
+  if (!isPlatformOwner(user)) {
     throw new Error("Forbidden: Only @mythicalhrg is authorized to delete study groups.");
   }
 

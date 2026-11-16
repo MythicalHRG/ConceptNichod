@@ -38,7 +38,7 @@ test('38.3 Owner security guards protect mythicalhrg and mythicalhrg@gmail.com',
   // Danger zone account deletion guards
   assert.ok(authContent.includes('mythicalhrg@gmail.com'), 'Must guard mythicalhrg@gmail.com against account deletion');
   // Admin authorization checks
-  assert.ok(adminContent.includes('mythicalhrg@gmail.com'), 'Admin authorization must recognize mythicalhrg@gmail.com');
+  assert.ok(adminContent.includes('isPlatformOwner(user)'), 'Admin server actions must use centralized Owner authorization');
 });
 
 test('38.4 User Profiles display Birthday with Lucide Cake icon matching other detail badges', () => {

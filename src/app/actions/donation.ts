@@ -1,6 +1,8 @@
 // src/app/actions/donation.ts
 "use server";
 
+
+import { isPlatformOwner } from "@/lib/owner-access";
 import { revalidatePath } from "next/cache";
 import connectToDatabase from "@/lib/mongoose";
 import DonationTransaction from "@/models/DonationTransaction";
@@ -24,12 +26,12 @@ import {
 const VALID_TIERS: PatronTier[] = ["LEGEND", "DIAMOND", "GOLD", "SILVER", "SUPPORTER"];
 const DONATIONS_ENABLED = process.env.DONATIONS_ENABLED === "true";
 
-async function requireAdminSession() {
+async function requireOwnerSession() {
   await connectToDatabase();
   const sessionUuid = verifySessionCookie((await cookies()).get("user_session")?.value);
   if (!sessionUuid) throw new Error("Unauthorized: Please log in as Admin.");
   const adminUser = await User.findOne({ uuid: sessionUuid }).select("uuid username role email").lean();
-  if (!adminUser || adminUser.username !== "mythicalhrg") throw new Error("Forbidden: Admin privileges required.");
+  if (!isPlatformOwner(adminUser)) throw new Error("Forbidden: Owner privileges required.");
   return adminUser;
 }
 
@@ -224,7 +226,7 @@ export async function submitDonationTransaction(formData: {
  */
 export async function getAdminDonationDashboard(filterStatus?: string, search?: string) {
   try {
-    await requireAdminSession();
+    await requireOwnerSession();
 
     const queryParts: Record<string, any>[] = [];
     if (filterStatus === "pending") {
@@ -352,7 +354,7 @@ export async function adminVerifyDonationAndSetAmount(payload: {
   adminNote?: string;
 }) {
   try {
-    const adminUser = await requireAdminSession();
+    const adminUser = await requireOwnerSession();
 
     const amountCheck = validateAdminVerifiedAmount(payload.verifiedAmount);
     if (!amountCheck.valid || !amountCheck.data) {
@@ -471,7 +473,7 @@ export async function adminToggleHallOfPatrons(
   publish: boolean
 ) {
   try {
-    const adminUser = await requireAdminSession();
+    const adminUser = await requireOwnerSession();
 
     const tx = await DonationTransaction.findById(transactionDbId);
     if (!tx) {
@@ -563,7 +565,7 @@ export async function adminRejectDonationTransaction(
   adminNote?: string
 ) {
   try {
-    const adminUser = await requireAdminSession();
+    const adminUser = await requireOwnerSession();
 
     const tx = await DonationTransaction.findById(transactionDbId);
     if (!tx) {
@@ -617,7 +619,7 @@ export async function adminUpdateDonationSettings(input: {
   thankYouNote?: string;
 }) {
   try {
-    const adminUser = await requireAdminSession();
+    const adminUser = await requireOwnerSession();
 
     const upiId = sanitizeDonationText(input.upiId, 100);
     const payeeName = sanitizeDonationText(input.payeeName, 80);
@@ -713,7 +715,7 @@ export async function submitDonationUtrAction(payload: { amount: number; utr: st
   return { success: false, error: "The donation form has been updated. Submit your donor name, 12-digit UTR and payment-app Transaction ID using /donate." };
 }
 export async function reconcileDonationManuallyAction(payload: { utr: string; bankReference: string; receivedAmount: number; recipientVpa: string }) {
-  await requireAdminSession();
+  await requireOwnerSession();
   const utr = String(payload.utr || "").trim();
   if (String(payload.bankReference || "").trim() !== utr) return { success:false, error:"Bank reference mismatch." };
   const tx = await DonationTransaction.findOne({ utr }).select("_id").lean();
@@ -744,7 +746,7 @@ export async function getCurrentUserDonationContextAction() {
   } catch { return { success:false, username:null }; }
 }
 export async function getAdminDonationSettingsAction() {
-  await requireAdminSession();
+  await requireOwnerSession();
   const settings = await DonationSetting.findOne().select("upiId qrCodeUrl isEnabled").lean();
   return {
     success: true,
@@ -762,13 +764,13 @@ export async function addDonorCardAction(payload: { username:string; amount:numb
   return adminAddManualPatron({ name:payload.username, amount:payload.amount, tier:payload.tier, message:payload.message });
 }
 export async function deleteDonorCardAction(uuid:string) {
-  await requireAdminSession(); await connectToDatabase();
+  await requireOwnerSession(); await connectToDatabase();
   const donor = await Donor.findOne({ uuid });
   if (donor) { donor.isVisible=false; donor.isPublic=false; await donor.save(); }
   return { success:true };
 }
 export async function adminUpdatePatron(payload:{ donorId:string; name?:string; amount:number|string; tier?:string; message?:string; isAnonymous?:boolean }) {
-  await requireAdminSession(); await connectToDatabase();
+  await requireOwnerSession(); await connectToDatabase();
   const amount = validateAdminVerifiedAmount(payload.amount);
   if (!amount.valid || !amount.data) return {success:false,error:amount.error || "Invalid amount."};
   const donor = await Donor.findById(payload.donorId);
@@ -790,7 +792,7 @@ export async function adminUpdatePatron(payload:{ donorId:string; name?:string; 
   return {success:true,message:"Hall of Patrons entry updated."};
 }
 export async function adminRemovePatron(donorId:string) {
-  await requireAdminSession(); await connectToDatabase();
+  await requireOwnerSession(); await connectToDatabase();
   const donor = await Donor.findById(donorId);
   if (!donor) return {success:false,error:"Patron not found."};
   donor.isVisible=false; donor.isPublic=false; await donor.save();
@@ -799,7 +801,7 @@ export async function adminRemovePatron(donorId:string) {
   return {success:true,message:"Patron hidden from the Hall of Patrons."};
 }
 export async function adminAddManualPatron(payload:{name:string;amount:number|string;tier?:string;message?:string;isAnonymous?:boolean}) {
-  await requireAdminSession(); await connectToDatabase();
+  await requireOwnerSession(); await connectToDatabase();
   const amount = validateAdminVerifiedAmount(payload.amount);
   const name = sanitizeDonationText(payload.name,60);
   if (!amount.valid || !amount.data) return {success:false,error:amount.error || "Invalid amount."};

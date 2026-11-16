@@ -119,7 +119,7 @@ test('35.5 Codebase Verification: Admin server action and UI components exist an
   const studyGroupActionsPath = path.resolve('src/app/actions/study-groups.ts');
   const studyGroupContent = fs.readFileSync(studyGroupActionsPath, 'utf8');
   assert.ok(studyGroupContent.includes('export async function adminDeleteStudyGroupAction('));
-  assert.ok(studyGroupContent.includes('user.username !== "mythicalhrg"'));
+  assert.ok(studyGroupContent.includes('isPlatformOwner(user)'));
 
   const adminPanelPath = path.resolve('src/components/admin/admin-panel.tsx');
   const panelContent = fs.readFileSync(adminPanelPath, 'utf8');
