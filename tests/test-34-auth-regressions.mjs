@@ -46,7 +46,8 @@ test("donation payments remain disabled until an explicit deployment opt-in", ()
   assert.match(donation, /if \(!DONATIONS_ENABLED\)[\s\S]*?Donations are temporarily unavailable/);
   assert.match(settings, /upiId: \{ type: String, default: "" \}/);
   assert.doesNotMatch(page, /harsh\.2525@ptaxis/);
-  assert.match(page, /receiverUpiId \?/);
+  assert.match(page, /settings\.isEnabled \?/);
+  assert.match(page, /Donations are temporarily paused/);
 });
 
 test("AI generation and text-to-speech server actions enforce per-user rate limits", () => {
