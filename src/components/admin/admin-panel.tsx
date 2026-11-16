@@ -170,7 +170,7 @@ export function AdminPanel() {
 
   // Donation & UPI State
   const [donationSettings, setDonationSettings] = useState({
-    upiId: "harsh.2525@ptaxis",
+    upiId: "",
   });
   const [isSavingDonation, setIsSavingDonation] = useState(false);
 
@@ -203,7 +203,7 @@ export function AdminPanel() {
       if (studyGroupsRes?.success) setStudyGroups(studyGroupsRes.groups || []);
       const donationRes = await getDonationInfoAction().catch(() => ({ success: true, settings: null }));
       if (donationRes?.success && donationRes.settings) {
-        setDonationSettings({ upiId: donationRes.settings.upiId || "harsh.2525@ptaxis" });
+        setDonationSettings({ upiId: donationRes.settings.upiId || "" });
       }
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
