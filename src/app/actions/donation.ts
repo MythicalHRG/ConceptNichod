@@ -293,7 +293,7 @@ export async function getAdminDonationDashboard(filterStatus?: string, search?: 
       utr: t.utr,
       transactionId: t.transactionId || "",
       message: t.message || "",
-      status: (t.status || "pending") as "pending" | "verified" | "rejected",
+      status: t.status || "pending",
       verifiedAmount: t.verifiedAmount ?? null,
       patronTier: t.patronTier || null,
       isPublishedToPatrons: Boolean(t.isPublishedToPatrons),
