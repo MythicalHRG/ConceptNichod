@@ -96,7 +96,7 @@ export default function DonatePage() {
     async function load() {
       setLoadingData(true);
       const res = await getPublicDonationPageData();
-      if (res.settings) setSettings(res.settings);
+      if (res.settings) setSettings((prev) => ({ ...prev, ...res.settings, upiId: res.settings.upiId || "" }));
       if (res.patrons) setPatrons(res.patrons as PatronItem[]);
       if (typeof res.totalRaised === "number") setTotalRaised(res.totalRaised);
       setLoadingData(false);
