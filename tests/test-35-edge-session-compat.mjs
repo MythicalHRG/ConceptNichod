@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createHmac, webcrypto } from "node:crypto";
+import { webcrypto } from "node:crypto";
+import { createSignedSessionCookie } from "../src/lib/session.ts";
 import { verifyEdgeSessionCookie } from "../src/lib/edge-session.ts";
 
 const uuid = "123e4567-e89b-12d3-a456-426614174000";
@@ -16,8 +17,8 @@ test("Edge verifier accepts the exact HMAC cookie produced by the Node session s
     process.env.NODE_ENV = "production";
     process.env.SESSION_SECRET = `  "${secret}"  `;
     process.env.ENCRYPTION_SECRET_KEY = "different-fallback-secret-that-is-also-long-enough";
-    const signature = createHmac("sha256", secret).update(uuid).digest("hex");
-    assert.equal(await verifyEdgeSessionCookie(`${uuid}.${signature}`), uuid);
+    const signedCookie = createSignedSessionCookie(uuid);
+    assert.equal(await verifyEdgeSessionCookie(signedCookie), uuid);
     assert.equal(await verifyEdgeSessionCookie(`${uuid}.${"0".repeat(64)}`), null);
     assert.equal(await verifyEdgeSessionCookie("not-a-session"), null);
   } finally {
