@@ -23,12 +23,9 @@ async function verifyAdmin() {
     throw new Error("Forbidden: Admin access only");
   }
 
-  // Ensure role is synchronized
-  if (user.role !== "admin") {
-    user.role = "admin";
-    await user.save();
-  }
-
+  // Authorization is based on the dedicated root account identity above.
+  // Preserve the stored role (including "owner") instead of rewriting it
+  // every time an admin action executes.
   return user;
 }
 
