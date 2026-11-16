@@ -30,3 +30,10 @@ test("shared rate-limit model defines unique window keys and TTL cleanup", () =>
   assert.match(source, /expiresAt:\s*1/);
   assert.match(source, /expireAfterSeconds:\s*0/);
 });
+
+test("OTP fallback rate limits scope missing proxy IPs by email", () => {
+  const otp = fs.readFileSync("src/app/api/auth/otp/route.ts", "utf8");
+  assert.match(otp, /otp:verify:ip:\$\{ip\}:\$\{email\}/);
+  assert.match(otp, /otp:verify:email:\$\{email\}/);
+  assert.match(otp, /ipUnavailable = ip === "127\.0\.0\.1" \|\| ip === "unknown"/);
+});
