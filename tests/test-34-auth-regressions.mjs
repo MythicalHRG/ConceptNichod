@@ -87,3 +87,19 @@ test("topic progress persistence validates ownership, status, answer bounds, and
   assert.ok(progress.includes("topic-progress:${sessionUuid}"));
   assert.match(progress, /\{ _id: topicId, userId: sessionUuid \}/);
 });
+
+test("registration fallback rate limits are scoped by email when the proxy IP is unavailable", () => {
+  const registerStart = auth.indexOf("export async function registerAction");
+  const registerEnd = auth.indexOf("export async function loginAction", registerStart);
+  const register = auth.slice(registerStart, registerEnd);
+  assert.match(register, /ipUnavailable = ip === "127\\.0\\.0\\.1" \\|\\| ip === "unknown"/);
+  assert.match(register, /register:\\$\\{ip\\}:\\$\\{normalizedEmail\\}/);
+  assert.match(register, /register:email:\\$\\{normalizedEmail\\}/);
+});
+
+test("login does not rewrite the existing platform owner's database role", () => {
+  const loginStart = auth.indexOf("export async function loginAction");
+  const loginEnd = auth.indexOf("export async function logoutAction", loginStart);
+  const login = auth.slice(loginStart, loginEnd);
+  assert.doesNotMatch(login, /user\\.role\\s*=\\s*"owner"/);
+});
