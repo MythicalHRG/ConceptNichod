@@ -159,9 +159,10 @@ export async function submitDonationTransaction(formData: {
 
     if (existing) {
       const dupField = existing.utr === utr ? "12-digit UTR" : "Transaction ID";
+      const existingStatus = String(existing.status || "pending").toUpperCase();
       return {
         success: false,
-        error: `This ${dupField} has already been submitted (Status: ${existing.status.toUpperCase()}).`,
+        error: `This ${dupField} has already been submitted (Status: ${existingStatus}).`,
       };
     }
 
@@ -226,23 +227,27 @@ export async function getAdminDonationDashboard(filterStatus?: string, search?: 
   try {
     await requireAdminSession();
 
-    const query: Record<string, any> = {};
-    if (filterStatus && ["pending", "verified", "rejected"].includes(filterStatus)) {
-      query.status = filterStatus;
+    const queryParts: Record<string, any>[] = [];
+    if (filterStatus === "pending") {
+      // Legacy records created before status tracking must remain reviewable.
+      queryParts.push({ $or: [{ status: "pending" }, { status: { $exists: false } }, { status: null }] });
+    } else if (filterStatus && ["verified", "rejected"].includes(filterStatus)) {
+      queryParts.push({ status: filterStatus });
     }
 
     if (search && search.trim() !== "") {
       const escaped = search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const regex = new RegExp(escaped, "i");
-      query.$or = [
+      queryParts.push({ $or: [
         { utr: regex },
         { transactionId: regex },
         { donorName: regex },
         { username: regex },
-      ];
+      ] });
     }
+    const query = queryParts.length === 0 ? {} : queryParts.length === 1 ? queryParts[0] : { $and: queryParts };
 
-    const [transactionsRaw, statsAgg, settingsRaw, patronsRaw] = await Promise.all([
+    const [transactionsRaw, statsAgg, settingsRaw, patronsRaw, legacyPendingCount] = await Promise.all([
       DonationTransaction.find(query).sort({ createdAt: -1 }).limit(250).lean(),
       DonationTransaction.aggregate([
         {
@@ -259,6 +264,7 @@ export async function getAdminDonationDashboard(filterStatus?: string, search?: 
       ]),
       DonationSetting.findOne().lean(),
       Donor.find().sort({ amount: -1, donatedAt: -1 }).limit(200).lean(),
+      DonationTransaction.countDocuments({ $or: [{ status: { $exists: false } }, { status: null }] }),
     ]);
 
     const summary = {
@@ -268,8 +274,9 @@ export async function getAdminDonationDashboard(filterStatus?: string, search?: 
       totalVerifiedAmount: 0,
     };
 
+    summary.pendingCount = legacyPendingCount;
     for (const row of statsAgg) {
-      if (row._id === "pending") summary.pendingCount = row.count;
+      if (row._id === "pending") summary.pendingCount += row.count;
       if (row._id === "verified") {
         summary.verifiedCount = row.count;
         summary.totalVerifiedAmount = row.verifiedSum || 0;
@@ -287,7 +294,7 @@ export async function getAdminDonationDashboard(filterStatus?: string, search?: 
       utr: t.utr,
       transactionId: t.transactionId,
       message: t.message || "",
-      status: t.status as "pending" | "verified" | "rejected",
+      status: (t.status || "pending") as "pending" | "verified" | "rejected",
       verifiedAmount: t.verifiedAmount ?? null,
       patronTier: t.patronTier || null,
       isPublishedToPatrons: Boolean(t.isPublishedToPatrons),
@@ -339,6 +346,8 @@ export async function getAdminDonationDashboard(filterStatus?: string, search?: 
 export async function adminVerifyDonationAndSetAmount(payload: {
   transactionDbId: string;
   verifiedAmount: number | string;
+  bankReference: string;
+  recipientVpa: string;
   publishToHallOfPatrons: boolean;
   customTier?: string;
   adminNote?: string;
@@ -361,12 +370,28 @@ export async function adminVerifyDonationAndSetAmount(payload: {
       return { success: false, error: "Donation transaction not found." };
     }
 
+    // An admin-entered amount is not proof of payment. Require explicit bank-record
+    // reference and recipient VPA confirmation before changing a transaction to verified.
+    const bankReference = sanitizeDonationText(payload.bankReference || "", 60).replace(/\\s+/g, "");
+    if (!bankReference || bankReference !== String(tx.utr)) {
+      return { success: false, error: "Bank statement reference must exactly match the submitted UTR." };
+    }
+    const settings = await DonationSetting.findOne().select("upiId").lean();
+    const configuredVpa = String((settings as any)?.upiId || "").trim().toLowerCase();
+    const recipientVpa = sanitizeDonationText(payload.recipientVpa || "", 100).trim().toLowerCase();
+    if (!configuredVpa || !recipientVpa || recipientVpa !== configuredVpa) {
+      return { success: false, error: "Recipient VPA must match the configured donation account and the bank record." };
+    }
+
     const tier: PatronTier =
       payload.customTier && VALID_TIERS.includes(payload.customTier as PatronTier)
         ? (payload.customTier as PatronTier)
         : computePatronTier(confirmedAmount);
 
     tx.status = "verified";
+    tx.bankReference = bankReference;
+    tx.recipientVpa = configuredVpa;
+    tx.verificationMethod = "manual-bank-reconciliation";
     tx.verifiedAmount = confirmedAmount;
     tx.patronTier = tier;
     tx.isPublishedToPatrons = Boolean(payload.publishToHallOfPatrons);
@@ -729,6 +754,12 @@ export async function adminUpdatePatron(payload:{ donorId:string; name?:string; 
   const donor = await Donor.findById(payload.donorId);
   if (!donor) return {success:false,error:"Patron not found."};
   const tier = payload.tier && VALID_TIERS.includes(payload.tier as PatronTier) ? payload.tier as PatronTier : computePatronTier(amount.data);
+  if (donor.transactionRef) {
+    const linkedTransaction = await DonationTransaction.findById(donor.transactionRef).select("status verifiedAmount").lean();
+    if (linkedTransaction && (linkedTransaction.status !== "verified" || Number(linkedTransaction.verifiedAmount) !== amount.data)) {
+      return { success:false, error:"The amount of a linked payment record is locked. Reconcile the bank reference and recipient VPA in the transaction queue first." };
+    }
+  }
   donor.name = sanitizeDonationText(payload.name || donor.name,60);
   donor.amount = amount.data; donor.totalAmount = amount.data; donor.tier = tier;
   donor.message = sanitizeDonationText(payload.message || "",250); donor.latestMessage = donor.message;
