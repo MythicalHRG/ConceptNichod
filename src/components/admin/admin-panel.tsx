@@ -1333,6 +1333,21 @@ export function AdminPanel() {
                     </p>
                   </div>
 
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      Verified QR Image URL (Optional)
+                    </label>
+                    <Input
+                      type="url"
+                      value={donationSettings.qrCodeUrl}
+                      onChange={(e) => setDonationSettings((prev) => ({ ...prev, qrCodeUrl: e.target.value }))}
+                      placeholder="https://.../verified-upi-qr.png"
+                      className="font-mono text-sm"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Add a QR image only after confirming that it encodes the same recipient VPA above. Without one, the donation page displays the copyable UPI ID only.
+                    </p>
+                  </div>
                   <Button type="submit" disabled={isSavingDonation} className="w-full sm:w-auto">
                     {isSavingDonation ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
