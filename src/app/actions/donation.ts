@@ -718,7 +718,13 @@ export async function reconcileDonationManuallyAction(payload: { utr: string; ba
   if (!tx) return { success:false, error:"No donation submission found for this UTR." };
   const settings = await DonationSetting.findOne().select("upiId").lean();
   if (String(payload.recipientVpa || "").trim().toLowerCase() !== String((settings as any)?.upiId || "").trim().toLowerCase()) return { success:false, error:"Recipient VPA does not match the configured donation UPI ID." };
-  return adminVerifyDonationAndSetAmount({ transactionDbId:String(tx._id), verifiedAmount:payload.receivedAmount, publishToHallOfPatrons:false });
+  return adminVerifyDonationAndSetAmount({
+    transactionDbId: String(tx._id),
+    verifiedAmount: payload.receivedAmount,
+    bankReference: payload.bankReference,
+    recipientVpa: payload.recipientVpa,
+    publishToHallOfPatrons: false,
+  });
 }
 export async function getPendingDonationsAdminAction() {
   const res = await getAdminDonationDashboard("pending");
