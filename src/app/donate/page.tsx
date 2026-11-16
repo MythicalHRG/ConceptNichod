@@ -213,66 +213,45 @@ export default function DonatePage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Step 1: Direct UPI QR Card */}
           <div className="lg:col-span-5 bg-slate-900/90 border border-slate-800 rounded-2xl p-6 sm:p-8 space-y-6">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">
-                Step 1 • Scan & Pay Any Amount
-              </span>
-              <span className="text-[11px] text-slate-400">Direct UPI</span>
-            </div>
-
-            <div className="bg-white p-4 rounded-2xl flex flex-col items-center justify-center max-w-[240px] mx-auto shadow-xl">
-              <img
-                src={settings.qrCodeUrl || "/qr.png"}
-                alt="ConceptNichod UPI QR Code"
-                className="w-48 h-48 object-contain rounded-lg"
-              />
-              <span className="mt-2 text-xs font-bold text-slate-800">
-                Pay to {settings.payeeName}
-              </span>
-            </div>
-
-            {/* Copyable UPI ID Box */}
-            <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-[11px] text-slate-500 uppercase font-semibold">
-                  Official UPI ID
-                </p>
-                <p className="text-sm font-mono font-bold text-slate-200 truncate">
-                  {receiverUpiId ? receiverUpiId : "Recipient UPI ID will appear once enabled."}
+            {settings.isEnabled ? (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">
+                    Step 1 • Scan & Pay Any Amount
+                  </span>
+                  <span className="text-[11px] text-slate-400">Direct UPI</span>
+                </div>
+                <div className="bg-white p-4 rounded-2xl flex flex-col items-center justify-center max-w-[240px] mx-auto shadow-xl">
+                  <img src={settings.qrCodeUrl} alt="ConceptNichod UPI QR Code" className="w-48 h-48 object-contain rounded-lg" />
+                  <span className="mt-2 text-xs font-bold text-slate-800">Pay to {settings.payeeName}</span>
+                </div>
+                <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[11px] text-slate-500 uppercase font-semibold">Official UPI ID</p>
+                    <p className="text-sm font-mono font-bold text-slate-200 truncate">{receiverUpiId}</p>
+                  </div>
+                  <button type="button" onClick={handleCopyUpi} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition shrink-0">
+                    {copiedUpi ? <><CheckCircle2 className="w-3.5 h-3.5" />Copied</> : <><Copy className="w-3.5 h-3.5" />Copy ID</>}
+                  </button>
+                </div>
+                <div className="bg-indigo-950/30 border border-indigo-500/20 rounded-xl p-4 space-y-2 text-xs text-slate-300">
+                  <div className="flex items-center gap-2 font-semibold text-indigo-300">
+                    <ShieldCheck className="w-4 h-4 shrink-0" />
+                    Manual Admin Reconciliation
+                  </div>
+                  <p className="text-slate-400 leading-relaxed">
+                    After paying, retain your 12-digit UTR and payment-app Transaction ID. The Admin checks the bank record and recipient account before verifying a submission.
+                  </p>
+                </div>
+              </>
+            ) : (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-5 space-y-2">
+                <p className="text-sm font-bold text-amber-200">Donations are temporarily paused</p>
+                <p className="text-xs leading-relaxed text-slate-300">
+                  The recipient account has not been enabled for payments yet. No QR code or payment ID is displayed. Please do not send money until the official account is confirmed.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={handleCopyUpi}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition shrink-0"
-              >
-                {copiedUpi ? (
-                  <>
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    Copied
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-3.5 h-3.5" />
-                    Copy ID
-                  </>
-                )}
-              </button>
-            </div>
-
-            <div className="bg-indigo-950/30 border border-indigo-500/20 rounded-xl p-4 space-y-2 text-xs text-slate-300">
-              <div className="flex items-center gap-2 font-semibold text-indigo-300">
-                <ShieldCheck className="w-4 h-4 shrink-0" />
-                Manual Admin Reconciliation
-              </div>
-              <p className="text-slate-400 leading-relaxed">
-                After paying via GPay, PhonePe, Paytm, or BHIM, copy your{" "}
-                <strong className="text-slate-200">12-digit UTR</strong> and{" "}
-                <strong className="text-slate-200">Transaction ID</strong>. Our Admin manually
-                verifies every transaction in the Admin Panel, enters the exact amount received,
-                and promotes your profile to the <strong className="text-amber-300">Hall of Patrons</strong>.
-              </p>
-            </div>
+            )}
           </div>
 
           {/* Step 2: Submit UTR + Transaction ID Form */}
