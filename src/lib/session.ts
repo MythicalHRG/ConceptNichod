@@ -1,7 +1,11 @@
 import crypto from "crypto";
 
+function cleanSessionSecret(value?: string): string {
+  return (value || "").trim().replace(/^[\"']+|[\"']+$/g, "").trim();
+}
+
 function getSessionSecret(): string {
-  const configured = (process.env.SESSION_SECRET || process.env.ENCRYPTION_SECRET_KEY || "").trim();
+  const configured = cleanSessionSecret(process.env.SESSION_SECRET) || cleanSessionSecret(process.env.ENCRYPTION_SECRET_KEY);
   if (configured) {
     if (process.env.NODE_ENV === "production" && Buffer.byteLength(configured, "utf8") < 32) {
       throw new Error("SESSION_SECRET or ENCRYPTION_SECRET_KEY must contain at least 32 bytes in production.");
