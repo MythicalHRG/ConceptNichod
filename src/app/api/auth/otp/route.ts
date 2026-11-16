@@ -7,6 +7,7 @@ import Blacklist from '@/models/Blacklist';
 import nodemailer from 'nodemailer';
 import { getClientIp } from '@/lib/ip';
 import { checkDistributedRateLimit } from '@/lib/distributed-rate-limiter';
+import { normalizeEmail } from '@/lib/email-utils';
 
 const MAX_VERIFY_ATTEMPTS = 5;
 const RESEND_COOLDOWN_MS = 60 * 1000; // 60 seconds cooldown
@@ -84,7 +85,185 @@ export async function POST(req: Request) {
 
       if (isPasswordReset) {
         const safeEmail = escapeRegex(email);
-        const existingUser = await User.findOne({ email: new RegExp(`^${safeEmail}$`, 'i') });
+        const safeCanonicalEmail = escapeRegex(normalizeEmail(email));
+        const existingUser = await User.findOne({
+          $or: [
+            { email: new RegExp(`^${safeEmail}import { NextResponse } from 'next/server';
+import crypto from 'crypto';
+import dbConnect from '@/lib/mongoose';
+import OtpVerification from '@/models/OtpVerification';
+import User from '@/models/User';
+import Blacklist from '@/models/Blacklist';
+import nodemailer from 'nodemailer';
+import { getClientIp } from '@/lib/ip';
+import { checkDistributedRateLimit } from '@/lib/distributed-rate-limiter';
+import { normalizeEmail } from '@/lib/email-utils';
+
+const MAX_VERIFY_ATTEMPTS = 5;
+const RESEND_COOLDOWN_MS = 60 * 1000; // 60 seconds cooldown
+
+function validateEmailDomain(email: string) {
+  return email.endsWith("@gmail.com") || email.endsWith("@outlook.com") || email.endsWith("@outlook.in");
+}
+
+export async function POST(req: Request) {
+  try {
+    let { email, action, otp, isPasswordReset, username } = await req.json();
+
+    if (email) {
+      email = email.toLowerCase().trim();
+    }
+
+    if (!email) {
+      return NextResponse.json({ error: 'Email is required' }, { status: 400 });
+    }
+
+    await dbConnect();
+
+    const ip = await getClientIp(req.headers);
+
+    // Blacklist enforcement
+    const isIpBanned = await Blacklist.findOne({ type: "ip", value: ip });
+    if (isIpBanned) {
+      return NextResponse.json({ error: 'Access denied: Your IP address is banned.' }, { status: 403 });
+    }
+
+    const isEmailBanned = await Blacklist.findOne({ type: "email", value: email });
+    if (isEmailBanned) {
+      return NextResponse.json({ error: 'Access denied: This email address is banned.' }, { status: 403 });
+    }
+
+    const senderUser = process.env.EMAIL_SERVER_USER || process.env.GMAIL_USER || 'mythicalhrg@gmail.com';
+    const senderPass = process.env.EMAIL_SERVER_PASSWORD || process.env.GMAIL_APP_PASSWORD || process.env.EMAIL_PASS;
+
+    if (action === 'send') {
+      // IP Rate limiting: 5 requests per 15 minutes
+      const rateLimitKey = ip === "127.0.0.1" || ip === "unknown" ? `otp:${ip}:${email}` : `otp:${ip}`;
+      const rateLimit = await checkDistributedRateLimit(rateLimitKey, 5, 15 * 60 * 1000);
+      if (!rateLimit.success) {
+        return NextResponse.json(
+          { error: 'Too many OTP requests from this IP. Please try again later.' },
+          { status: 429 }
+        );
+      }
+
+      // Per-email Rate limiting: 5 requests per 15 minutes
+      const emailRateLimit = await checkDistributedRateLimit(`otp:email:${email}`, 5, 15 * 60 * 1000);
+      if (!emailRateLimit.success) {
+        return NextResponse.json(
+          { error: 'Too many OTP requests for this email address. Please try again later.' },
+          { status: 429 }
+        );
+      }
+
+      // Enforce email domain restriction
+      if (!validateEmailDomain(email)) {
+        return NextResponse.json(
+          { error: 'Only @gmail.com, @outlook.com, and @outlook.in emails are allowed.' },
+          { status: 400 }
+        );
+      }
+
+      if (email.includes('+')) {
+        return NextResponse.json(
+          { error: 'Email aliases and subaddressing (+tag) are not permitted. Please use your primary email address.' },
+          { status: 400 }
+        );
+      }
+
+      const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+      if (isPasswordReset) {
+, 'i') },
+            { email: new RegExp(`^${safeCanonicalEmail}import { NextResponse } from 'next/server';
+import crypto from 'crypto';
+import dbConnect from '@/lib/mongoose';
+import OtpVerification from '@/models/OtpVerification';
+import User from '@/models/User';
+import Blacklist from '@/models/Blacklist';
+import nodemailer from 'nodemailer';
+import { getClientIp } from '@/lib/ip';
+import { checkDistributedRateLimit } from '@/lib/distributed-rate-limiter';
+import { normalizeEmail } from '@/lib/email-utils';
+
+const MAX_VERIFY_ATTEMPTS = 5;
+const RESEND_COOLDOWN_MS = 60 * 1000; // 60 seconds cooldown
+
+function validateEmailDomain(email: string) {
+  return email.endsWith("@gmail.com") || email.endsWith("@outlook.com") || email.endsWith("@outlook.in");
+}
+
+export async function POST(req: Request) {
+  try {
+    let { email, action, otp, isPasswordReset, username } = await req.json();
+
+    if (email) {
+      email = email.toLowerCase().trim();
+    }
+
+    if (!email) {
+      return NextResponse.json({ error: 'Email is required' }, { status: 400 });
+    }
+
+    await dbConnect();
+
+    const ip = await getClientIp(req.headers);
+
+    // Blacklist enforcement
+    const isIpBanned = await Blacklist.findOne({ type: "ip", value: ip });
+    if (isIpBanned) {
+      return NextResponse.json({ error: 'Access denied: Your IP address is banned.' }, { status: 403 });
+    }
+
+    const isEmailBanned = await Blacklist.findOne({ type: "email", value: email });
+    if (isEmailBanned) {
+      return NextResponse.json({ error: 'Access denied: This email address is banned.' }, { status: 403 });
+    }
+
+    const senderUser = process.env.EMAIL_SERVER_USER || process.env.GMAIL_USER || 'mythicalhrg@gmail.com';
+    const senderPass = process.env.EMAIL_SERVER_PASSWORD || process.env.GMAIL_APP_PASSWORD || process.env.EMAIL_PASS;
+
+    if (action === 'send') {
+      // IP Rate limiting: 5 requests per 15 minutes
+      const rateLimitKey = ip === "127.0.0.1" || ip === "unknown" ? `otp:${ip}:${email}` : `otp:${ip}`;
+      const rateLimit = await checkDistributedRateLimit(rateLimitKey, 5, 15 * 60 * 1000);
+      if (!rateLimit.success) {
+        return NextResponse.json(
+          { error: 'Too many OTP requests from this IP. Please try again later.' },
+          { status: 429 }
+        );
+      }
+
+      // Per-email Rate limiting: 5 requests per 15 minutes
+      const emailRateLimit = await checkDistributedRateLimit(`otp:email:${email}`, 5, 15 * 60 * 1000);
+      if (!emailRateLimit.success) {
+        return NextResponse.json(
+          { error: 'Too many OTP requests for this email address. Please try again later.' },
+          { status: 429 }
+        );
+      }
+
+      // Enforce email domain restriction
+      if (!validateEmailDomain(email)) {
+        return NextResponse.json(
+          { error: 'Only @gmail.com, @outlook.com, and @outlook.in emails are allowed.' },
+          { status: 400 }
+        );
+      }
+
+      if (email.includes('+')) {
+        return NextResponse.json(
+          { error: 'Email aliases and subaddressing (+tag) are not permitted. Please use your primary email address.' },
+          { status: 400 }
+        );
+      }
+
+      const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+      if (isPasswordReset) {
+, 'i') }
+          ]
+        });
         if (!existingUser) {
           return NextResponse.json({ error: 'No account registered with this email address.' }, { status: 404 });
         }
@@ -197,8 +376,11 @@ export async function POST(req: Request) {
 
     if (action === 'verify') {
       // IP Rate limiting for verification attempts: 15 attempts per 15 minutes
-      const verifyRateLimit = await checkDistributedRateLimit(`otp:verify:${ip}`, 15, 15 * 60 * 1000);
-      if (!verifyRateLimit.success) {
+      const ipUnavailable = ip === "127.0.0.1" || ip === "unknown";
+      const verifyIpKey = ipUnavailable ? `otp:verify:ip:${ip}:${email}` : `otp:verify:ip:${ip}`;
+      const verifyRateLimit = await checkDistributedRateLimit(verifyIpKey, 15, 15 * 60 * 1000);
+      const verifyEmailRateLimit = await checkDistributedRateLimit(`otp:verify:email:${email}`, 15, 15 * 60 * 1000);
+      if (!verifyRateLimit.success || !verifyEmailRateLimit.success) {
         return NextResponse.json(
           { error: 'Too many verification attempts from this IP. Please wait a few minutes before trying again.' },
           { status: 429 }
