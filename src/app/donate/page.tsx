@@ -228,7 +228,7 @@ export default function DonatePage() {
                 <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-[11px] text-slate-500 uppercase font-semibold">Official UPI ID</p>
-                    <p className="text-sm font-mono font-bold text-slate-200 truncate">{receiverUpiId}</p>
+                    <p className="text-sm font-mono font-bold text-slate-200 truncate">{receiverUpiId ? receiverUpiId : "Recipient UPI ID will appear once enabled."}</p>
                   </div>
                   <button type="button" onClick={handleCopyUpi} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition shrink-0">
                     {copiedUpi ? <><CheckCircle2 className="w-3.5 h-3.5" />Copied</> : <><Copy className="w-3.5 h-3.5" />Copy ID</>}
