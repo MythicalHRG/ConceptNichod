@@ -47,7 +47,8 @@ export async function POST(req: Request) {
 
     if (action === 'send') {
       // IP Rate limiting: 5 requests per 15 minutes
-      const rateLimit = await checkDistributedRateLimit(`otp:${ip}`, 5, 15 * 60 * 1000);
+      const rateLimitKey = ip === "127.0.0.1" || ip === "unknown" ? `otp:${ip}:${email}` : `otp:${ip}`;
+      const rateLimit = await checkDistributedRateLimit(rateLimitKey, 5, 15 * 60 * 1000);
       if (!rateLimit.success) {
         return NextResponse.json(
           { error: 'Too many OTP requests from this IP. Please try again later.' },
