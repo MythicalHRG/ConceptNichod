@@ -1,7 +1,7 @@
 import crypto from "crypto";
 
 function getSessionSecret(): string {
-  const configured = (process.env.SESSION_SECRET || process.env.ENCRYPTION_SECRET_KEY || "").trim().replace(/^(['"])(.*)\\1$/, "$2").trim();
+  const configured = (process.env.SESSION_SECRET || process.env.ENCRYPTION_SECRET_KEY || "").trim();
   if (configured) {
     if (process.env.NODE_ENV === "production" && Buffer.byteLength(configured, "utf8") < 32) {
       throw new Error("SESSION_SECRET or ENCRYPTION_SECRET_KEY must contain at least 32 bytes in production.");
@@ -28,6 +28,7 @@ export function verifySessionCookie(cookieValue?: string | null): string | null 
   if (dotIndex > 0) {
     const uuid = trimmed.substring(0, dotIndex);
     const signature = trimmed.substring(dotIndex + 1);
+    if (!UUID_REGEX.test(uuid) || !/^[a-f0-9]{64}$/i.test(signature)) return null;
     const expectedSignature = crypto.createHmac("sha256", getSessionSecret()).update(uuid).digest("hex");
     const sigBuf = Buffer.from(signature);
     const expectedBuf = Buffer.from(expectedSignature);
