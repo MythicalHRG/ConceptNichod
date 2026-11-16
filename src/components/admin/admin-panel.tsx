@@ -21,7 +21,7 @@ import {
   getEmailBroadcastHistoryAction,
 } from "@/app/actions/email-broadcast";
 import {
-  getDonationInfoAction,
+  getAdminDonationSettingsAction,
   updateDonationSettingsAction,
 } from "@/app/actions/donation";
 import {
@@ -201,7 +201,7 @@ export function AdminPanel() {
       if (emailRes?.success) setEmailBroadcasts(emailRes.broadcasts || []);
       if (changelogsRes?.success) setChangelogs(changelogsRes.changelogs || []);
       if (studyGroupsRes?.success) setStudyGroups(studyGroupsRes.groups || []);
-      const donationRes = await getDonationInfoAction().catch(() => ({ success: true, settings: null }));
+      const donationRes = await getAdminDonationSettingsAction().catch(() => ({ success: false, settings: null }));
       if (donationRes?.success && donationRes.settings) {
         setDonationSettings({ upiId: donationRes.settings.upiId || "" });
       }
@@ -1327,7 +1327,7 @@ export function AdminPanel() {
                       className="font-mono text-sm"
                     />
                     <p className="text-xs text-muted-foreground">
-                      This UPI VPA is used to generate dynamic payment QR codes and 1-tap UPI app links on the donation page.
+                      The official VPA is the only payment destination displayed. The page will not show an unverified QR image.
                     </p>
                   </div>
 
