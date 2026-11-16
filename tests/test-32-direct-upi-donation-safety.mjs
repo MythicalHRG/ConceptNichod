@@ -85,7 +85,7 @@ test("admin verification requires bank statement UTR and recipient VPA evidence"
 test("legacy donation records without a status remain in the pending review queue", () => {
   const actions = read("src/app/actions/donation.ts");
   assert.match(actions, /status: \{ \$exists: false \}/);
-  assert.match(actions, /status: \(t\.status \|\| "pending"\)/);
+  assert.match(actions, /status:\s*\(?t\.status\s*\|\|\s*"pending"\)?/);
   assert.match(actions, /legacyPendingCount/);
 });
 
