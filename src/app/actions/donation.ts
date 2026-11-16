@@ -666,7 +666,7 @@ export async function getDonationInfoAction() {
   await connectToDatabase();
   let setting = await DonationSetting.findOne().lean();
   if (!setting) {
-    setting = await DonationSetting.create({ upiId:"", payeeName:"ConceptNichod", qrCodeUrl:"/qr.png", isEnabled:false });
+    setting = await DonationSetting.create({ upiId:"", payeeName:"ConceptNichod", qrCodeUrl:"", isEnabled:false });
   }
 
   // Keep legacy public metrics bank-verified only; unverified claims never contribute.
@@ -703,6 +703,7 @@ export async function getDonationInfoAction() {
   }));
   const publicSettings = JSON.parse(JSON.stringify(setting));
   if (process.env.DONATIONS_ENABLED !== "true") publicSettings.upiId = "";
+  if (publicSettings.qrCodeUrl === "/qr.png") publicSettings.qrCodeUrl = "";
   // Evaluated for audit parity; only publishedPatrons are returned publicly.
   void verifiedDonations;
   return { success:true, settings:publicSettings, donors:JSON.parse(JSON.stringify(donors)), recentTransactions:JSON.parse(JSON.stringify(recentTransactions)) };
