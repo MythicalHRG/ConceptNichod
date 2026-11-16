@@ -577,8 +577,8 @@ test("Tareeka 22.16: OTP verify endpoint enforces IP rate limiting", () => {
   const content = fs.readFileSync(otpRoutePath, "utf-8");
 
   assert.ok(
-    content.includes("checkDistributedRateLimit(`otp:verify:${ip}`") || content.includes('checkDistributedRateLimit(`otp:verify:${ip}`'),
-    "/api/auth/otp must rate limit verification attempts by IP"
+    content.includes("otp:verify:${ip}") && content.includes("otp:verify:email:${email}"),
+    "/api/auth/otp must rate limit verification attempts by IP and email"
   );
 });
 

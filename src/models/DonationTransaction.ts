@@ -22,6 +22,7 @@ export interface IDonationTransaction extends Document {
   patronTier: PatronTier | null;
   isPublishedToPatrons: boolean;
   donorRecordId?: string | null;
+  bankReference?: string | null;
   recipientVpa?: string | null;
   verificationMethod?: "manual-bank-reconciliation" | null;
   adminNote?: string;
@@ -54,6 +55,7 @@ const DonationTransactionSchema = new Schema<IDonationTransaction>({
   patronTier: { type: String, enum: ["LEGEND", "DIAMOND", "GOLD", "SILVER", "SUPPORTER", "Legend", "Benefactor", "Patron", "Supporter", null], default: null },
   isPublishedToPatrons: { type: Boolean, default: false, index: true },
   donorRecordId: { type: String, default: null },
+  bankReference: { type: String, trim: true, default: null },
   recipientVpa: { type: String, trim: true, lowercase: true, default: null },
   verificationMethod: { type: String, enum: ["manual-bank-reconciliation", null], default: null },
   adminNote: { type: String, trim: true, maxlength: 500, default: "" },

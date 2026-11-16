@@ -17,7 +17,7 @@ const DonationSettingSchema = new Schema<IDonationSetting>({
   upiId: { type: String, default: "" },
   payeeName: { type: String, required: true, trim: true, default: process.env.NEXT_PUBLIC_UPI_NAME || "ConceptNichod" },
   qrCodeUrl: { type: String, trim: true, default: "/qr.png" },
-  isEnabled: { type: Boolean, default: true },
+  isEnabled: { type: Boolean, default: false },
   headline: { type: String, trim: true, default: "Support ConceptNichod & Join the Hall of Patrons" },
   subtext: { type: String, trim: true, default: "Scan the UPI QR code to donate any amount, then submit your 12-digit UTR and Transaction ID below for manual Admin verification." },
   // Legacy settings retained so older admin settings screens remain compatible.

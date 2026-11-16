@@ -46,7 +46,8 @@ test("donation payments remain disabled until an explicit deployment opt-in", ()
   assert.match(donation, /if \(!DONATIONS_ENABLED\)[\s\S]*?Donations are temporarily unavailable/);
   assert.match(settings, /upiId: \{ type: String, default: "" \}/);
   assert.doesNotMatch(page, /harsh\.2525@ptaxis/);
-  assert.match(page, /receiverUpiId \?/);
+  assert.match(page, /settings\.isEnabled \?/);
+  assert.match(page, /Donations are temporarily paused/);
 });
 
 test("AI generation and text-to-speech server actions enforce per-user rate limits", () => {
@@ -86,4 +87,20 @@ test("topic progress persistence validates ownership, status, answer bounds, and
   assert.match(progress, /status !== "in_progress" && status !== "completed"/);
   assert.ok(progress.includes("topic-progress:${sessionUuid}"));
   assert.match(progress, /\{ _id: topicId, userId: sessionUuid \}/);
+});
+
+test("registration fallback rate limits are scoped by email when the proxy IP is unavailable", () => {
+  const registerStart = auth.indexOf("export async function registerAction");
+  const registerEnd = auth.indexOf("export async function loginAction", registerStart);
+  const register = auth.slice(registerStart, registerEnd);
+  assert.ok(register.includes('ipUnavailable = ip === "127.0.0.1" || ip === "unknown"'));
+  assert.ok(register.includes('`register:${ip}:${normalizedEmail}`'));
+  assert.ok(register.includes('`register:email:${normalizedEmail}`'));
+});
+
+test("login does not rewrite the existing platform owner's database role", () => {
+  const loginStart = auth.indexOf("export async function loginAction");
+  const loginEnd = auth.indexOf("export async function logoutAction", loginStart);
+  const login = auth.slice(loginStart, loginEnd);
+  assert.equal(login.includes('user.role = "owner"'), false);
 });

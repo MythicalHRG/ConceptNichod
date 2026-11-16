@@ -1,63 +1,43 @@
 import crypto from "crypto";
 
+function cleanSessionSecret(value?: string): string {
+  return (value || "").trim().replace(/^[\"']+|[\"']+$/g, "").trim();
+}
+
 function getSessionSecret(): string {
-  const configured = process.env.ENCRYPTION_SECRET_KEY?.trim();
+  const configured = cleanSessionSecret(process.env.SESSION_SECRET) || cleanSessionSecret(process.env.ENCRYPTION_SECRET_KEY);
   if (configured) {
     if (process.env.NODE_ENV === "production" && Buffer.byteLength(configured, "utf8") < 32) {
-      throw new Error("ENCRYPTION_SECRET_KEY must contain at least 32 bytes in production.");
+      throw new Error("SESSION_SECRET or ENCRYPTION_SECRET_KEY must contain at least 32 bytes in production.");
     }
     return configured;
   }
   if (process.env.NODE_ENV === "production") {
-    throw new Error("ENCRYPTION_SECRET_KEY must be configured with a strong random secret in production.");
+    throw new Error("SESSION_SECRET or ENCRYPTION_SECRET_KEY must be configured with a strong random secret in production.");
   }
   return "local-development-only-session-secret-not-for-production";
 }
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function createSignedSessionCookie(uuid: string): string {
-  if (!uuid || typeof uuid !== "string") {
-    throw new Error("UUID is required to create a session cookie.");
-  }
+  if (!uuid || typeof uuid !== "string") throw new Error("UUID is required to create a session cookie.");
   const signature = crypto.createHmac("sha256", getSessionSecret()).update(uuid).digest("hex");
   return `${uuid}.${signature}`;
 }
 
 export function verifySessionCookie(cookieValue?: string | null): string | null {
-  if (!cookieValue || typeof cookieValue !== "string") {
-    return null;
-  }
-
+  if (!cookieValue || typeof cookieValue !== "string") return null;
   const trimmed = cookieValue.trim();
   const dotIndex = trimmed.lastIndexOf(".");
-
   if (dotIndex > 0) {
     const uuid = trimmed.substring(0, dotIndex);
     const signature = trimmed.substring(dotIndex + 1);
-
-    const expectedSignature = crypto
-      .createHmac("sha256", getSessionSecret())
-      .update(uuid)
-      .digest("hex");
+    if (!UUID_REGEX.test(uuid) || !/^[a-f0-9]{64}$/i.test(signature)) return null;
+    const expectedSignature = crypto.createHmac("sha256", getSessionSecret()).update(uuid).digest("hex");
     const sigBuf = Buffer.from(signature);
     const expectedBuf = Buffer.from(expectedSignature);
-
-    if (
-      sigBuf.length === expectedBuf.length &&
-      crypto.timingSafeEqual(sigBuf, expectedBuf)
-    ) {
-      return uuid;
-    }
+    if (sigBuf.length === expectedBuf.length && crypto.timingSafeEqual(sigBuf, expectedBuf)) return uuid;
   }
-
-  // Security Hardening: In production or strict mode, unsigned UUIDs are strictly rejected to prevent account takeover.
-  // Legacy unsigned UUIDs are only tolerated during non-production test suites if not in strict mode.
-  if (process.env.NODE_ENV !== "production" && process.env.STRICT_SESSION_SIGNING !== "true") {
-    if (UUID_REGEX.test(trimmed)) {
-      return trimmed;
-    }
-  }
-
+  if (process.env.NODE_ENV !== "production" && process.env.STRICT_SESSION_SIGNING !== "true" && UUID_REGEX.test(trimmed)) return trimmed;
   return null;
 }

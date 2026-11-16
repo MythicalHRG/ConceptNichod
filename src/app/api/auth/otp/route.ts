@@ -47,7 +47,9 @@ export async function POST(req: Request) {
 
     if (action === 'send') {
       // IP Rate limiting: 5 requests per 15 minutes
-      const rateLimit = await checkDistributedRateLimit(`otp:${ip}`, 5, 15 * 60 * 1000);
+      const ipUnavailable = ip === "127.0.0.1" || ip === "unknown";
+      const rateLimitKey = ipUnavailable ? `otp:${ip}:${email}` : `otp:${ip}`;
+      const rateLimit = await checkDistributedRateLimit(rateLimitKey, 5, 15 * 60 * 1000);
       if (!rateLimit.success) {
         return NextResponse.json(
           { error: 'Too many OTP requests from this IP. Please try again later.' },
@@ -196,8 +198,12 @@ export async function POST(req: Request) {
 
     if (action === 'verify') {
       // IP Rate limiting for verification attempts: 15 attempts per 15 minutes
-      const verifyRateLimit = await checkDistributedRateLimit(`otp:verify:${ip}`, 15, 15 * 60 * 1000);
-      if (!verifyRateLimit.success) {
+      const ipUnavailable = ip === "127.0.0.1" || ip === "unknown";
+      const verifyRateLimit = ipUnavailable
+        ? await checkDistributedRateLimit(`otp:verify:ip:${ip}:${email}`, 15, 15 * 60 * 1000)
+        : await checkDistributedRateLimit(`otp:verify:${ip}`, 15, 15 * 60 * 1000);
+      const verifyEmailRateLimit = await checkDistributedRateLimit(`otp:verify:email:${email}`, 15, 15 * 60 * 1000);
+      if (!verifyRateLimit.success || !verifyEmailRateLimit.success) {
         return NextResponse.json(
           { error: 'Too many verification attempts from this IP. Please wait a few minutes before trying again.' },
           { status: 429 }

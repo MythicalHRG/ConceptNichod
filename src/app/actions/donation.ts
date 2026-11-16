@@ -17,6 +17,7 @@ import {
   validateAdminVerifiedAmount,
   computePatronTier,
   sanitizeDonationText,
+  normalizeVpa,
   PatronTier,
 } from "@/lib/donation-validation";
 
@@ -42,19 +43,28 @@ export async function getPublicDonationPageData() {
     let settings = await DonationSetting.findOne().lean();
     if (!settings) {
       const created = await DonationSetting.create({
-        upiId: process.env.NEXT_PUBLIC_UPI_ID || "",
+        upiId: "",
         payeeName: process.env.NEXT_PUBLIC_UPI_NAME || "ConceptNichod",
         qrCodeUrl: "/qr.png",
-        isEnabled: true,
+        isEnabled: false,
       });
       settings = created.toObject();
     }
 
-    const patronsRaw = await Donor.find({ isVisible: true, isPublic: true, amount: { $gt: 0 } })
-      .select("name username amount tier message isAnonymous donatedAt createdAt")
-      .sort({ amount: -1, donatedAt: -1 })
-      .limit(150)
-      .lean();
+    const configuredVpa = normalizeVpa(settings.upiId || "");
+    const donationsAvailable = DONATIONS_ENABLED && Boolean(settings.isEnabled) && Boolean(configuredVpa);
+
+    const [patronsRaw, totalRaisedAgg] = await Promise.all([
+      Donor.find({ isVisible: true, isPublic: true, amount: { $gt: 0 } })
+        .select("name username amount tier message isAnonymous donatedAt createdAt")
+        .sort({ amount: -1, donatedAt: -1 })
+        .limit(150)
+        .lean(),
+      Donor.aggregate([
+        { $match: { isVisible: true, isPublic: true, amount: { $gt: 0 } } },
+        { $group: { _id: null, totalRaised: { $sum: "$amount" } } },
+      ]),
+    ]);
 
     const patrons = patronsRaw.map((p: any) => ({
       id: String(p._id),
@@ -68,15 +78,15 @@ export async function getPublicDonationPageData() {
         : new Date(p.createdAt).toISOString(),
     }));
 
-    const totalRaised = patrons.reduce((sum, p) => sum + p.amount, 0);
+    const totalRaised = Number(totalRaisedAgg[0]?.totalRaised || 0);
 
     return {
       success: true,
       settings: {
-        upiId: settings.upiId || process.env.NEXT_PUBLIC_UPI_ID || "",
+        upiId: donationsAvailable ? configuredVpa || "" : "",
         payeeName: settings.payeeName || "ConceptNichod",
-        qrCodeUrl: settings.qrCodeUrl || "/qr.png",
-        isEnabled: Boolean(settings.isEnabled) && process.env.DONATIONS_ENABLED === "true",
+        qrCodeUrl: donationsAvailable ? settings.qrCodeUrl || "/qr.png" : "",
+        isEnabled: donationsAvailable,
         headline:
           settings.headline || "Support ConceptNichod & Join the Hall of Patrons",
         subtext:
@@ -94,8 +104,8 @@ export async function getPublicDonationPageData() {
       settings: {
         upiId: process.env.NEXT_PUBLIC_UPI_ID || "",
         payeeName: process.env.NEXT_PUBLIC_UPI_NAME || "ConceptNichod",
-        qrCodeUrl: "/qr.png",
-        isEnabled: process.env.DONATIONS_ENABLED === "true",
+        qrCodeUrl: "",
+        isEnabled: false,
         headline: "Support ConceptNichod & Join the Hall of Patrons",
         subtext:
           "Scan the UPI QR code to contribute any amount, then submit your 12-digit UTR and Transaction ID below.",
@@ -120,58 +130,55 @@ export async function submitDonationTransaction(formData: {
   honeypot?: string;
 }) {
   try {
-    // Silent bot trap
     if (formData.honeypot && formData.honeypot.trim() !== "") {
-      return {
-        success: true,
-        message: "Your UTR & Transaction ID have been sent to the Admin Panel for verification.",
-      };
+      return { success: true, message: "Your UTR & Transaction ID have been sent to the Admin Panel for verification." };
     }
 
-    const clientIp = await getClientIp();
-    if (!DONATIONS_ENABLED) return { success: false, error: "Donations are temporarily unavailable while the recipient account is being confirmed." };
-    const rateLimit = await checkDistributedRateLimit(`donate_submit:${clientIp}`, 5, 15 * 60 * 1000);
-    if (!rateLimit.success) {
-      return {
-        success: false,
-        error: "Too many submissions from your network. Please wait 15 minutes before trying again.",
-      };
+    if (!DONATIONS_ENABLED) {
+      return { success: false, error: "Donations are temporarily unavailable while the recipient account is being confirmed." };
     }
 
     const validation = validateDonationSubmission(formData);
     if (!validation.valid || !validation.data) {
-      return {
-        success: false,
-        error: validation.error || "Invalid submission details.",
-      };
+      return { success: false, error: validation.error || "Invalid submission details." };
     }
 
     const { donorName, utr, transactionId, message, isAnonymous } = validation.data;
+    const clientIp = await getClientIp();
 
     await connectToDatabase();
+    const settings = await DonationSetting.findOne().select("upiId isEnabled").lean();
+    const configuredVpa = normalizeVpa((settings as any)?.upiId || "");
+    if (!settings?.isEnabled || !configuredVpa) {
+      return { success: false, error: "Donations are temporarily unavailable because the recipient account is not configured and enabled." };
+    }
 
-    // Check for duplicate UTR or Transaction ID
+    const ipUnavailable = clientIp === "127.0.0.1" || clientIp === "unknown";
+    const rateLimitKey = ipUnavailable ? "donate_submit:" + clientIp + ":" + utr : "donate_submit:" + clientIp;
+    const rateLimit = await checkDistributedRateLimit(rateLimitKey, 5, 15 * 60 * 1000);
+    if (!rateLimit.success) {
+      return { success: false, error: "Too many submissions from your network. Please wait 15 minutes before trying again." };
+    }
+
     const existing = await DonationTransaction.findOne({
       $or: [{ utr }, { transactionId }],
-    })
-      .select("utr transactionId status")
-      .lean();
+    }).select("utr transactionId status").lean();
 
     if (existing) {
       const dupField = existing.utr === utr ? "12-digit UTR" : "Transaction ID";
-      return {
-        success: false,
-        error: `This ${dupField} has already been submitted (Status: ${existing.status.toUpperCase()}).`,
-      };
+      const existingStatus = String(existing.status || "pending").toUpperCase();
+      return { success: false, error: "This " + dupField + " has already been submitted (Status: " + existingStatus + ")." };
     }
 
-    // Attach optional logged-in user session if available
     const sessionUuid = verifySessionCookie((await cookies()).get("user_session")?.value);
     let userId: string | null = null;
     let username: string | null = null;
     if (sessionUuid) {
       const dbUser = await User.findOne({ uuid: sessionUuid }).select("uuid username").lean();
-      if (dbUser) { userId = sessionUuid; username = (dbUser as any).username || null; }
+      if (dbUser) {
+        userId = sessionUuid;
+        username = (dbUser as any).username || null;
+      }
     }
 
     const createdTx = await DonationTransaction.create({
@@ -201,21 +208,14 @@ export async function submitDonationTransaction(formData: {
     return {
       success: true,
       transactionId: String(createdTx._id),
-      message:
-        "Submitted! Your UTR and Transaction ID have been sent to the Admin Panel. The Admin will manually verify your payment, enter the confirmed amount, and add you to the Hall of Patrons.",
+      message: "Submitted! Your UTR and Transaction ID have been sent to the Admin Panel for verification.",
     };
   } catch (error: any) {
     if (error?.code === 11000) {
-      return {
-        success: false,
-        error: "This UTR or Transaction ID has already been submitted.",
-      };
+      return { success: false, error: "This UTR or Transaction ID has already been submitted." };
     }
     console.error("[submitDonationTransaction] Error:", error);
-    return {
-      success: false,
-      error: "Failed to submit transaction details. Please try again.",
-    };
+    return { success: false, error: "Failed to submit transaction details. Please try again." };
   }
 }
 
@@ -226,23 +226,27 @@ export async function getAdminDonationDashboard(filterStatus?: string, search?: 
   try {
     await requireAdminSession();
 
-    const query: Record<string, any> = {};
-    if (filterStatus && ["pending", "verified", "rejected"].includes(filterStatus)) {
-      query.status = filterStatus;
+    const queryParts: Record<string, any>[] = [];
+    if (filterStatus === "pending") {
+      // Legacy records created before status tracking must remain reviewable.
+      queryParts.push({ $or: [{ status: "pending" }, { status: { $exists: false } }, { status: null }] });
+    } else if (filterStatus && ["verified", "rejected"].includes(filterStatus)) {
+      queryParts.push({ status: filterStatus });
     }
 
     if (search && search.trim() !== "") {
       const escaped = search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const regex = new RegExp(escaped, "i");
-      query.$or = [
+      queryParts.push({ $or: [
         { utr: regex },
         { transactionId: regex },
         { donorName: regex },
         { username: regex },
-      ];
+      ] });
     }
+    const query = queryParts.length === 0 ? {} : queryParts.length === 1 ? queryParts[0] : { $and: queryParts };
 
-    const [transactionsRaw, statsAgg, settingsRaw, patronsRaw] = await Promise.all([
+    const [transactionsRaw, statsAgg, settingsRaw, patronsRaw, legacyPendingCount] = await Promise.all([
       DonationTransaction.find(query).sort({ createdAt: -1 }).limit(250).lean(),
       DonationTransaction.aggregate([
         {
@@ -259,6 +263,7 @@ export async function getAdminDonationDashboard(filterStatus?: string, search?: 
       ]),
       DonationSetting.findOne().lean(),
       Donor.find().sort({ amount: -1, donatedAt: -1 }).limit(200).lean(),
+      DonationTransaction.countDocuments({ $or: [{ status: { $exists: false } }, { status: null }] }),
     ]);
 
     const summary = {
@@ -268,8 +273,9 @@ export async function getAdminDonationDashboard(filterStatus?: string, search?: 
       totalVerifiedAmount: 0,
     };
 
+    summary.pendingCount = legacyPendingCount;
     for (const row of statsAgg) {
-      if (row._id === "pending") summary.pendingCount = row.count;
+      if (row._id === "pending") summary.pendingCount += row.count;
       if (row._id === "verified") {
         summary.verifiedCount = row.count;
         summary.totalVerifiedAmount = row.verifiedSum || 0;
@@ -285,9 +291,9 @@ export async function getAdminDonationDashboard(filterStatus?: string, search?: 
       donorEmail: t.donorEmail || null,
       isAnonymous: Boolean(t.isAnonymous),
       utr: t.utr,
-      transactionId: t.transactionId,
+      transactionId: t.transactionId || "",
       message: t.message || "",
-      status: t.status as "pending" | "verified" | "rejected",
+      status: t.status || "pending",
       verifiedAmount: t.verifiedAmount ?? null,
       patronTier: t.patronTier || null,
       isPublishedToPatrons: Boolean(t.isPublishedToPatrons),
@@ -295,7 +301,7 @@ export async function getAdminDonationDashboard(filterStatus?: string, search?: 
       adminNote: t.adminNote || "",
       verifiedBy: t.verifiedBy || null,
       verifiedAt: t.verifiedAt ? new Date(t.verifiedAt).toISOString() : null,
-      createdAt: new Date(t.createdAt).toISOString(),
+      createdAt: new Date(t.createdAt || t.donatedAt || Date.now()).toISOString(),
     }));
 
     const patrons = patronsRaw.map((p: any) => ({
@@ -318,7 +324,7 @@ export async function getAdminDonationDashboard(filterStatus?: string, search?: 
       transactions,
       patrons,
       settings: {
-        upiId: (settingsRaw as any)?.upiId || process.env.NEXT_PUBLIC_UPI_ID || "",
+        upiId: (settingsRaw as any)?.upiId || "",
         payeeName: (settingsRaw as any)?.payeeName || "ConceptNichod",
         qrCodeUrl: (settingsRaw as any)?.qrCodeUrl || "/qr.png",
         isEnabled: Boolean((settingsRaw as any)?.isEnabled) && process.env.DONATIONS_ENABLED === "true",
@@ -339,6 +345,8 @@ export async function getAdminDonationDashboard(filterStatus?: string, search?: 
 export async function adminVerifyDonationAndSetAmount(payload: {
   transactionDbId: string;
   verifiedAmount: number | string;
+  bankReference: string;
+  recipientVpa: string;
   publishToHallOfPatrons: boolean;
   customTier?: string;
   adminNote?: string;
@@ -361,12 +369,28 @@ export async function adminVerifyDonationAndSetAmount(payload: {
       return { success: false, error: "Donation transaction not found." };
     }
 
+    // An admin-entered amount is not proof of payment. Require explicit bank-record
+    // reference and recipient VPA confirmation before changing a transaction to verified.
+    const bankReference = sanitizeDonationText(payload.bankReference || "", 60).replace(/\s+/g, "");
+    if (!bankReference || bankReference !== String(tx.utr)) {
+      return { success: false, error: "Bank statement reference must exactly match the submitted UTR." };
+    }
+    const settings = await DonationSetting.findOne().select("upiId").lean();
+    const configuredVpa = normalizeVpa((settings as any)?.upiId);
+    const recipientVpa = normalizeVpa(sanitizeDonationText(payload.recipientVpa || "", 100));
+    if (!configuredVpa || !recipientVpa || recipientVpa !== configuredVpa) {
+      return { success: false, error: "Recipient VPA must match the configured donation account and the bank record." };
+    }
+
     const tier: PatronTier =
       payload.customTier && VALID_TIERS.includes(payload.customTier as PatronTier)
         ? (payload.customTier as PatronTier)
         : computePatronTier(confirmedAmount);
 
     tx.status = "verified";
+    tx.bankReference = bankReference;
+    tx.recipientVpa = configuredVpa;
+    tx.verificationMethod = "manual-bank-reconciliation";
     tx.verifiedAmount = confirmedAmount;
     tx.patronTier = tier;
     tx.isPublishedToPatrons = Boolean(payload.publishToHallOfPatrons);
@@ -599,7 +623,7 @@ export async function adminUpdateDonationSettings(input: {
     const payeeName = sanitizeDonationText(input.payeeName, 80);
     const qrCodeUrl = sanitizeDonationText(input.qrCodeUrl || "/qr.png", 300) || "/qr.png";
 
-    if (!upiId || !upiId.includes("@")) {
+    if (!/^[a-zA-Z0-9._-]{2,100}@[a-zA-Z0-9.-]{2,64}$/.test(upiId)) {
       return { success: false, error: "Please enter a valid UPI ID (e.g. name@upi)." };
     }
 
@@ -693,7 +717,13 @@ export async function reconcileDonationManuallyAction(payload: { utr: string; ba
   if (!tx) return { success:false, error:"No donation submission found for this UTR." };
   const settings = await DonationSetting.findOne().select("upiId").lean();
   if (String(payload.recipientVpa || "").trim().toLowerCase() !== String((settings as any)?.upiId || "").trim().toLowerCase()) return { success:false, error:"Recipient VPA does not match the configured donation UPI ID." };
-  return adminVerifyDonationAndSetAmount({ transactionDbId:String(tx._id), verifiedAmount:payload.receivedAmount, publishToHallOfPatrons:false });
+  return adminVerifyDonationAndSetAmount({
+    transactionDbId: String(tx._id),
+    verifiedAmount: payload.receivedAmount,
+    bankReference: payload.bankReference,
+    recipientVpa: payload.recipientVpa,
+    publishToHallOfPatrons: false,
+  });
 }
 export async function getPendingDonationsAdminAction() {
   const res = await getAdminDonationDashboard("pending");
@@ -729,6 +759,12 @@ export async function adminUpdatePatron(payload:{ donorId:string; name?:string; 
   const donor = await Donor.findById(payload.donorId);
   if (!donor) return {success:false,error:"Patron not found."};
   const tier = payload.tier && VALID_TIERS.includes(payload.tier as PatronTier) ? payload.tier as PatronTier : computePatronTier(amount.data);
+  if (donor.transactionRef) {
+    const linkedTransaction = await DonationTransaction.findById(donor.transactionRef).select("status verifiedAmount").lean();
+    if (!linkedTransaction || linkedTransaction.status !== "verified" || Number(linkedTransaction.verifiedAmount) !== amount.data) {
+      return { success:false, error:"The amount of a linked payment record is locked. Reconcile the bank reference and recipient VPA in the transaction queue first." };
+    }
+  }
   donor.name = sanitizeDonationText(payload.name || donor.name,60);
   donor.amount = amount.data; donor.totalAmount = amount.data; donor.tier = tier;
   donor.message = sanitizeDonationText(payload.message || "",250); donor.latestMessage = donor.message;

@@ -57,6 +57,8 @@ export function DonationReconciliation() {
 
   // Per-row Admin inputs for manual ₹ amount, tier, note, and Hall of Patrons checkbox
   const [amountMap, setAmountMap] = useState<Record<string, string>>({});
+  const [bankReferenceMap, setBankReferenceMap] = useState<Record<string, string>>({});
+  const [recipientVpaMap, setRecipientVpaMap] = useState<Record<string, string>>({});
   const [tierMap, setTierMap] = useState<Record<string, string>>({});
   const [publishMap, setPublishMap] = useState<Record<string, boolean>>({});
   const [noteMap, setNoteMap] = useState<Record<string, string>>({});
@@ -107,6 +109,9 @@ export function DonationReconciliation() {
       }
 
       setAmountMap(nextAmounts);
+      // Require fresh confirmation for each verification attempt; do not silently reuse evidence.
+      setBankReferenceMap(Object.fromEntries(((res.transactions as AdminTxItem[]) || []).map((tx) => [tx.id, ""])));
+      setRecipientVpaMap(Object.fromEntries(((res.transactions as AdminTxItem[]) || []).map((tx) => [tx.id, ""])));
       setTierMap(nextTiers);
       setPublishMap(nextPublish);
       setNoteMap(nextNotes);
@@ -124,12 +129,20 @@ export function DonationReconciliation() {
       alert("Please manually enter the ₹ amount received for this UTR before verifying.");
       return;
     }
+    const bankReference = (bankReferenceMap[tx.id] || "").trim();
+    const recipientVpa = (recipientVpaMap[tx.id] || "").trim();
+    if (!bankReference || !recipientVpa) {
+      alert("Enter the matching bank-statement UTR and recipient VPA after checking the actual bank record.");
+      return;
+    }
 
     setBusyId(tx.id);
     try {
       const res = await adminVerifyDonationAndSetAmount({
         transactionDbId: tx.id,
         verifiedAmount: Number(enteredAmount),
+        bankReference,
+        recipientVpa,
         publishToHallOfPatrons: Boolean(publishMap[tx.id]),
         customTier:
           tierMap[tx.id] && tierMap[tx.id] !== "AUTO" ? tierMap[tx.id] : undefined,
@@ -225,8 +238,7 @@ export function DonationReconciliation() {
             UTR & Transaction ID Manual Reconciliation
           </h2>
           <p className="text-xs sm:text-sm text-slate-400">
-            Check the donor&apos;s UTR & Transaction ID in your UPI app, manually enter the ₹
-            amount received, and promote them to the Hall of Patrons.
+            Compare the UTR, Transaction ID, credited amount, and recipient VPA against your actual bank record before verifying.
           </p>
         </div>
 
@@ -458,6 +470,42 @@ export function DonationReconciliation() {
                     &ldquo;{tx.message}&rdquo;
                   </div>
                 )}
+
+                {/* Mandatory bank evidence confirmation before any payment is marked verified */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-xl border border-amber-500/20 bg-amber-950/10 p-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1">
+                      Bank Statement UTR / Reference *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      inputMode="numeric"
+                      maxLength={60}
+                      placeholder="Re-enter the UTR shown in bank records"
+                      value={bankReferenceMap[tx.id] ?? ""}
+                      onChange={(e) => setBankReferenceMap((prev) => ({ ...prev, [tx.id]: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs font-mono text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1">
+                      Recipient VPA in Bank Record *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      maxLength={100}
+                      placeholder="Enter the credited recipient UPI ID"
+                      value={recipientVpaMap[tx.id] ?? ""}
+                      onChange={(e) => setRecipientVpaMap((prev) => ({ ...prev, [tx.id]: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs font-mono text-white"
+                    />
+                  </div>
+                  <p className="sm:col-span-2 text-[11px] text-amber-200/80">
+                    Verify these details in the bank&apos;s own transaction record. UTR format or a donor screenshot alone does not prove payment.
+                  </p>
+                </div>
 
                 {/* Admin Manual Amount Input & Hall of Patrons Controls */}
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">

@@ -2,49 +2,29 @@
 
 import { useEffect } from "react";
 
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return Boolean(target.closest("input, textarea, [contenteditable='true']"));
+}
+
 export function SecurityGuard() {
   useEffect(() => {
-    // Disable right click
     const handleContextMenu = (e: MouseEvent) => {
+      if (isEditableTarget(e.target)) return;
       e.preventDefault();
     };
-
-    // Disable keyboard shortcuts for DevTools
     const handleKeyDown = (e: KeyboardEvent) => {
-      // F12
-      if (e.key === "F12") {
-        e.preventDefault();
-      }
-      
-      // Ctrl+Shift+I / Cmd+Option+I (DevTools)
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "I" || e.key === "i")) {
-        e.preventDefault();
-      }
-      
-      // Ctrl+Shift+J / Cmd+Option+J (Console)
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "J" || e.key === "j")) {
-        e.preventDefault();
-      }
-      
-      // Ctrl+Shift+C / Cmd+Option+C (Element Inspector)
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "C" || e.key === "c")) {
-        e.preventDefault();
-      }
-      
-      // Ctrl+U / Cmd+U (View Source)
-      if ((e.ctrlKey || e.metaKey) && (e.key === "U" || e.key === "u")) {
-        e.preventDefault();
-      }
+      if (isEditableTarget(e.target)) return;
+      if (e.key === "F12") e.preventDefault();
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && ["I", "i", "J", "j", "C", "c"].includes(e.key)) e.preventDefault();
+      if ((e.ctrlKey || e.metaKey) && (e.key === "U" || e.key === "u")) e.preventDefault();
     };
-
     document.addEventListener("contextmenu", handleContextMenu);
     document.addEventListener("keydown", handleKeyDown);
-
     return () => {
       document.removeEventListener("contextmenu", handleContextMenu);
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, []);
-
   return null;
 }
