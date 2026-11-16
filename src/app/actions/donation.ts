@@ -376,8 +376,8 @@ export async function adminVerifyDonationAndSetAmount(payload: {
       return { success: false, error: "Bank statement reference must exactly match the submitted UTR." };
     }
     const settings = await DonationSetting.findOne().select("upiId").lean();
-    const configuredVpa = String((settings as any)?.upiId || "").trim().toLowerCase();
-    const recipientVpa = sanitizeDonationText(payload.recipientVpa || "", 100).trim().toLowerCase();
+    const configuredVpa = normalizeVpa((settings as any)?.upiId);
+    const recipientVpa = normalizeVpa(sanitizeDonationText(payload.recipientVpa || "", 100));
     if (!configuredVpa || !recipientVpa || recipientVpa !== configuredVpa) {
       return { success: false, error: "Recipient VPA must match the configured donation account and the bank record." };
     }
