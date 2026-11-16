@@ -43,7 +43,7 @@ export async function getPublicDonationPageData() {
     let settings = await DonationSetting.findOne().lean();
     if (!settings) {
       const created = await DonationSetting.create({
-        upiId: process.env.NEXT_PUBLIC_UPI_ID || "",
+        upiId: "",
         payeeName: process.env.NEXT_PUBLIC_UPI_NAME || "ConceptNichod",
         qrCodeUrl: "/qr.png",
         isEnabled: false,
@@ -51,7 +51,7 @@ export async function getPublicDonationPageData() {
       settings = created.toObject();
     }
 
-    const configuredVpa = normalizeVpa(settings.upiId || process.env.NEXT_PUBLIC_UPI_ID || "");
+    const configuredVpa = normalizeVpa(settings.upiId || "");
     const donationsAvailable = DONATIONS_ENABLED && Boolean(settings.isEnabled) && Boolean(configuredVpa);
 
     const [patronsRaw, totalRaisedAgg] = await Promise.all([
@@ -324,7 +324,7 @@ export async function getAdminDonationDashboard(filterStatus?: string, search?: 
       transactions,
       patrons,
       settings: {
-        upiId: (settingsRaw as any)?.upiId || process.env.NEXT_PUBLIC_UPI_ID || "",
+        upiId: (settingsRaw as any)?.upiId || "",
         payeeName: (settingsRaw as any)?.payeeName || "ConceptNichod",
         qrCodeUrl: (settingsRaw as any)?.qrCodeUrl || "/qr.png",
         isEnabled: Boolean((settingsRaw as any)?.isEnabled) && process.env.DONATIONS_ENABLED === "true",
