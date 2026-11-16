@@ -54,11 +54,17 @@ export async function getPublicDonationPageData() {
     const configuredVpa = normalizeVpa(settings.upiId || process.env.NEXT_PUBLIC_UPI_ID || "");
     const donationsAvailable = DONATIONS_ENABLED && Boolean(settings.isEnabled) && Boolean(configuredVpa);
 
-    const patronsRaw = await Donor.find({ isVisible: true, isPublic: true, amount: { $gt: 0 } })
-      .select("name username amount tier message isAnonymous donatedAt createdAt")
-      .sort({ amount: -1, donatedAt: -1 })
-      .limit(150)
-      .lean();
+    const [patronsRaw, totalRaisedAgg] = await Promise.all([
+      Donor.find({ isVisible: true, isPublic: true, amount: { $gt: 0 } })
+        .select("name username amount tier message isAnonymous donatedAt createdAt")
+        .sort({ amount: -1, donatedAt: -1 })
+        .limit(150)
+        .lean(),
+      Donor.aggregate([
+        { $match: { isVisible: true, isPublic: true, amount: { $gt: 0 } } },
+        { $group: { _id: null, totalRaised: { $sum: "$amount" } } },
+      ]),
+    ]);
 
     const patrons = patronsRaw.map((p: any) => ({
       id: String(p._id),
@@ -72,7 +78,7 @@ export async function getPublicDonationPageData() {
         : new Date(p.createdAt).toISOString(),
     }));
 
-    const totalRaised = patrons.reduce((sum, p) => sum + p.amount, 0);
+    const totalRaised = Number(totalRaisedAgg[0]?.totalRaised || 0);
 
     return {
       success: true,
@@ -285,7 +291,7 @@ export async function getAdminDonationDashboard(filterStatus?: string, search?: 
       donorEmail: t.donorEmail || null,
       isAnonymous: Boolean(t.isAnonymous),
       utr: t.utr,
-      transactionId: t.transactionId,
+      transactionId: t.transactionId || "",
       message: t.message || "",
       status: (t.status || "pending") as "pending" | "verified" | "rejected",
       verifiedAmount: t.verifiedAmount ?? null,
@@ -295,7 +301,7 @@ export async function getAdminDonationDashboard(filterStatus?: string, search?: 
       adminNote: t.adminNote || "",
       verifiedBy: t.verifiedBy || null,
       verifiedAt: t.verifiedAt ? new Date(t.verifiedAt).toISOString() : null,
-      createdAt: new Date(t.createdAt).toISOString(),
+      createdAt: new Date(t.createdAt || t.donatedAt || Date.now()).toISOString(),
     }));
 
     const patrons = patronsRaw.map((p: any) => ({
@@ -617,7 +623,7 @@ export async function adminUpdateDonationSettings(input: {
     const payeeName = sanitizeDonationText(input.payeeName, 80);
     const qrCodeUrl = sanitizeDonationText(input.qrCodeUrl || "/qr.png", 300) || "/qr.png";
 
-    if (!upiId || !upiId.includes("@")) {
+    if (!/^[a-zA-Z0-9._-]{2,100}@[a-zA-Z0-9.-]{2,64}$/.test(upiId)) {
       return { success: false, error: "Please enter a valid UPI ID (e.g. name@upi)." };
     }
 
@@ -755,7 +761,7 @@ export async function adminUpdatePatron(payload:{ donorId:string; name?:string; 
   const tier = payload.tier && VALID_TIERS.includes(payload.tier as PatronTier) ? payload.tier as PatronTier : computePatronTier(amount.data);
   if (donor.transactionRef) {
     const linkedTransaction = await DonationTransaction.findById(donor.transactionRef).select("status verifiedAmount").lean();
-    if (linkedTransaction && (linkedTransaction.status !== "verified" || Number(linkedTransaction.verifiedAmount) !== amount.data)) {
+    if (!linkedTransaction || linkedTransaction.status !== "verified" || Number(linkedTransaction.verifiedAmount) !== amount.data) {
       return { success:false, error:"The amount of a linked payment record is locked. Reconcile the bank reference and recipient VPA in the transaction queue first." };
     }
   }
