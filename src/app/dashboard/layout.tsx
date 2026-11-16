@@ -21,6 +21,7 @@ import { UserProfileButton } from "@/components/auth/user-profile-button";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import User from "@/models/User";
+import { isPlatformOwner } from "@/lib/owner-access";
 import { verifySessionCookie } from "@/lib/session";
 
 export default async function DashboardLayout({
@@ -42,7 +43,7 @@ export default async function DashboardLayout({
     await dbConnect();
     topicsDocs = await Topic.find({ userId: userId }).sort({ createdAt: -1 }).lean();
     const user = await User.findOne({ uuid: userId }).lean();
-    if (user && user.username === "mythicalhrg") {
+    if (isPlatformOwner(user)) {
       isAdmin = true;
     }
   } catch (error) {
