@@ -45,7 +45,7 @@ export async function getPublicDonationPageData() {
       const created = await DonationSetting.create({
         upiId: "",
         payeeName: process.env.NEXT_PUBLIC_UPI_NAME || "ConceptNichod",
-        qrCodeUrl: "/qr.png",
+        qrCodeUrl: "",
         isEnabled: false,
       });
       settings = created.toObject();
@@ -85,7 +85,7 @@ export async function getPublicDonationPageData() {
       settings: {
         upiId: donationsAvailable ? configuredVpa || "" : "",
         payeeName: settings.payeeName || "ConceptNichod",
-        qrCodeUrl: donationsAvailable ? settings.qrCodeUrl || "/qr.png" : "",
+        qrCodeUrl: donationsAvailable && settings.qrCodeUrl && settings.qrCodeUrl !== "/qr.png" ? settings.qrCodeUrl : "",
         isEnabled: donationsAvailable,
         headline:
           settings.headline || "Support ConceptNichod & Join the Hall of Patrons",
@@ -326,7 +326,7 @@ export async function getAdminDonationDashboard(filterStatus?: string, search?: 
       settings: {
         upiId: (settingsRaw as any)?.upiId || "",
         payeeName: (settingsRaw as any)?.payeeName || "ConceptNichod",
-        qrCodeUrl: (settingsRaw as any)?.qrCodeUrl || "/qr.png",
+        qrCodeUrl: (settingsRaw as any)?.qrCodeUrl && (settingsRaw as any)?.qrCodeUrl !== "/qr.png" ? (settingsRaw as any).qrCodeUrl : "",
         isEnabled: Boolean((settingsRaw as any)?.isEnabled) && process.env.DONATIONS_ENABLED === "true",
       },
     };
@@ -621,7 +621,9 @@ export async function adminUpdateDonationSettings(input: {
 
     const upiId = sanitizeDonationText(input.upiId, 100);
     const payeeName = sanitizeDonationText(input.payeeName, 80);
-    const qrCodeUrl = sanitizeDonationText(input.qrCodeUrl || "/qr.png", 300) || "/qr.png";
+    const qrCodeUrl = sanitizeDonationText(input.qrCodeUrl || "", 300);
+    const isSafeQrCodeUrl = !qrCodeUrl || (qrCodeUrl.startsWith("/") && !qrCodeUrl.startsWith("//")) || (() => { try { return new URL(qrCodeUrl).protocol === "https:"; } catch { return false; } })();
+    if (!isSafeQrCodeUrl) return { success: false, error: "QR image must use a same-site path or a secure HTTPS image URL." };
 
     if (!/^[a-zA-Z0-9._-]{2,100}@[a-zA-Z0-9.-]{2,64}$/.test(upiId)) {
       return { success: false, error: "Please enter a valid UPI ID (e.g. name@upi)." };
@@ -741,7 +743,7 @@ export async function getCurrentUserDonationContextAction() {
   } catch { return { success:false, username:null }; }
 }
 export async function updateDonationSettingsAction(payload: { upiId:string; qrCodeUrl?:string; customInstructions?:string; thankYouNote?:string }) {
-  return adminUpdateDonationSettings({ upiId:payload.upiId, payeeName:"ConceptNichod", qrCodeUrl:payload.qrCodeUrl || "/qr.png", isEnabled:true, customInstructions:payload.customInstructions, thankYouNote:payload.thankYouNote });
+  return adminUpdateDonationSettings({ upiId:payload.upiId, payeeName:"ConceptNichod", qrCodeUrl:payload.qrCodeUrl || "", isEnabled:true, customInstructions:payload.customInstructions, thankYouNote:payload.thankYouNote });
 }
 export async function addDonorCardAction(payload: { username:string; amount:number; tier?:"Supporter"|"Patron"|"Benefactor"|"Legend"; message?:string }) {
   return adminAddManualPatron({ name:payload.username, amount:payload.amount, tier:payload.tier, message:payload.message });
