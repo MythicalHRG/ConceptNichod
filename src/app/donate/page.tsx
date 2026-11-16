@@ -221,17 +221,10 @@ export default function DonatePage() {
                   </span>
                   <span className="text-[11px] text-slate-400">Direct UPI</span>
                 </div>
-                {settings.qrCodeUrl ? (
-                  <div className="bg-white p-4 rounded-2xl flex flex-col items-center justify-center max-w-[240px] mx-auto shadow-xl">
-                    <img src={settings.qrCodeUrl} alt="ConceptNichod verified UPI QR Code" className="w-48 h-48 object-contain rounded-lg" />
-                    <span className="mt-2 text-xs font-bold text-slate-800">Pay to {settings.payeeName}</span>
-                  </div>
-                ) : (
-                  <div className="rounded-xl border border-slate-700 bg-slate-950/70 p-4 text-center">
-                    <p className="text-xs font-semibold text-slate-200">No verified QR image configured</p>
-                    <p className="mt-1 text-xs text-slate-400">Use the official UPI ID below only after confirming the recipient name in your payment app.</p>
-                  </div>
-                )}
+                <div className="rounded-xl border border-slate-700 bg-slate-950/70 p-4 text-center">
+                  <p className="text-xs font-semibold text-slate-200">Use the official UPI ID</p>
+                  <p className="mt-1 text-xs text-slate-400">No QR image is displayed until a verified QR-generation flow is available. Copy the UPI ID below and confirm the recipient name in your payment app.</p>
+                </div>
                 <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-[11px] text-slate-500 uppercase font-semibold">Official UPI ID</p>
