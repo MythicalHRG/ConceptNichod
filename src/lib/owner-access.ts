@@ -18,6 +18,6 @@ export function hasPlatformOwnerIdentity(
 
 export function isPlatformOwner(
   user: PlatformOwnerIdentity | null | undefined
-): boolean {
+): user is PlatformOwnerIdentity & { username: string; role: "owner" } {
   return Boolean(user && user.role === "owner" && hasPlatformOwnerIdentity(user));
 }
