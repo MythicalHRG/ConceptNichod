@@ -17,6 +17,7 @@ import {
   validateAdminVerifiedAmount,
   computePatronTier,
   sanitizeDonationText,
+  normalizeVpa,
   PatronTier,
 } from "@/lib/donation-validation";
 
@@ -45,10 +46,13 @@ export async function getPublicDonationPageData() {
         upiId: process.env.NEXT_PUBLIC_UPI_ID || "",
         payeeName: process.env.NEXT_PUBLIC_UPI_NAME || "ConceptNichod",
         qrCodeUrl: "/qr.png",
-        isEnabled: true,
+        isEnabled: false,
       });
       settings = created.toObject();
     }
+
+    const configuredVpa = normalizeVpa(settings.upiId || process.env.NEXT_PUBLIC_UPI_ID || "");
+    const donationsAvailable = DONATIONS_ENABLED && Boolean(settings.isEnabled) && Boolean(configuredVpa);
 
     const patronsRaw = await Donor.find({ isVisible: true, isPublic: true, amount: { $gt: 0 } })
       .select("name username amount tier message isAnonymous donatedAt createdAt")
@@ -73,10 +77,10 @@ export async function getPublicDonationPageData() {
     return {
       success: true,
       settings: {
-        upiId: settings.upiId || process.env.NEXT_PUBLIC_UPI_ID || "",
+        upiId: donationsAvailable ? configuredVpa : "",
         payeeName: settings.payeeName || "ConceptNichod",
-        qrCodeUrl: settings.qrCodeUrl || "/qr.png",
-        isEnabled: Boolean(settings.isEnabled) && process.env.DONATIONS_ENABLED === "true",
+        qrCodeUrl: donationsAvailable ? settings.qrCodeUrl || "/qr.png" : "",
+        isEnabled: donationsAvailable,
         headline:
           settings.headline || "Support ConceptNichod & Join the Hall of Patrons",
         subtext:
@@ -94,8 +98,8 @@ export async function getPublicDonationPageData() {
       settings: {
         upiId: process.env.NEXT_PUBLIC_UPI_ID || "",
         payeeName: process.env.NEXT_PUBLIC_UPI_NAME || "ConceptNichod",
-        qrCodeUrl: "/qr.png",
-        isEnabled: process.env.DONATIONS_ENABLED === "true",
+        qrCodeUrl: "",
+        isEnabled: false,
         headline: "Support ConceptNichod & Join the Hall of Patrons",
         subtext:
           "Scan the UPI QR code to contribute any amount, then submit your 12-digit UTR and Transaction ID below.",
@@ -120,59 +124,55 @@ export async function submitDonationTransaction(formData: {
   honeypot?: string;
 }) {
   try {
-    // Silent bot trap
     if (formData.honeypot && formData.honeypot.trim() !== "") {
-      return {
-        success: true,
-        message: "Your UTR & Transaction ID have been sent to the Admin Panel for verification.",
-      };
+      return { success: true, message: "Your UTR & Transaction ID have been sent to the Admin Panel for verification." };
     }
 
-    const clientIp = await getClientIp();
-    if (!DONATIONS_ENABLED) return { success: false, error: "Donations are temporarily unavailable while the recipient account is being confirmed." };
-    const rateLimit = await checkDistributedRateLimit(`donate_submit:${clientIp}`, 5, 15 * 60 * 1000);
-    if (!rateLimit.success) {
-      return {
-        success: false,
-        error: "Too many submissions from your network. Please wait 15 minutes before trying again.",
-      };
+    if (!DONATIONS_ENABLED) {
+      return { success: false, error: "Donations are temporarily unavailable while the recipient account is being confirmed." };
     }
 
     const validation = validateDonationSubmission(formData);
     if (!validation.valid || !validation.data) {
-      return {
-        success: false,
-        error: validation.error || "Invalid submission details.",
-      };
+      return { success: false, error: validation.error || "Invalid submission details." };
     }
 
     const { donorName, utr, transactionId, message, isAnonymous } = validation.data;
+    const clientIp = await getClientIp();
 
     await connectToDatabase();
+    const settings = await DonationSetting.findOne().select("upiId isEnabled").lean();
+    const configuredVpa = normalizeVpa((settings as any)?.upiId || "");
+    if (!settings?.isEnabled || !configuredVpa) {
+      return { success: false, error: "Donations are temporarily unavailable because the recipient account is not configured and enabled." };
+    }
 
-    // Check for duplicate UTR or Transaction ID
+    const ipUnavailable = clientIp === "127.0.0.1" || clientIp === "unknown";
+    const rateLimitKey = ipUnavailable ? "donate_submit:" + clientIp + ":" + utr : "donate_submit:" + clientIp;
+    const rateLimit = await checkDistributedRateLimit(rateLimitKey, 5, 15 * 60 * 1000);
+    if (!rateLimit.success) {
+      return { success: false, error: "Too many submissions from your network. Please wait 15 minutes before trying again." };
+    }
+
     const existing = await DonationTransaction.findOne({
       $or: [{ utr }, { transactionId }],
-    })
-      .select("utr transactionId status")
-      .lean();
+    }).select("utr transactionId status").lean();
 
     if (existing) {
       const dupField = existing.utr === utr ? "12-digit UTR" : "Transaction ID";
       const existingStatus = String(existing.status || "pending").toUpperCase();
-      return {
-        success: false,
-        error: `This ${dupField} has already been submitted (Status: ${existingStatus}).`,
-      };
+      return { success: false, error: "This " + dupField + " has already been submitted (Status: " + existingStatus + ")." };
     }
 
-    // Attach optional logged-in user session if available
     const sessionUuid = verifySessionCookie((await cookies()).get("user_session")?.value);
     let userId: string | null = null;
     let username: string | null = null;
     if (sessionUuid) {
       const dbUser = await User.findOne({ uuid: sessionUuid }).select("uuid username").lean();
-      if (dbUser) { userId = sessionUuid; username = (dbUser as any).username || null; }
+      if (dbUser) {
+        userId = sessionUuid;
+        username = (dbUser as any).username || null;
+      }
     }
 
     const createdTx = await DonationTransaction.create({
@@ -202,21 +202,14 @@ export async function submitDonationTransaction(formData: {
     return {
       success: true,
       transactionId: String(createdTx._id),
-      message:
-        "Submitted! Your UTR and Transaction ID have been sent to the Admin Panel. The Admin will manually verify your payment, enter the confirmed amount, and add you to the Hall of Patrons.",
+      message: "Submitted! Your UTR and Transaction ID have been sent to the Admin Panel for verification.",
     };
   } catch (error: any) {
     if (error?.code === 11000) {
-      return {
-        success: false,
-        error: "This UTR or Transaction ID has already been submitted.",
-      };
+      return { success: false, error: "This UTR or Transaction ID has already been submitted." };
     }
     console.error("[submitDonationTransaction] Error:", error);
-    return {
-      success: false,
-      error: "Failed to submit transaction details. Please try again.",
-    };
+    return { success: false, error: "Failed to submit transaction details. Please try again." };
   }
 }
 
