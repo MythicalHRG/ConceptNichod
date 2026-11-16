@@ -91,9 +91,12 @@ export async function registerAction(formData: FormData) {
         if (passwordError) throw new Error(passwordError);
 
         const ip = await getClientIp();
-        const regRate = await checkDistributedRateLimit(`register:${ip}`, 3, 60 * 60 * 1000);
-        if (!regRate.success) {
-            throw new Error("Too many registration attempts from this IP. Please try again later.");
+        const ipUnavailable = ip === "127.0.0.1" || ip === "unknown";
+        const regIpRateKey = ipUnavailable ? `register:${ip}:${normalizedEmail}` : `register:${ip}`;
+        const regRate = await checkDistributedRateLimit(regIpRateKey, 3, 60 * 60 * 1000);
+        const regEmailRate = await checkDistributedRateLimit(`register:email:${normalizedEmail}`, 3, 60 * 60 * 1000);
+        if (!regRate.success || !regEmailRate.success) {
+            throw new Error("Too many registration attempts. Please try again later.");
         }
 
         const isIpBanned = await Blacklist.findOne({ type: "ip", value: ip });
