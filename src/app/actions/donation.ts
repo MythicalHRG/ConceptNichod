@@ -85,7 +85,7 @@ export async function getPublicDonationPageData() {
       settings: {
         upiId: donationsAvailable ? configuredVpa || "" : "",
         payeeName: settings.payeeName || "ConceptNichod",
-        qrCodeUrl: donationsAvailable && settings.qrCodeUrl && settings.qrCodeUrl !== "/qr.png" ? settings.qrCodeUrl : "",
+        qrCodeUrl: "",
         isEnabled: donationsAvailable,
         headline:
           settings.headline || "Support ConceptNichod & Join the Hall of Patrons",
@@ -326,7 +326,7 @@ export async function getAdminDonationDashboard(filterStatus?: string, search?: 
       settings: {
         upiId: (settingsRaw as any)?.upiId || "",
         payeeName: (settingsRaw as any)?.payeeName || "ConceptNichod",
-        qrCodeUrl: (settingsRaw as any)?.qrCodeUrl && (settingsRaw as any)?.qrCodeUrl !== "/qr.png" ? (settingsRaw as any).qrCodeUrl : "",
+        qrCodeUrl: "",
         isEnabled: Boolean((settingsRaw as any)?.isEnabled) && process.env.DONATIONS_ENABLED === "true",
       },
     };
@@ -636,7 +636,7 @@ export async function adminUpdateDonationSettings(input: {
 
     settings.upiId = upiId;
     settings.payeeName = payeeName || "ConceptNichod";
-    settings.qrCodeUrl = qrCodeUrl;
+    settings.qrCodeUrl = "";
     settings.isEnabled = input.isEnabled ?? true;
     settings.updatedBy = (adminUser as any).username || "Admin";
     if (input.customInstructions !== undefined) settings.subtext = sanitizeDonationText(input.customInstructions, 500);
@@ -703,7 +703,7 @@ export async function getDonationInfoAction() {
   }));
   const publicSettings = JSON.parse(JSON.stringify(setting));
   if (process.env.DONATIONS_ENABLED !== "true") publicSettings.upiId = "";
-  if (publicSettings.qrCodeUrl === "/qr.png") publicSettings.qrCodeUrl = "";
+  publicSettings.qrCodeUrl = "";
   // Evaluated for audit parity; only publishedPatrons are returned publicly.
   void verifiedDonations;
   return { success:true, settings:publicSettings, donors:JSON.parse(JSON.stringify(donors)), recentTransactions:JSON.parse(JSON.stringify(recentTransactions)) };
@@ -750,7 +750,7 @@ export async function getAdminDonationSettingsAction() {
     success: true,
     settings: {
       upiId: (settings as any)?.upiId || "",
-      qrCodeUrl: (settings as any)?.qrCodeUrl && (settings as any)?.qrCodeUrl !== "/qr.png" ? (settings as any).qrCodeUrl : "",
+      qrCodeUrl: "",
       isEnabled: Boolean((settings as any)?.isEnabled),
     },
   };
