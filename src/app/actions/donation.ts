@@ -372,7 +372,7 @@ export async function adminVerifyDonationAndSetAmount(payload: {
 
     // An admin-entered amount is not proof of payment. Require explicit bank-record
     // reference and recipient VPA confirmation before changing a transaction to verified.
-    const bankReference = sanitizeDonationText(payload.bankReference || "", 60).replace(/\\s+/g, "");
+    const bankReference = sanitizeDonationText(payload.bankReference || "", 60).replace(/\s+/g, "");
     if (!bankReference || bankReference !== String(tx.utr)) {
       return { success: false, error: "Bank statement reference must exactly match the submitted UTR." };
     }
