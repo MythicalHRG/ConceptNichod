@@ -21,7 +21,7 @@ import {
   getEmailBroadcastHistoryAction,
 } from "@/app/actions/email-broadcast";
 import {
-  getDonationInfoAction,
+  getAdminDonationSettingsAction,
   updateDonationSettingsAction,
 } from "@/app/actions/donation";
 import {
@@ -202,9 +202,9 @@ export function AdminPanel() {
       if (emailRes?.success) setEmailBroadcasts(emailRes.broadcasts || []);
       if (changelogsRes?.success) setChangelogs(changelogsRes.changelogs || []);
       if (studyGroupsRes?.success) setStudyGroups(studyGroupsRes.groups || []);
-      const donationRes = await getDonationInfoAction().catch(() => ({ success: true, settings: null }));
+      const donationRes = await getAdminDonationSettingsAction().catch(() => ({ success: false, settings: null }));
       if (donationRes?.success && donationRes.settings) {
-        setDonationSettings({ upiId: donationRes.settings.upiId || "", qrCodeUrl: donationRes.settings.qrCodeUrl && donationRes.settings.qrCodeUrl !== "/qr.png" ? donationRes.settings.qrCodeUrl : "" });
+        setDonationSettings({ upiId: donationRes.settings.upiId || "", qrCodeUrl: donationRes.settings.qrCodeUrl || "" });
       }
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
