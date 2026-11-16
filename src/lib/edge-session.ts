@@ -1,7 +1,7 @@
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function getSessionSecret(): string {
-  const configured = (process.env.SESSION_SECRET || process.env.ENCRYPTION_SECRET_KEY || "").trim().replace(/^(['"])(.*)\\1$/, "$2").trim();
+  const configured = (process.env.SESSION_SECRET || process.env.ENCRYPTION_SECRET_KEY || "").trim();
   if (configured) {
     if (process.env.NODE_ENV === "production" && new TextEncoder().encode(configured).length < 32) {
       throw new Error("SESSION_SECRET or ENCRYPTION_SECRET_KEY must contain at least 32 bytes in production.");
