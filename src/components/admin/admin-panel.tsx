@@ -171,6 +171,7 @@ export function AdminPanel() {
   // Donation & UPI State
   const [donationSettings, setDonationSettings] = useState({
     upiId: "",
+    qrCodeUrl: "",
   });
   const [isSavingDonation, setIsSavingDonation] = useState(false);
 
@@ -495,6 +496,7 @@ export function AdminPanel() {
     try {
       const res = await updateDonationSettingsAction({
         upiId: donationSettings.upiId.trim(),
+        qrCodeUrl: donationSettings.qrCodeUrl.trim(),
       });
       if (res.success) {
         toast({ title: "UPI ID Saved", description: "Official UPI ID updated successfully." });
@@ -1321,7 +1323,7 @@ export function AdminPanel() {
                     </label>
                     <Input
                       value={donationSettings.upiId}
-                      onChange={(e) => setDonationSettings({ upiId: e.target.value })}
+                      onChange={(e) => setDonationSettings((prev) => ({ ...prev, upiId: e.target.value }))}
                       placeholder="e.g. harsh.2525@ptaxis"
                       required
                       className="font-mono text-sm"
