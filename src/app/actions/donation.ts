@@ -83,7 +83,7 @@ export async function getPublicDonationPageData() {
     return {
       success: true,
       settings: {
-        upiId: donationsAvailable ? configuredVpa : "",
+        upiId: donationsAvailable ? configuredVpa || "" : "",
         payeeName: settings.payeeName || "ConceptNichod",
         qrCodeUrl: donationsAvailable ? settings.qrCodeUrl || "/qr.png" : "",
         isEnabled: donationsAvailable,
