@@ -743,6 +743,18 @@ export async function getCurrentUserDonationContextAction() {
     return { success:true, username:(user as any).username, name:(user as any).fullName || (user as any).username };
   } catch { return { success:false, username:null }; }
 }
+export async function getAdminDonationSettingsAction() {
+  await requireAdminSession();
+  const settings = await DonationSetting.findOne().select("upiId qrCodeUrl isEnabled").lean();
+  return {
+    success: true,
+    settings: {
+      upiId: (settings as any)?.upiId || "",
+      qrCodeUrl: (settings as any)?.qrCodeUrl && (settings as any)?.qrCodeUrl !== "/qr.png" ? (settings as any).qrCodeUrl : "",
+      isEnabled: Boolean((settings as any)?.isEnabled),
+    },
+  };
+}
 export async function updateDonationSettingsAction(payload: { upiId:string; qrCodeUrl?:string; customInstructions?:string; thankYouNote?:string }) {
   return adminUpdateDonationSettings({ upiId:payload.upiId, payeeName:"ConceptNichod", qrCodeUrl:payload.qrCodeUrl || "", isEnabled:true, customInstructions:payload.customInstructions, thankYouNote:payload.thankYouNote });
 }
