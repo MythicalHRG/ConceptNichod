@@ -232,12 +232,18 @@ export async function loginAction(formData: FormData) {
             throw new Error("Invalid credentials");
         }
 
-        // Reset failed login count only after the password has been verified.
-        await resetDistributedRateLimit(accountRateKey);
-        await resetDistributedRateLimit(loginRateKey);
+        // A valid password is authoritative. Rate-counter cleanup and login
+        // telemetry are best-effort and must not turn a valid login into a failure.
+        const resetResults = await Promise.allSettled([
+            resetDistributedRateLimit(accountRateKey),
+            resetDistributedRateLimit(loginRateKey),
+        ]);
+        for (const result of resetResults) {
+            if (result.status === "rejected") {
+                console.error("Login rate-limit reset failed:", result.reason);
+            }
+        }
 
-        // Update login IP and timestamps. Database failures must not be counted
-        // as bad-password attempts.
         const now = new Date();
         user.lastLoginIp = ip;
         user.lastLoginAt = now;
@@ -246,7 +252,11 @@ export async function loginAction(formData: FormData) {
             user.firstLoginIp = ip;
             user.firstLoginAt = user.createdAt || now;
         }
-        await user.save();
+        try {
+            await user.save();
+        } catch (metadataError) {
+            console.error("Login metadata update failed:", metadataError);
+        }
 
         (await cookies()).set("user_session", createSignedSessionCookie(user.uuid), { 
             httpOnly: true, 
