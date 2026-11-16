@@ -204,7 +204,7 @@ export function AdminPanel() {
       if (studyGroupsRes?.success) setStudyGroups(studyGroupsRes.groups || []);
       const donationRes = await getDonationInfoAction().catch(() => ({ success: true, settings: null }));
       if (donationRes?.success && donationRes.settings) {
-        setDonationSettings({ upiId: donationRes.settings.upiId || "" });
+        setDonationSettings({ upiId: donationRes.settings.upiId || "", qrCodeUrl: donationRes.settings.qrCodeUrl && donationRes.settings.qrCodeUrl !== "/qr.png" ? donationRes.settings.qrCodeUrl : "" });
       }
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
@@ -1329,7 +1329,7 @@ export function AdminPanel() {
                       className="font-mono text-sm"
                     />
                     <p className="text-xs text-muted-foreground">
-                      This UPI VPA is used to generate dynamic payment QR codes and 1-tap UPI app links on the donation page.
+                      The VPA is the payment recipient. A QR image is configured separately below and is never inferred from the legacy static QR file.
                     </p>
                   </div>
 
