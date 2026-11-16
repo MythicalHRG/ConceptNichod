@@ -68,3 +68,23 @@ test("admin reconciliation is accessible from both dashboard routes", () => {
   assert.match(read("src/components/admin/admin-panel.tsx"), /DonationReconciliation/);
   assert.match(read("src/app/dashboard/admin/donations/page.tsx"), /DonationReconciliation/);
 });
+
+test("admin verification requires bank statement UTR and recipient VPA evidence", () => {
+  const actions = read("src/app/actions/donation.ts");
+  const model = read("src/models/DonationTransaction.ts");
+  const adminUi = read("src/components/admin/donation-reconciliation.tsx");
+  assert.match(actions, /bankReference: string/);
+  assert.match(actions, /bank statement reference must exactly match the submitted UTR/i);
+  assert.match(actions, /recipientVpa !== configuredVpa/);
+  assert.match(actions, /verificationMethod = "manual-bank-reconciliation"/);
+  assert.match(model, /bankReference:/);
+  assert.match(adminUi, /Bank Statement UTR \/ Reference/);
+  assert.match(adminUi, /Recipient VPA in Bank Record/);
+});
+
+test("legacy donation records without a status remain in the pending review queue", () => {
+  const actions = read("src/app/actions/donation.ts");
+  assert.match(actions, /status: \{ \$exists: false \}/);
+  assert.match(actions, /status: t\.status \|\| "pending"/);
+  assert.match(actions, /legacyPendingCount/);
+});
