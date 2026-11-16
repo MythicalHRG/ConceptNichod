@@ -88,3 +88,16 @@ test("legacy donation records without a status remain in the pending review queu
   assert.match(actions, /status: t\.status \|\| "pending"/);
   assert.match(actions, /legacyPendingCount/);
 });
+
+test("public donation totals are not truncated by the visible patron list limit", () => {
+  const actions = read("src/app/actions/donation.ts");
+  assert.match(actions, /Donor\.aggregate\(\[/);
+  assert.match(actions, /totalRaised: \{ \$sum: "\$amount" \}/);
+  assert.match(actions, /Number\(totalRaisedAgg\[0\]\?\.totalRaised \|\| 0\)/);
+});
+
+test("linked verified donation amounts cannot be edited outside reconciliation", () => {
+  const actions = read("src/app/actions/donation.ts");
+  assert.match(actions, /linkedTransaction\.status !== "verified"/);
+  assert.match(actions, /linkedTransaction\.verifiedAmount\) !== amount\.data/);
+});
