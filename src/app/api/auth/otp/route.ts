@@ -197,8 +197,10 @@ export async function POST(req: Request) {
 
     if (action === 'verify') {
       // IP Rate limiting for verification attempts: 15 attempts per 15 minutes
-      const verifyIpKey = ip === "127.0.0.1" || ip === "unknown" ? `otp:verify:${ip}:${email}` : `otp:verify:${ip}`;
-      const verifyRateLimit = await checkDistributedRateLimit(verifyIpKey, 15, 15 * 60 * 1000);
+      const ipUnavailable = ip === "127.0.0.1" || ip === "unknown";
+      const verifyRateLimit = ipUnavailable
+        ? await checkDistributedRateLimit(`otp:verify:ip:${ip}:${email}`, 15, 15 * 60 * 1000)
+        : await checkDistributedRateLimit(`otp:verify:${ip}`, 15, 15 * 60 * 1000);
       const verifyEmailRateLimit = await checkDistributedRateLimit(`otp:verify:email:${email}`, 15, 15 * 60 * 1000);
       if (!verifyRateLimit.success || !verifyEmailRateLimit.success) {
         return NextResponse.json(
