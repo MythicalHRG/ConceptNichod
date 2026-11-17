@@ -213,37 +213,67 @@ export async function POST(req: Request) {
       const sanitizedOtp = (otp || '').trim();
       if (!sanitizedOtp) return NextResponse.json({ error: 'OTP is required' }, { status: 400 });
 
-      const otpRecord = await OtpVerification.findOne({ email });
-      if (!otpRecord) return NextResponse.json({ error: 'No verification code requested for this email' }, { status: 404 });
+      const now = new Date();
+      // Increment attempts in MongoDB so parallel requests cannot overwrite one
+      // another's counter and bypass the per-code verification limit.
+      const otpRecord = await OtpVerification.findOneAndUpdate(
+        { email, expiresAt: { $gt: now }, attempts: { $lt: MAX_VERIFY_ATTEMPTS } },
+        { $inc: { attempts: 1 } },
+        { new: true }
+      );
 
-      // Check max attempts to prevent brute-force cracking
-      otpRecord.attempts = (otpRecord.attempts || 0) + 1;
-
-      if (otpRecord.attempts > MAX_VERIFY_ATTEMPTS) {
-        await OtpVerification.deleteOne({ email });
-        return NextResponse.json(
-          { error: 'Too many incorrect attempts. This code has been invalidated for security. Please request a new one.' },
-          { status: 429 }
-        );
-      }
-
-      if (new Date() > otpRecord.expiresAt) {
-        await OtpVerification.deleteOne({ email });
-        return NextResponse.json({ error: 'Verification code has expired. Please request a new code.' }, { status: 400 });
+      if (!otpRecord) {
+        const currentRecord = await OtpVerification.findOne({ email });
+        if (!currentRecord) {
+          return NextResponse.json({ error: 'No verification code requested for this email' }, { status: 404 });
+        }
+        if (currentRecord.expiresAt <= now) {
+          await OtpVerification.deleteOne({ _id: currentRecord._id, expiresAt: { $lte: now } });
+          return NextResponse.json({ error: 'Verification code has expired. Please request a new code.' }, { status: 400 });
+        }
+        if ((currentRecord.attempts || 0) >= MAX_VERIFY_ATTEMPTS) {
+          await OtpVerification.deleteOne({
+            _id: currentRecord._id,
+            isVerified: false,
+            attempts: { $gte: MAX_VERIFY_ATTEMPTS },
+          });
+          return NextResponse.json(
+            { error: 'Too many incorrect attempts. This code has been invalidated for security. Please request a new one.' },
+            { status: 429 }
+          );
+        }
+        return NextResponse.json({ error: 'Verification code is no longer valid. Please request a new one.' }, { status: 400 });
       }
 
       if (otpRecord.otp !== sanitizedOtp) {
-        await otpRecord.save();
-        const remaining = MAX_VERIFY_ATTEMPTS - otpRecord.attempts;
+        if (otpRecord.attempts >= MAX_VERIFY_ATTEMPTS) {
+          await OtpVerification.deleteOne({
+            _id: otpRecord._id,
+            isVerified: false,
+            attempts: { $gte: MAX_VERIFY_ATTEMPTS },
+          });
+        }
+        const remaining = Math.max(0, MAX_VERIFY_ATTEMPTS - otpRecord.attempts);
         return NextResponse.json(
           { error: `Invalid code. ${remaining} attempt(s) remaining before invalidation.` },
           { status: 400 }
         );
       }
 
-      // Verification successful
-      otpRecord.isVerified = true;
-      await otpRecord.save();
+      // Conditional update prevents a stale request from verifying an expired,
+      // replaced, or already-consumed OTP record.
+      const verifiedRecord = await OtpVerification.findOneAndUpdate(
+        { _id: otpRecord._id, otp: sanitizedOtp, isVerified: false, expiresAt: { $gt: new Date() } },
+        { $set: { isVerified: true } },
+        { new: true }
+      );
+      if (!verifiedRecord) {
+        const alreadyVerified = await OtpVerification.exists({ _id: otpRecord._id, isVerified: true });
+        if (alreadyVerified) {
+          return NextResponse.json({ success: true, message: 'Email verified successfully' });
+        }
+        return NextResponse.json({ error: 'Verification code has expired or is no longer valid.' }, { status: 400 });
+      }
 
       return NextResponse.json({ success: true, message: 'Email verified successfully' });
     }
