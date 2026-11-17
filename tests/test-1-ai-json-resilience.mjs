@@ -7,7 +7,10 @@ function parseJsonResponse(raw) {
     throw new Error("Invalid response received from AI model: empty or non-string output.");
   }
 
-  let text = raw.trim();
+  let text = raw.trim().replace(
+    /(?<!\\)\\(frac|theta|beta|right|left|nabla|sqrt|sum|int|cdot|times|alpha|gamma|delta|lambda|mu|pi|sigma|omega|text|mathrm|mathbf|overline|underline|begin|end|operatorname|infty|partial|approx|neq|leq|geq|rightarrow|mathbb|mathcal)\b/g,
+    "\\\\$1"
+  );
 
   // 1. Direct parse attempt if clean JSON
   try {
@@ -87,4 +90,11 @@ test("Tareeka 1: AI JSON parser handles trailing commas produced by LLMs", () =>
   const invalidJsonWithTrailingComma = `{"name": "Thermodynamics", "difficulty": "Medium",}`;
   const result = parseJsonResponse(invalidJsonWithTrailingComma);
   assert.strictEqual(result.name, "Thermodynamics");
+});
+
+
+test("AI JSON parser preserves unescaped LaTeX commands inside JSON strings", () => {
+  const raw = String.raw`{"formula":"\frac{a}{b} + \theta + \beta + \right) + \nabla f"}`;
+  const result = parseJsonResponse(raw);
+  assert.equal(result.formula, String.raw`\frac{a}{b} + \theta + \beta + \right) + \nabla f`);
 });

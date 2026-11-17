@@ -133,7 +133,13 @@ export function parseJsonResponse<T>(raw: string): T {
     throw new Error("Invalid response received from AI model: empty or non-string output.");
   }
 
-  let text = raw.trim();
+  // Models sometimes emit LaTeX commands with a single backslash inside a
+  // JSON string. Escape known commands before JSON.parse; leave already escaped
+  // JSON backslashes and standard JSON escape sequences untouched.
+  let text = raw.trim().replace(
+    /(?<!\\)\\(frac|theta|beta|right|left|nabla|sqrt|sum|int|cdot|times|alpha|gamma|delta|lambda|mu|pi|sigma|omega|text|mathrm|mathbf|overline|underline|begin|end|operatorname|infty|partial|approx|neq|leq|geq|rightarrow|mathbb|mathcal)\b/g,
+    "\\\\$1"
+  );
 
   // 1. Direct parse attempt if clean JSON
   try {

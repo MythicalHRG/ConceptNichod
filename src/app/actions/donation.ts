@@ -366,9 +366,15 @@ export async function adminVerifyDonationAndSetAmount(payload: {
 
     const confirmedAmount = amountCheck.data;
 
-    const tx = await DonationTransaction.findById(payload.transactionDbId);
+    let tx = await DonationTransaction.findById(payload.transactionDbId);
     if (!tx) {
       return { success: false, error: "Donation transaction not found." };
+    }
+    // Resume a verified payment if its patron sync previously failed.
+    const isDonorSyncRecovery =
+      tx.status === "verified" && Boolean(tx.isPublishedToPatrons) && !tx.donorRecordId;
+    if (tx.status && tx.status !== "pending" && !isDonorSyncRecovery) {
+      return { success: false, error: "This donation has already been reviewed." };
     }
 
     // An admin-entered amount is not proof of payment. Require explicit bank-record
@@ -384,26 +390,58 @@ export async function adminVerifyDonationAndSetAmount(payload: {
       return { success: false, error: "Recipient VPA must match the configured donation account and the bank record." };
     }
 
-    const tier: PatronTier =
-      payload.customTier && VALID_TIERS.includes(payload.customTier as PatronTier)
+    if (isDonorSyncRecovery && Number(tx.verifiedAmount) !== confirmedAmount) {
+      return { success: false, error: "This verified donation amount is locked; retry patron synchronization with the original amount." };
+    }
+    const tier: PatronTier = isDonorSyncRecovery
+      ? (tx.patronTier || computePatronTier(confirmedAmount))
+      : payload.customTier && VALID_TIERS.includes(payload.customTier as PatronTier)
         ? (payload.customTier as PatronTier)
         : computePatronTier(confirmedAmount);
 
-    tx.status = "verified";
-    tx.bankReference = bankReference;
-    tx.recipientVpa = configuredVpa;
-    tx.verificationMethod = "manual-bank-reconciliation";
-    tx.verifiedAmount = confirmedAmount;
-    tx.patronTier = tier;
-    tx.isPublishedToPatrons = Boolean(payload.publishToHallOfPatrons);
-    tx.adminNote = sanitizeDonationText(payload.adminNote || "", 500);
-    tx.verifiedBy = (adminUser as any).username || "Admin";
-    tx.verifiedAt = new Date();
+    if (!isDonorSyncRecovery) {
+      // Atomically claim a pending transaction so concurrent approvals cannot both proceed.
+      const claimedTx = await DonationTransaction.findOneAndUpdate(
+        {
+          _id: tx._id,
+          $or: [
+            { status: "pending" },
+            { status: { $exists: false } },
+            { status: null },
+          ],
+        },
+        {
+          $set: {
+            status: "verified",
+            bankReference,
+            recipientVpa: configuredVpa,
+            verificationMethod: "manual-bank-reconciliation",
+            verifiedAmount: confirmedAmount,
+            patronTier: tier,
+            isPublishedToPatrons: Boolean(payload.publishToHallOfPatrons),
+            adminNote: sanitizeDonationText(payload.adminNote || "", 500),
+            verifiedBy: (adminUser as any).username || "Admin",
+            verifiedAt: new Date(),
+          },
+        },
+        { new: true, runValidators: true }
+      );
+      if (!claimedTx) {
+        return { success: false, error: "This donation has already been reviewed or is being processed." };
+      }
+      tx = claimedTx;
+    }
 
-    // Sync with Donor (Hall of Patrons) collection
+    // Deterministic UUID makes donor upsert idempotent if the write succeeded
+    // but the response or DonationTransaction save failed. UUID is uniquely indexed.
     if (tx.isPublishedToPatrons) {
+      const existingDonor = tx.donorRecordId
+        ? null
+        : await Donor.findOne({ transactionRef: String(tx._id) });
+      const donorUuid =
+        existingDonor?.uuid ||
+        crypto.createHash("sha256").update(`conceptnichod:donation:${tx._id}`).digest("hex");
       const patronData = {
-        uuid: tx.donorRecordId ? undefined : crypto.randomUUID(),
         userId: tx.userId || null,
         userUuid: tx.userId || null,
         username: tx.username || null,
@@ -426,23 +464,32 @@ export async function adminVerifyDonationAndSetAmount(payload: {
       };
 
       if (tx.donorRecordId) {
-        await Donor.findByIdAndUpdate(tx.donorRecordId, patronData, { new: true });
+        await Donor.findByIdAndUpdate(tx.donorRecordId, patronData, { new: true, runValidators: true });
       } else {
-        const existingDonor = await Donor.findOne({ transactionRef: String(tx._id) });
-        if (existingDonor) {
-          Object.assign(existingDonor, patronData);
-          await existingDonor.save();
-          tx.donorRecordId = String(existingDonor._id);
-        } else {
-          const newDonor = await Donor.create(patronData);
-          tx.donorRecordId = String(newDonor._id);
+        let donor;
+        try {
+          donor = await Donor.findOneAndUpdate(
+            { uuid: donorUuid },
+            { $set: patronData, $setOnInsert: { uuid: donorUuid } },
+            { upsert: true, new: true, runValidators: true }
+          );
+        } catch (donorError: any) {
+          if (donorError?.code !== 11000) throw donorError;
+          donor = await Donor.findOneAndUpdate(
+            { uuid: donorUuid },
+            { $set: patronData },
+            { new: true, runValidators: true }
+          );
         }
+        if (!donor) throw new Error("Donor record could not be confirmed; retry patron synchronization.");
+        tx.donorRecordId = String(donor._id);
       }
     } else if (tx.donorRecordId) {
-      // If unchecked, hide from Hall of Patrons
       await Donor.findByIdAndUpdate(tx.donorRecordId, { isVisible: false, isPublic: false });
     }
 
+    // Keep the bank-verified status if patron sync fails. A retry is safe because
+    // the deterministic donor UUID prevents duplicate credits.
     await tx.save();
 
 
