@@ -94,7 +94,7 @@ test("Tareeka 1: AI JSON parser handles trailing commas produced by LLMs", () =>
 
 
 test("AI JSON parser preserves unescaped LaTeX commands inside JSON strings", () => {
-  const raw = String.raw`{"formula":"\\frac{a}{b} + \\theta + \\beta + \\right) + \\nabla f"}`;
+  const raw = String.raw`{"formula":"\frac{a}{b} + \theta + \beta + \right) + \nabla f"}`;
   const result = parseJsonResponse(raw);
   assert.equal(result.formula, String.raw`\frac{a}{b} + \theta + \beta + \right) + \nabla f`);
 });
