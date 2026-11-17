@@ -76,7 +76,7 @@ test("admin verification requires bank statement UTR and recipient VPA evidence"
   assert.match(actions, /bankReference: string/);
   assert.match(actions, /bank statement reference must exactly match the submitted UTR/i);
   assert.match(actions, /recipientVpa !== configuredVpa/);
-  assert.match(actions, /verificationMethod = "manual-bank-reconciliation"/);
+  assert.match(actions, /verificationMethod:\s*"manual-bank-reconciliation"/);
   assert.match(model, /bankReference:/);
   assert.match(adminUi, /Bank Statement UTR \/ Reference/);
   assert.match(adminUi, /Recipient VPA in Bank Record/);
