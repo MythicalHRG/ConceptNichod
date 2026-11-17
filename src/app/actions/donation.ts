@@ -366,9 +366,12 @@ export async function adminVerifyDonationAndSetAmount(payload: {
 
     const confirmedAmount = amountCheck.data;
 
-    const tx = await DonationTransaction.findById(payload.transactionDbId);
+    let tx = await DonationTransaction.findById(payload.transactionDbId);
     if (!tx) {
       return { success: false, error: "Donation transaction not found." };
+    }
+    if (tx.status && tx.status !== "pending") {
+      return { success: false, error: "This donation has already been reviewed." };
     }
 
     // An admin-entered amount is not proof of payment. Require explicit bank-record
@@ -389,16 +392,37 @@ export async function adminVerifyDonationAndSetAmount(payload: {
         ? (payload.customTier as PatronTier)
         : computePatronTier(confirmedAmount);
 
-    tx.status = "verified";
-    tx.bankReference = bankReference;
-    tx.recipientVpa = configuredVpa;
-    tx.verificationMethod = "manual-bank-reconciliation";
-    tx.verifiedAmount = confirmedAmount;
-    tx.patronTier = tier;
-    tx.isPublishedToPatrons = Boolean(payload.publishToHallOfPatrons);
-    tx.adminNote = sanitizeDonationText(payload.adminNote || "", 500);
-    tx.verifiedBy = (adminUser as any).username || "Admin";
-    tx.verifiedAt = new Date();
+    // Claim the pending transaction atomically before creating/updating its patron record.
+    // Concurrent approval requests cannot both pass this one-way status transition.
+    const claimedTx = await DonationTransaction.findOneAndUpdate(
+      {
+        _id: tx._id,
+        $or: [
+          { status: "pending" },
+          { status: { $exists: false } },
+          { status: null },
+        ],
+      },
+      {
+        $set: {
+          status: "verified",
+          bankReference,
+          recipientVpa: configuredVpa,
+          verificationMethod: "manual-bank-reconciliation",
+          verifiedAmount: confirmedAmount,
+          patronTier: tier,
+          isPublishedToPatrons: Boolean(payload.publishToHallOfPatrons),
+          adminNote: sanitizeDonationText(payload.adminNote || "", 500),
+          verifiedBy: (adminUser as any).username || "Admin",
+          verifiedAt: new Date(),
+        },
+      },
+      { new: true, runValidators: true }
+    );
+    if (!claimedTx) {
+      return { success: false, error: "This donation has already been reviewed or is being processed." };
+    }
+    tx = claimedTx;
 
     // Sync with Donor (Hall of Patrons) collection
     if (tx.isPublishedToPatrons) {
