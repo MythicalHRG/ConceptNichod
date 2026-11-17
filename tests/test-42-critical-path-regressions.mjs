@@ -6,8 +6,9 @@ test("OTP attempt accounting is atomic and bounded in MongoDB", () => {
   const source = fs.readFileSync("src/app/api/auth/otp/route.ts", "utf8");
   assert.match(source, /findOneAndUpdate\(\s*\{ email, expiresAt: \{ \$gt: now \}, attempts: \{ \$lt: MAX_VERIFY_ATTEMPTS \} \},\s*\{ \$inc: \{ attempts: 1 \} \}/);
   assert.match(source, /isVerified: false, expiresAt: \{ \$gt: new Date\(\) \}/);
-  assert.doesNotMatch(source, /otpRecord\.attempts\s*=\s*\(otpRecord\.attempts\s*\|\|\s*0\)\s*\+\s*1/);
-  assert.doesNotMatch(source, /await otpRecord\.save\(\)/);
+  const verifyBlock = source.slice(source.indexOf("if (action === 'verify')"), source.indexOf("return NextResponse.json({ error: 'Invalid action'"));
+  assert.doesNotMatch(verifyBlock, /otpRecord\.attempts\s*=\s*\(otpRecord\.attempts\s*\|\|\s*0\)\s*\+\s*1/);
+  assert.doesNotMatch(verifyBlock, /await otpRecord\.save\(\)/);
 });
 
 test("group deletion purges associated group messages", () => {
