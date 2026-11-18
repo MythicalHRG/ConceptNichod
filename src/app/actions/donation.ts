@@ -484,7 +484,6 @@ export async function adminVerifyDonationAndSetAmount(payload: {
             ),
         },
       });
-    }
     } else if (tx.donorRecordId) {
       await Donor.findByIdAndUpdate(tx.donorRecordId, { isVisible: false, isPublic: false });
     }
