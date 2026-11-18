@@ -12,6 +12,7 @@ import User from "@/models/User";
 import { cookies } from "next/headers";
 import { verifySessionCookie } from "@/lib/session";
 import crypto from "crypto";
+import { syncDonationDonor } from "@/lib/donation-donor-sync.js";
 import { getClientIp } from "@/lib/ip";
 import { checkDistributedRateLimit } from "@/lib/distributed-rate-limiter";
 import {
@@ -432,15 +433,9 @@ export async function adminVerifyDonationAndSetAmount(payload: {
       tx = claimedTx;
     }
 
-    // Deterministic UUID makes donor upsert idempotent if the write succeeded
-    // but the response or DonationTransaction save failed. UUID is uniquely indexed.
+    // Synchronize a transaction-scoped Donor row with fixed $set values.
+    // Retrying this block cannot increment a donation a second time.
     if (tx.isPublishedToPatrons) {
-      const existingDonor = tx.donorRecordId
-        ? null
-        : await Donor.findOne({ transactionRef: String(tx._id) });
-      const donorUuid =
-        existingDonor?.uuid ||
-        crypto.createHash("sha256").update(`conceptnichod:donation:${tx._id}`).digest("hex");
       const patronData = {
         userId: tx.userId || null,
         userUuid: tx.userId || null,
@@ -463,27 +458,33 @@ export async function adminVerifyDonationAndSetAmount(payload: {
         isPublic: true,
       };
 
-      if (tx.donorRecordId) {
-        await Donor.findByIdAndUpdate(tx.donorRecordId, patronData, { new: true, runValidators: true });
-      } else {
-        let donor;
-        try {
-          donor = await Donor.findOneAndUpdate(
-            { uuid: donorUuid },
-            { $set: patronData, $setOnInsert: { uuid: donorUuid } },
-            { upsert: true, new: true, runValidators: true }
-          );
-        } catch (donorError: any) {
-          if (donorError?.code !== 11000) throw donorError;
-          donor = await Donor.findOneAndUpdate(
-            { uuid: donorUuid },
-            { $set: patronData },
-            { new: true, runValidators: true }
-          );
-        }
-        if (!donor) throw new Error("Donor record could not be confirmed; retry patron synchronization.");
-        tx.donorRecordId = String(donor._id);
-      }
+      await syncDonationDonor({
+        tx,
+        donorData: patronData,
+        donorStore: {
+          findOneByTransactionRef: async (transactionRef: string) =>
+            await Donor.findOne({ transactionRef }),
+          upsertByUuid: async (donorUuid: string, data: Record<string, unknown>) =>
+            await Donor.findOneAndUpdate(
+              { uuid: donorUuid },
+              { $set: data, $setOnInsert: { uuid: donorUuid } },
+              { upsert: true, new: true, runValidators: true }
+            ),
+          updateByUuid: async (donorUuid: string, data: Record<string, unknown>) =>
+            await Donor.findOneAndUpdate(
+              { uuid: donorUuid },
+              { $set: data },
+              { new: true, runValidators: true }
+            ),
+          updateById: async (donorId: string, data: Record<string, unknown>) =>
+            await Donor.findByIdAndUpdate(
+              donorId,
+              data,
+              { new: true, runValidators: true }
+            ),
+        },
+      });
+    }
     } else if (tx.donorRecordId) {
       await Donor.findByIdAndUpdate(tx.donorRecordId, { isVisible: false, isPublic: false });
     }
