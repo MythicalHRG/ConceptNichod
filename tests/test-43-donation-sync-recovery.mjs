@@ -85,7 +85,7 @@ function createInMemoryDonorStore() {
     totals() {
       const donors = [...records.values()];
       return {
-        totalDonated: donors.reduce((sum, donor) => sum + Number(donor.totalAmount || 0), 0),
+        totalDonated: donors.reduce((sum, donor) => sum + Number(donor.amount || 0), 0),
         donationCount: donors.reduce((sum, donor) => sum + Number(donor.donationCount || 0), 0),
         rowCount: donors.length,
       };
