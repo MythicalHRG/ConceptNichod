@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
+import { useToast } from "@/hooks/use-toast";
 import {
   getAdminDonationDashboard,
   adminVerifyDonationAndSetAmount,
@@ -43,6 +44,7 @@ interface AdminTxItem {
 }
 
 export function DonationReconciliation() {
+  const { toast } = useToast();
   const [statusFilter, setStatusFilter] = useState<string>("pending");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -74,6 +76,7 @@ export function DonationReconciliation() {
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
+    try {
     const res = await getAdminDonationDashboard(
       statusFilter === "all" ? undefined : statusFilter,
       search
@@ -117,8 +120,17 @@ export function DonationReconciliation() {
       setPublishMap(nextPublish);
       setNoteMap(nextNotes);
     }
-    setLoading(false);
-  }, [statusFilter, search]);
+
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not load donation dashboard",
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [statusFilter, search, toast]);
 
   useEffect(() => {
     loadDashboard();
@@ -155,6 +167,12 @@ export function DonationReconciliation() {
       } else {
         await loadDashboard();
       }
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Donation mutation failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
     } finally {
       setBusyId(null);
     }
@@ -169,6 +187,12 @@ export function DonationReconciliation() {
       } else {
         await loadDashboard();
       }
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Donation mutation failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
     } finally {
       setBusyId(null);
     }
@@ -184,6 +208,12 @@ export function DonationReconciliation() {
       } else {
         await loadDashboard();
       }
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Donation mutation failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
     } finally {
       setBusyId(null);
     }
@@ -197,6 +227,12 @@ export function DonationReconciliation() {
       const result = await adminUpdatePatron({ donorId:patronId, ...edit });
       if (!result.success) alert(result.error || "Could not update patron.");
       else await loadDashboard();
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Donation mutation failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
     } finally { setBusyId(null); }
   };
 
@@ -207,6 +243,12 @@ export function DonationReconciliation() {
       const result = await adminRemovePatron(patronId);
       if (!result.success) alert(result.error || "Could not remove patron.");
       else await loadDashboard();
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Donation mutation failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
     } finally { setBusyId(null); }
   };
 
@@ -225,6 +267,12 @@ export function DonationReconciliation() {
       } else {
         setShowSettings(false);
       }
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Donation mutation failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
     } finally {
       setSavingSettings(false);
     }
