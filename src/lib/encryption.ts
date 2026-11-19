@@ -212,7 +212,7 @@ export async function decryptData(inputPayload: string, password: string): Promi
 
     // Helper to attempt decryption with a given key
     const attemptDecryption = async (decKey: Buffer) => {
-        let currentBytes = rawCiphertext;
+        let currentBytes: Buffer = rawCiphertext;
         for (let i = 49; i >= 0; i--) {
             let curIv = Buffer.from(ivStack.slice(i * 12, (i + 1) * 12));
             currentBytes = await decryptAesGcm(decKey, currentBytes, curIv);
