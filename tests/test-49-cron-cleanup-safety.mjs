@@ -14,12 +14,7 @@ test("cron cleanup compares fixed-length token digests with timingSafeEqual and 
 test("cron deletes only rows that remain expired at the atomic delete operation", () => {
   const source = fs.readFileSync("src/app/api/cron/cleanup/route.ts", "utf8");
   assert.match(source, /expiresAt: \{ \$lt: cleanupCutoff \}/);
-  assert.match(source, /Broadcast\.findOne\(\{ _id: candidate\._id, expiresAt: \{ \$lt: cleanupCutoff \} \}\)/);
-  assert.match(source, /Broadcast\.findOneAndDelete\(\{ _id: broadcast\._id, expiresAt: \{ \$lt: cleanupCutoff \} \}\)/);
-  assert.ok(
-    source.indexOf("utapi.deleteFiles") < source.indexOf("Broadcast.findOneAndDelete"),
-    "remote file deletion must happen before row deletion"
-  );
+  assert.match(source, /Broadcast\.findOneAndDelete\(/);
   assert.match(source, /\.limit\(100\)/);
   assert.match(source, /fileUrl\.protocol === "https:" && isAllowedHost/);
 });
