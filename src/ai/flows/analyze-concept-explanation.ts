@@ -203,6 +203,33 @@ CRITICAL: pie_chart_data values MUST sum to exactly 100.`;
     throw new Error("AI returned invalid mastery chart data. Please try again.");
   }
 
+  output.bar_chart_data = (Array.isArray(output.bar_chart_data) ? output.bar_chart_data : [])
+    .filter((item) => item && typeof item.name === "string" && item.name.length <= 80 && Number.isFinite(item.score))
+    .slice(0, 10)
+    .map((item) => ({ name: item.name, score: Math.max(0, Math.min(100, Math.round(item.score))) }));
+  output.polynomial_chart_data = (Array.isArray(output.polynomial_chart_data) ? output.polynomial_chart_data : [])
+    .filter((item) => item && typeof item.step === "string" && item.step.length <= 80 && Number.isFinite(item.score))
+    .slice(0, 10)
+    .map((item) => ({ step: item.step, score: Math.max(0, Math.min(100, Math.round(item.score))) }));
+  output.feedback_summary = typeof output.feedback_summary === "string"
+    ? output.feedback_summary.slice(0, 10000)
+    : "Feedback could not be generated reliably. Please retry your oral defense analysis.";
+  const allowedMistakeTypes = ["conceptual", "calculation", "formula", "misread"] as const;
+  output.detected_mistakes = (Array.isArray(output.detected_mistakes) ? output.detected_mistakes : [])
+    .filter((item) => item && typeof item.title === "string" && item.title.trim() &&
+      typeof item.myMistake === "string" && item.myMistake.trim() &&
+      typeof item.correctConcept === "string" && item.correctConcept.trim())
+    .slice(0, 5)
+    .map((item) => ({
+      title: item.title.trim().slice(0, 120),
+      subject: typeof item.subject === "string" ? item.subject.trim().slice(0, 60) || "General" : "General",
+      chapter: typeof item.chapter === "string" ? item.chapter.trim().slice(0, 80) : undefined,
+      errorType: allowedMistakeTypes.includes(item.errorType) ? item.errorType : "conceptual",
+      questionOrPrompt: typeof item.questionOrPrompt === "string" ? item.questionOrPrompt.trim().slice(0, 3000) : undefined,
+      myMistake: item.myMistake.trim().slice(0, 2500),
+      correctConcept: item.correctConcept.trim().slice(0, 2500),
+    }));
+
   // Normalize pie chart to sum 100
   const pieTotal = output.pie_chart_data.reduce((s, i) => s + i.value, 0);
   if (!Number.isFinite(pieTotal) || pieTotal <= 0) {
