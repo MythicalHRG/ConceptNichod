@@ -35,6 +35,7 @@ interface AdminTxItem {
   verifiedAmount: number | null;
   patronTier: string | null;
   isPublishedToPatrons: boolean;
+  donorRecordId?: string | null;
   adminNote?: string;
   verifiedBy?: string | null;
   verifiedAt?: string | null;
@@ -464,6 +465,12 @@ export function DonationReconciliation() {
                   </div>
                 </div>
 
+                {tx.status === "verified" && tx.isPublishedToPatrons && !tx.donorRecordId && (
+                  <div role="status" className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                    Donor synchronization incomplete. Confirm the original bank evidence below, then retry the donor sync.
+                  </div>
+                )}
+
                 {tx.message && (
                   <div className="text-xs text-slate-300 bg-slate-950/70 p-3 rounded-xl border border-slate-800">
                     <span className="text-slate-500 font-semibold">Donor Message: </span>
@@ -587,9 +594,11 @@ export function DonationReconciliation() {
                       className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-xs font-bold text-white transition"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
-                      {tx.status === "verified"
-                        ? "Update ₹ & Patron"
-                        : "Verify & Save ₹"}
+                      {tx.status === "verified" && tx.isPublishedToPatrons && !tx.donorRecordId
+                        ? "Retry Donor Sync"
+                        : tx.status === "verified"
+                          ? "Update ₹ & Patron"
+                          : "Verify & Save ₹"}
                     </button>
 
                     {tx.status === "verified" && (
