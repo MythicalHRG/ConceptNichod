@@ -11,7 +11,7 @@ export async function getPublicProfileData(username: string) {
   const escapeRegex = (string: string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const safeUsername = escapeRegex(username);
 
-  const user = await User.findOne({ username: new RegExp(`^${safeUsername}$`, 'i') }).select("-password -email -uuid -_id -createdAt -__v -firstLoginIp -firstLoginAt -lastLoginIp -lastLoginAt -lastKnownIp");
+  const user = await User.findOne({ username: new RegExp(`^${safeUsername}$`, 'i') }).select("-password -email -uuid -_id -createdAt -__v -dob -firstLoginIp -firstLoginAt -lastLoginIp -lastLoginAt -lastKnownIp");
   if (!user) {
     return null;
   }
