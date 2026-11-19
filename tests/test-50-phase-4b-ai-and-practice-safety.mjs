@@ -23,6 +23,9 @@ test("direct AI analysis flows validate bounded payloads and finite model metric
   assert.match(mirror, /Number\.isFinite\(input\.durationSeconds\)/);
   assert.match(mirror, /Number\.isFinite\(item\.score\)/);
   assert.match(mirror, /Number\.isFinite\(item\.value\)/);
+  assert.match(mirror, /Number\.isFinite\(item\.score\)/);
+  assert.match(mirror, /output\.polynomial_chart_data =/);
+  assert.match(mirror, /output\.feedback_summary = typeof output\.feedback_summary/);
 });
 
 test("OpenRouter calls and JSON parsing have hard execution/input bounds", () => {
