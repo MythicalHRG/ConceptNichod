@@ -80,8 +80,9 @@ export async function GET(request: Request) {
       }
 
       // Remote attachment deletion completes before MongoDB removes the row.
-      const result = await Broadcast.deleteOne({ _id: broadcast._id, expiresAt: { $lt: cleanupCutoff } });
-      if (result.deletedCount === 1) deletedCount += 1;
+      const deleted = await Broadcast.findOneAndDelete({ _id: broadcast._id, expiresAt: { $lt: cleanupCutoff } })
+        .select("_id").lean();
+      if (deleted) deletedCount += 1;
     }
 
     return new Response(JSON.stringify({ 
