@@ -1,9 +1,10 @@
 const INVISIBLE_PROMPT_CHARS = /[\u0000\u{E0000}-\u{E007F}]/gu;
 
-export function escapeUntrustedPromptContext(text: string): string {
-  return String(text ?? "")
+/** Escape user/model-controlled text before embedding it inside prompt delimiters. */
+export function escapePromptText(value: string): string {
+  return String(value ?? "")
     .replace(INVISIBLE_PROMPT_CHARS, "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
