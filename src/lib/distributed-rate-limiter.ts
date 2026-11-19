@@ -52,20 +52,26 @@ export async function checkDistributedRateLimit(
     counter = await RateLimitCounter.findOneAndUpdate(
       { key: window.key, windowStart: window.windowStart },
       { $inc: { count: 1 }, $setOnInsert: { expiresAt: window.expiresAt } },
-      { upsert: true, new: true }
-    ).select("count").lean();
-  } catch (error: unknown) {
-    if ((error as { code?: number })?.code !== 11000) throw error;
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    ).lean();
+  } catch (error: any) {
+    if (error?.code !== 11000) throw error;
     counter = await RateLimitCounter.findOneAndUpdate(
       { key: window.key, windowStart: window.windowStart },
       { $inc: { count: 1 } },
       { new: true }
-    ).select("count").lean();
+    ).lean();
   }
-  const count = counter?.count ?? 1;
-  const resetMs = Math.max(0, window.windowStart + windowMs - Date.now());
-  if (count > limit) return { success: false, limit, remaining: 0, resetMs };
-  return { success: true, limit, remaining: Math.max(0, limit - count), resetMs };
+  if (!counter || !Number.isSafeInteger(counter.count) || counter.count < 1) {
+    throw new Error("Rate-limit counter could not be confirmed; request denied");
+  }
+  const count = counter.count;
+  return {
+    success: count <= limit,
+    limit,
+    remaining: Math.max(0, limit - count),
+    resetMs: Math.max(0, window.windowStart + windowMs - now),
+  };
 }
 
 export async function peekDistributedRateLimit(
@@ -76,12 +82,16 @@ export async function peekDistributedRateLimit(
   const window = getWindow(key, windowMs, now);
   await dbConnect();
   await ensureRateLimitIndexes();
-  const counter = await RateLimitCounter.findOne({ key: window.key, windowStart: window.windowStart })
-    .select("count").lean();
+  const counter = await RateLimitCounter.findOne({
+    key: window.key, windowStart: window.windowStart
+  }).lean();
   const count = counter?.count ?? 0;
-  const resetMs = Math.max(0, window.windowStart + windowMs - Date.now());
-  if (count >= limit) return { success: false, limit, remaining: 0, resetMs };
-  return { success: true, limit, remaining: Math.max(0, limit - count), resetMs };
+  return {
+    success: count < limit,
+    limit,
+    remaining: Math.max(0, limit - count),
+    resetMs: Math.max(0, window.windowStart + windowMs - now),
+  };
 }
 
 export async function recordDistributedFailedAttempt(
