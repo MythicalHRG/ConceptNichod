@@ -1,9 +1,5 @@
 import mongoose from "mongoose";
 
-if (!process.env.MONGODB_URI) {
-  console.warn("⚠️ MONGODB_URI is not defined in environment variables.");
-}
-
 interface MongooseCache {
   conn: typeof mongoose | null;
   promise: Promise<typeof mongoose> | null;
@@ -20,33 +16,47 @@ if (!cached) {
 }
 
 async function dbConnect() {
-  if (cached!.conn) {
-    if (mongoose.connection.readyState === 1) {
+  if (mongoose.connection.readyState === 1) {
+    return mongoose;
+  }
+
+  if (mongoose.connection.readyState === 2 && cached!.promise) {
+    try {
+      cached!.conn = await cached!.promise;
       return cached!.conn;
-    }
-    if (mongoose.connection.readyState === 0 || mongoose.connection.readyState === 3) {
-      cached!.conn = null;
-      cached!.promise = null;
+    } catch {
+      // Reconnect below if pending promise failed
     }
   }
 
-  if (!cached!.promise) {
-    const uri = process.env.MONGODB_URI;
-    if (!uri) {
-      throw new Error(
-        "Please define the MONGODB_URI environment variable inside .env.local"
-      );
-    }
+  const uri = process.env.MONGODB_URI;
+  if (!uri) {
+    throw new Error("Please define the MONGODB_URI environment variable inside .env");
+  }
 
+  if (
+    !cached!.promise ||
+    mongoose.connection.readyState === 0 ||
+    mongoose.connection.readyState === 3
+  ) {
     const opts = {
-      bufferCommands: false,
-      serverSelectionTimeoutMS: 10000,
+      bufferCommands: true,
+      serverSelectionTimeoutMS: 8000, // 8s timeout for cold start resilience
+      socketTimeoutMS: 45000,
+      connectTimeoutMS: 10000,
       maxPoolSize: 10,
     };
 
-    cached!.promise = mongoose.connect(uri, opts).then((mongooseInstance) => {
-      return mongooseInstance;
-    });
+    cached!.promise = mongoose
+      .connect(uri, opts)
+      .then((mongooseInstance) => {
+        return mongooseInstance;
+      })
+      .catch((err) => {
+        cached!.promise = null; // Don't cache rejected connection promise
+        cached!.conn = null;
+        throw err;
+      });
   }
 
   try {
