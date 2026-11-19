@@ -9,7 +9,7 @@ test("prompt escaping neutralizes tag delimiters in untrusted model context", ()
   assert.match(concept, /const promptTranscript = escapePromptText\(safeTranscript\)/);
   assert.match(concept, /\$\{promptTranscript\}/);
   const answers = fs.readFileSync("src/ai/flows/analyze-answers.ts", "utf8");
-  assert.match(answers, /escapePromptText\(\(a\.answer \|\| ""\)\.slice\(0, 3000\)\)/);
+  assert.equal((answers.match(/escapePromptText\(\(a\.answer \|\| ""\)\.slice\(0, 3000\)\)/g) || []).length, 2, "written and spoken answers must both be escaped");
   assert.match(answers, /\$\{escapePromptText\(boundedSummary\)\}/);
   const questions = fs.readFileSync("src/ai/flows/generate-questions.ts", "utf8");
   assert.match(questions, /\$\{escapePromptText\(boundedSummary\)\}/);
