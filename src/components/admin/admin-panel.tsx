@@ -206,7 +206,7 @@ export function AdminPanel() {
         setDonationSettings({ upiId: donationRes.settings.upiId || "" });
       }
     } catch (e: any) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Error", description: e?.message || "Please try again.", variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -234,7 +234,7 @@ export function AdminPanel() {
         setGroupToDelete(null);
       }
     } catch (e: any) {
-      toast({ title: "Failed to delete group", description: e.message, variant: "destructive" });
+      toast({ title: "Failed to delete group", description: e?.message || "Please try again.", variant: "destructive" });
     } finally {
       setDeletingGroupId(null);
     }
@@ -259,7 +259,7 @@ export function AdminPanel() {
       toast({ title: "User deleted successfully" });
       setUsers(users.filter((u) => u.uuid !== uuid));
     } catch (e: any) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Error", description: e?.message || "Please try again.", variant: "destructive" });
     }
   };
 
@@ -323,7 +323,7 @@ export function AdminPanel() {
       setBanReason("");
       fetchData();
     } catch (e: any) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Error", description: e?.message || "Please try again.", variant: "destructive" });
     }
   };
 
@@ -333,7 +333,7 @@ export function AdminPanel() {
       toast({ title: "Unbanned successfully" });
       setBans(bans.filter((b) => b._id !== id));
     } catch (e: any) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Error", description: e?.message || "Please try again.", variant: "destructive" });
     }
   };
 
@@ -358,7 +358,7 @@ export function AdminPanel() {
       setUploadedFileUrl(null);
       fetchData();
     } catch (e: any) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Error", description: e?.message || "Please try again.", variant: "destructive" });
     } finally {
       setBroadcastLoading(false);
     }
@@ -371,7 +371,7 @@ export function AdminPanel() {
       toast({ title: "Broadcast deleted successfully" });
       setActiveBroadcasts(activeBroadcasts.filter((b) => b._id !== id));
     } catch (e: any) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Error", description: e?.message || "Please try again.", variant: "destructive" });
     }
   };
 
@@ -772,7 +772,7 @@ export function AdminPanel() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Attachment (Max 512MB, Optional)</label>
+                  <label className="text-sm font-medium">Attachment (Images/PDF up to 16MB; text up to 2MB, Optional)</label>
                   {!uploadedFileUrl ? (
                     <UploadButton
                       endpoint="broadcastAttachment"

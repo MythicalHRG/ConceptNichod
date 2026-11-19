@@ -73,140 +73,192 @@ export async function getLeaderboardDataAction(
 
   const userIds = users.map((u) => u.uuid);
 
-  // Fetch all ConceptMirror sessions for these users
-  const mirrorQuery: any = { userId: { $in: userIds } };
-  if (timeCutoff) {
-    mirrorQuery.createdAt = { $gte: timeCutoff };
-  }
-  const mirrorSessions = await ConceptMirror.find(mirrorQuery)
-    .select("userId conceptName overallScore durationSeconds createdAt")
-    .sort({ createdAt: 1 })
-    .lean();
+  // Stream the merged all-time activity history from MongoDB. This keeps the
+  // original all-time scoring inputs while avoiding two full collections in memory.
+  const activityMatch: Record<string, any> = { userId: { $in: userIds } };
+  if (timeCutoff) activityMatch.createdAt = { $gte: timeCutoff };
 
-  // Fetch all completed Topics for these users
-  const topicQuery: any = { userId: { $in: userIds } };
-  if (timeCutoff) {
-    topicQuery.createdAt = { $gte: timeCutoff };
-  }
-  const topicSessions = await Topic.find(topicQuery)
-    .select("userId name analysis practiceStatus savedWrittenAnswers savedSpokenAnswers createdAt")
-    .sort({ createdAt: 1 })
-    .lean();
+  const hasNonEmptyAnswer = (field: string) => ({
+    $gt: [
+      {
+        $size: {
+          $filter: {
+            input: { $cond: [{ $isArray: `$${field}` }, `$${field}`, []] },
+            as: "answer",
+            cond: {
+              $cond: [
+                { $eq: [{ $type: "$$answer" }, "string"] },
+                { $ne: [{ $trim: { input: "$$answer" } }, ""] },
+                false,
+              ],
+            },
+          },
+        },
+      },
+      0,
+    ],
+  });
 
-  // Fetch streaks
-  const streakDocs = await StudyStreak.find({ userId: { $in: userIds } }).lean();
-  const streakMap = new Map(streakDocs.map((s) => [s.userId, s]));
+  const activityPipeline: any[] = [
+    { $match: activityMatch },
+    {
+      $project: {
+        _id: 1,
+        userId: 1,
+        createdAt: 1,
+        eventType: { $literal: "mirror" },
+        title: { $ifNull: ["$conceptName", "Concept session"] },
+        rawScore: "$overallScore",
+        rawDuration: "$durationSeconds",
+      },
+    },
+    {
+      $unionWith: {
+        coll: Topic.collection.name,
+        pipeline: [
+          { $match: activityMatch },
+          {
+            $project: {
+              _id: 1,
+              userId: 1,
+              createdAt: 1,
+              eventType: { $literal: "topic" },
+              title: { $ifNull: ["$name", "Study topic"] },
+              analysisScore: "$analysis.overallScore",
+              practiceStatus: 1,
+              hasAnswers: {
+                $or: [
+                  hasNonEmptyAnswer("savedWrittenAnswers"),
+                  hasNonEmptyAnswer("savedSpokenAnswers"),
+                ],
+              },
+            },
+          },
+        ],
+      },
+    },
+    { $sort: { userId: 1, createdAt: 1, eventType: 1, _id: 1 } },
+  ];
 
-  const todayStr = getIstDateString(now);
-  const yesterdayStr = getYesterdayIstDateString(now);
+  type ActivitySummary = {
+    count: number;
+    totalScore: number;
+    totalDurationSeconds: number;
+    sumX: number;
+    sumY: number;
+    sumXY: number;
+    sumX2: number;
+    qualityWeightedVolume: number;
+    oralDefenseSeconds: number;
+    trajectory: TrajectoryPoint[];
+  };
+  const activitySummaryByUser = new Map<string, ActivitySummary>();
+  const activityCursor = ConceptMirror.aggregate(activityPipeline)
+    .allowDiskUse(true)
+    .cursor({ batchSize: 250 });
 
-  // Group activities per user & track authentic oral defense duration
-  const userActivities = new Map<
-    string,
-    Array<{
-      title: string;
-      score: number;
-      durationSeconds: number;
-      createdAt: Date;
-    }>
-  >();
-  const userOralDefenseSeconds = new Map<string, number>();
-
-  for (const session of mirrorSessions) {
-    const rawScore = session.overallScore;
-    const rawDuration = session.durationSeconds;
-    const createdAt = new Date(session.createdAt);
-    if (!Number.isFinite(rawScore) || !Number.isFinite(createdAt.getTime()) || typeof session.userId !== "string") continue;
-    const score = Math.max(0, Math.min(100, rawScore));
-    const dur = Number.isFinite(rawDuration) ? Math.max(0, Math.min(86400, rawDuration)) : 0;
-    const list = userActivities.get(session.userId) || [];
-    userOralDefenseSeconds.set(
-      session.userId,
-      (userOralDefenseSeconds.get(session.userId) || 0) + dur
-    );
-    list.push({
-      title: typeof session.conceptName === "string" ? session.conceptName.slice(0, 200) : "Concept session",
-      score,
-      durationSeconds: dur,
-      createdAt,
-    });
-    userActivities.set(session.userId, list);
-  }
-
-  for (const topic of topicSessions) {
-    // Only count topics where the student has actually practiced or completed an evaluation
-    const hasAnalysisScore = topic.analysis && Number.isFinite(topic.analysis.overallScore);
-    const isCompleted = topic.practiceStatus === "completed";
-    const isInProgress = topic.practiceStatus === "in_progress";
-    const hasAnswers =
-      (Array.isArray(topic.savedWrittenAnswers) &&
-        topic.savedWrittenAnswers.some((a: unknown) => typeof a === "string" && a.trim().length > 0)) ||
-      (Array.isArray(topic.savedSpokenAnswers) &&
-        topic.savedSpokenAnswers.some((a: unknown) => typeof a === "string" && a.trim().length > 0));
-    const topicCreatedAt = new Date(topic.createdAt);
-    if (!Number.isFinite(topicCreatedAt.getTime())) continue;
-
-    // Exclude untouched drafts (not_started without analysis, or in_progress without any answers)
-    if (!hasAnalysisScore && !isCompleted && (!isInProgress || !hasAnswers)) {
-      continue;
-    }
+  for await (const event of activityCursor) {
+    if (typeof event.userId !== "string") continue;
+    const createdAt = new Date(event.createdAt);
+    if (!Number.isFinite(createdAt.getTime())) continue;
 
     let score = 0;
-    if (hasAnalysisScore) {
-      score = topic.analysis.overallScore;
-    } else if (isCompleted) {
-      score = 70;
-    } else if (isInProgress) {
-      score = 40;
+    let durationSeconds = 0;
+    if (event.eventType === "mirror") {
+      const rawScore = event.rawScore;
+      const rawDuration = event.rawDuration;
+      if (!Number.isFinite(rawScore)) continue;
+      score = Math.max(0, Math.min(100, rawScore));
+      durationSeconds = Number.isFinite(rawDuration)
+        ? Math.max(0, Math.min(86400, rawDuration))
+        : 0;
+    } else {
+      const topic = { analysis: { overallScore: event.analysisScore } };
+      const hasAnalysisScore = Boolean(topic.analysis && Number.isFinite(topic.analysis.overallScore));
+      const isCompleted = event.practiceStatus === "completed";
+      const isInProgress = event.practiceStatus === "in_progress";
+      const hasAnswers = event.hasAnswers === true;
+
+      if (!hasAnalysisScore && !isCompleted && (!isInProgress || !hasAnswers)) {
+        continue;
+      }
+
+      const rawTopicScore = hasAnalysisScore
+        ? event.analysisScore
+        : isCompleted
+          ? 70
+          : isInProgress
+            ? 40
+            : 0;
+      score = Number.isFinite(rawTopicScore)
+        ? Math.max(0, Math.min(100, rawTopicScore))
+        : 0;
+      durationSeconds = isCompleted ? 180 : 60;
     }
 
-    const list = userActivities.get(topic.userId) || [];
-    list.push({
-      title: typeof topic.name === "string" ? topic.name.slice(0, 200) : "Study topic",
-      score: Number.isFinite(score) ? Math.max(0, Math.min(100, score)) : 0,
-      durationSeconds: isCompleted ? 180 : 60,
-      createdAt: topicCreatedAt,
+    let summary = activitySummaryByUser.get(event.userId);
+    if (!summary) {
+      summary = {
+        count: 0,
+        totalScore: 0,
+        totalDurationSeconds: 0,
+        sumX: 0,
+        sumY: 0,
+        sumXY: 0,
+        sumX2: 0,
+        qualityWeightedVolume: 0,
+        oralDefenseSeconds: 0,
+        trajectory: [],
+      };
+      activitySummaryByUser.set(event.userId, summary);
+    }
+
+    const x = summary.count + 1;
+    summary.count = x;
+    summary.totalScore += score;
+    summary.totalDurationSeconds += durationSeconds;
+    summary.sumX += x;
+    summary.sumY += score;
+    summary.sumXY += x * score;
+    summary.sumX2 += x * x;
+    if (score >= 80) summary.qualityWeightedVolume += 3.5;
+    else if (score >= 60) summary.qualityWeightedVolume += 2.5;
+    else if (score >= 40) summary.qualityWeightedVolume += 1.5;
+    else summary.qualityWeightedVolume += 0.5;
+
+    if (event.eventType === "mirror") {
+      summary.oralDefenseSeconds += durationSeconds;
+    }
+
+    summary.trajectory.push({
+      conceptIndex: x,
+      score: Math.round(score),
+      cumulativeAvg: Math.round((summary.totalScore / x) * 10) / 10,
+      label: typeof event.title === "string"
+        ? event.title.slice(0, 200)
+        : event.eventType === "mirror" ? "Concept session" : "Study topic",
+      timestamp: createdAt.toISOString(),
     });
-    userActivities.set(topic.userId, list);
+    if (summary.trajectory.length > 100) summary.trajectory.shift();
   }
+
+  const streakDocs = await StudyStreak.find({ userId: { $in: userIds } }).lean();
+  const streakMap = new Map(streakDocs.map((s) => [s.userId, s]));
+  const todayStr = getIstDateString(now);
+  const yesterdayStr = getYesterdayIstDateString(now);
 
   const entries: LeaderboardEntry[] = [];
 
   for (const u of users) {
-    const rawList = userActivities.get(u.uuid) || [];
-    rawList.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-
-    const N = rawList.length;
-    let totalScore = 0;
-    let totalDurationSeconds = 0;
-    const trajectory: TrajectoryPoint[] = [];
-
-    // Sums for linear regression: X = index (1..N), Y = score
-    let sumX = 0;
-    let sumY = 0;
-    let sumXY = 0;
-    let sumX2 = 0;
-
-    for (let i = 0; i < N; i++) {
-      const item = rawList[i];
-      const x = i + 1;
-      totalScore += item.score;
-      totalDurationSeconds += item.durationSeconds;
-      const runningAvg = Math.round((totalScore / x) * 10) / 10;
-
-      sumX += x;
-      sumY += item.score;
-      sumXY += x * item.score;
-      sumX2 += x * x;
-
-      trajectory.push({
-        conceptIndex: x,
-        score: Math.round(item.score),
-        cumulativeAvg: runningAvg,
-        label: item.title,
-        timestamp: item.createdAt.toISOString(),
-      });
-    }
+    const activity = activitySummaryByUser.get(u.uuid);
+    const N = activity?.count || 0;
+    const totalScore = activity?.totalScore || 0;
+    const totalDurationSeconds = activity?.totalDurationSeconds || 0;
+    const trajectory = activity?.trajectory || [];
+    const sumX = activity?.sumX || 0;
+    const sumY = activity?.sumY || 0;
+    const sumXY = activity?.sumXY || 0;
+    const sumX2 = activity?.sumX2 || 0;
 
     // Slope calculation m = (N*sumXY - sumX*sumY) / (N*sumX2 - sumX*sumX)
     let slope = 0;
@@ -231,16 +283,8 @@ export async function getLeaderboardDataAction(
     const currentStreak = Number.isFinite(currentStreakValue) ? Math.max(0, Math.min(3650, currentStreakValue)) : 0;
     const longestStreak = Number.isFinite(longestStreakValue) ? Math.max(0, Math.min(3650, longestStreakValue)) : 0;
 
-    // 1. Quality & Mastery-Weighted Volume:
-    // Reward depth of mastery over superficial churning
-    let qualityWeightedVolume = 0;
-    for (const item of rawList) {
-      if (item.score >= 80) qualityWeightedVolume += 3.5;
-      else if (item.score >= 60) qualityWeightedVolume += 2.5;
-      else if (item.score >= 40) qualityWeightedVolume += 1.5;
-      else qualityWeightedVolume += 0.5;
-    }
-    const conceptsWeight = Math.min(qualityWeightedVolume, 300);
+    // The score-volume weight is accumulated for every historical activity while streaming.
+    const conceptsWeight = Math.min(activity?.qualityWeightedVolume || 0, 300);
 
     // 2. Bayesian / Credibility-Smoothed Performance Weight:
     // Smooths accuracy by sample size so 1 attempt cannot outrank sustained high performance
@@ -270,7 +314,7 @@ export async function getLeaderboardDataAction(
     }
 
     // 6. Oral Defense Bonus from authentic Concept Mirror sessions:
-    const oralSeconds = userOralDefenseSeconds.get(u.uuid) || 0;
+    const oralSeconds = activity?.oralDefenseSeconds || 0;
     const oralBonus = Math.min(oralSeconds / 60, 20) * 0.5;
 
     // Composite Rank Score: guaranteed >= 0, rounded to 2 decimal places

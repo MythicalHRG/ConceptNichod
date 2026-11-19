@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   getMistakesDataAction,
@@ -63,6 +63,7 @@ export function MistakeNotebook() {
   const [statusFilter, setStatusFilter] = useState<"all" | "unresolved" | "mastered">("all");
   const [subjectFilter, setSubjectFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const searchRequestId = useRef(0);
 
   // Quiz Modal State
   const [isQuizOpen, setIsQuizOpen] = useState(false);
@@ -74,23 +75,27 @@ export function MistakeNotebook() {
   const [quizCompleted, setQuizCompleted] = useState(false);
 
   const fetchMistakes = async () => {
+    const requestId = ++searchRequestId.current;
+    setLoading(true);
     try {
       const res = await getMistakesDataAction({
         status: statusFilter,
         subject: subjectFilter,
         search: searchQuery,
       });
-      setData(res);
+      if (requestId === searchRequestId.current) setData(res);
     } catch (err: any) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: err.message || "Failed to load mistakes.",
-      });
+      if (requestId === searchRequestId.current) {
+        toast({ variant: "destructive", title: "Error", description: err.message || "Failed to load mistakes." });
+      }
     } finally {
-      setLoading(false);
+      if (requestId === searchRequestId.current) setLoading(false);
     }
   };
+
+  useEffect(() => () => {
+    searchRequestId.current += 1;
+  }, []);
 
   useEffect(() => {
     fetchMistakes();

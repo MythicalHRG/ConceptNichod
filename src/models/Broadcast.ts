@@ -16,9 +16,8 @@ const BroadcastSchema: Schema<IBroadcast> = new Schema({
   expiresAt: { type: Date, required: true }
 });
 
-// TTL index to automatically delete the broadcast when expiresAt is reached
-// We set expireAfterSeconds to 0 so it relies strictly on the `expiresAt` date
-BroadcastSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+// Non-TTL index: cron must delete remote attachments before removing DB records.
+BroadcastSchema.index({ expiresAt: 1 });
 
 const Broadcast: Model<IBroadcast> = mongoose.models.Broadcast || mongoose.model<IBroadcast>("Broadcast", BroadcastSchema);
 

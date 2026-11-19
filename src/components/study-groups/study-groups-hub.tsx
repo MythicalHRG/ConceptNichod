@@ -132,49 +132,84 @@ export function StudyGroupsHub() {
     loadDirectConversations();
   }, []);
 
-  // Poll messages for active group (using server time strictly)
+  // Sequential polling prevents request overlap and pauses on hidden tabs.
   useEffect(() => {
     if (!activeGroup) return;
-
     let isMounted = true;
+    let inFlight = false;
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    const scheduleNext = () => {
+      if (isMounted && document.visibilityState !== "hidden") timeout = setTimeout(() => void fetchMsgs(), 4000);
+    };
     const fetchMsgs = async () => {
+      if (!isMounted || inFlight || document.visibilityState === "hidden") return;
+      inFlight = true;
       try {
         const msgs = await getGroupMessagesAction(activeGroup.id);
         if (isMounted) setGroupMessages(msgs);
       } catch (err) {
         console.error("Failed to fetch group messages:", err);
+      } finally {
+        inFlight = false;
+        scheduleNext();
       }
     };
-
-    fetchMsgs();
-    const interval = setInterval(fetchMsgs, 4000); // Poll every 4 seconds
-
+    // The former clearInterval(interval) cleanup is now clearTimeout(timeout) for sequential polling.
+    // The former clearInterval(interval) cleanup is now clearTimeout(timeout) for sequential polling.
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        if (timeout) clearTimeout(timeout);
+        timeout = null;
+      } else if (!inFlight) {
+        timeout = null;
+        void fetchMsgs();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    void fetchMsgs();
     return () => {
       isMounted = false;
-      clearInterval(interval);
+      if (timeout) clearTimeout(timeout);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [activeGroup]);
 
-  // Poll direct messages
   useEffect(() => {
     if (!activeDirectTarget) return;
-
     let isMounted = true;
+    let inFlight = false;
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    const scheduleNext = () => {
+      if (isMounted && document.visibilityState !== "hidden") timeout = setTimeout(() => void fetchDMs(), 4000);
+    };
     const fetchDMs = async () => {
+      if (!isMounted || inFlight || document.visibilityState === "hidden") return;
+      inFlight = true;
       try {
         const res = await getDirectMessagesAction(activeDirectTarget);
         if (isMounted) setDirectMessages(res.messages);
       } catch (err) {
         console.error("Failed to fetch DM messages:", err);
+      } finally {
+        inFlight = false;
+        scheduleNext();
       }
     };
-
-    fetchDMs();
-    const interval = setInterval(fetchDMs, 4000);
-
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        if (timeout) clearTimeout(timeout);
+        timeout = null;
+      } else if (!inFlight) {
+        timeout = null;
+        void fetchDMs();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    void fetchDMs();
     return () => {
       isMounted = false;
-      clearInterval(interval);
+      if (timeout) clearTimeout(timeout);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [activeDirectTarget]);
 
