@@ -62,6 +62,8 @@ export function useAudioRecorder(): AudioRecorderState {
   const isLockedRef = useRef(false);
   const baseTranscriptRef = useRef('');
   const fullTranscriptRef = useRef('');
+  const restartCountRef = useRef(0);
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isSupported =
     typeof window !== 'undefined' &&
@@ -89,6 +91,7 @@ export function useAudioRecorder(): AudioRecorderState {
 
     recognition.onresult = (event: any) => {
       if (isLockedRef.current) return;
+      restartCountRef.current = 0;
       let finalSegment = '';
       let interimSegment = '';
 
@@ -120,30 +123,48 @@ export function useAudioRecorder(): AudioRecorderState {
           'Microphone permission denied. Please allow microphone access in your browser settings.'
         );
       } else if (event.error === 'no-speech') {
-        // No speech detected during pause, keep connection intact
+        // No speech detected during pause; the browser may continue the session.
       } else if (event.error === 'network') {
-        setErrorMessage('Network connection dropped for speech recognition. Retrying...');
+        setErrorMessage('Speech recognition connection interrupted. Reconnecting with a bounded retry policy...');
       }
     };
 
     recognition.onend = () => {
-      if (isLockedRef.current) {
+      if (isLockedRef.current || isPausedRef.current || !isIntentActiveRef.current) {
         setIsRecording(false);
         setIsConnecting(false);
         return;
       }
 
-      if (isIntentActiveRef.current && !isPausedRef.current) {
-        try {
-          recognition.start();
-        } catch {
-          setIsRecording(false);
-          setIsConnecting(false);
-        }
-      } else if (!isPausedRef.current) {
+      restartCountRef.current += 1;
+      if (restartCountRef.current > 5) {
+        isIntentActiveRef.current = false;
         setIsRecording(false);
         setIsConnecting(false);
+        setErrorMessage('Speech recognition could not reconnect. Press Start Speaking to try again.');
+        return;
       }
+
+      if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+      const retryDelay = Math.min(250 * (2 ** (restartCountRef.current - 1)), 4000);
+      setIsRecording(false);
+      setIsConnecting(true);
+      retryTimeoutRef.current = setTimeout(() => {
+        retryTimeoutRef.current = null;
+        if (isLockedRef.current || isPausedRef.current || !isIntentActiveRef.current) {
+          setIsConnecting(false);
+          return;
+        }
+        try {
+          recognition.start();
+        } catch (error) {
+          isIntentActiveRef.current = false;
+          setIsRecording(false);
+          setIsConnecting(false);
+          setErrorMessage('Speech recognition could not restart. Press Start Speaking to try again.');
+          console.warn('Speech recognition restart failed:', error);
+        }
+      }, retryDelay);
     };
 
     return recognition;
@@ -160,6 +181,9 @@ export function useAudioRecorder(): AudioRecorderState {
       return;
     }
 
+    if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+    retryTimeoutRef.current = null;
+    restartCountRef.current = 0;
     baseTranscriptRef.current = '';
     fullTranscriptRef.current = '';
     setTranscript('');
@@ -174,8 +198,22 @@ export function useAudioRecorder(): AudioRecorderState {
       } catch {}
     }
 
-    const recognition = initRecognition();
-    if (!recognition) return;
+    let recognition: any = null;
+    try {
+      recognition = initRecognition();
+    } catch (error) {
+      isIntentActiveRef.current = false;
+      setIsConnecting(false);
+      setErrorMessage('Speech recognition is unavailable in this browser.');
+      console.warn('Speech recognition initialization failed:', error);
+      return;
+    }
+    if (!recognition) {
+      isIntentActiveRef.current = false;
+      setIsConnecting(false);
+      setErrorMessage('Speech recognition is unavailable in this browser.');
+      return;
+    }
 
     recognitionRef.current = recognition;
 
@@ -191,6 +229,8 @@ export function useAudioRecorder(): AudioRecorderState {
 
   const pauseRecording = useCallback(() => {
     if (isLockedRef.current || !isRecording || isPaused) return;
+    if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+    retryTimeoutRef.current = null;
     isPausedRef.current = true;
     setIsPaused(true);
     baseTranscriptRef.current = fullTranscriptRef.current;
@@ -207,8 +247,23 @@ export function useAudioRecorder(): AudioRecorderState {
     setIsPaused(false);
     setIsConnecting(true);
 
-    const recognition = initRecognition();
-    if (!recognition) return;
+    if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+    retryTimeoutRef.current = null;
+    restartCountRef.current = 0;
+    let recognition: any = null;
+    try {
+      recognition = initRecognition();
+    } catch (error) {
+      setIsConnecting(false);
+      setErrorMessage('Speech recognition is unavailable in this browser.');
+      console.warn('Speech recognition initialization failed:', error);
+      return;
+    }
+    if (!recognition) {
+      setIsConnecting(false);
+      setErrorMessage('Speech recognition is unavailable in this browser.');
+      return;
+    }
 
     recognitionRef.current = recognition;
     try {
@@ -220,6 +275,8 @@ export function useAudioRecorder(): AudioRecorderState {
   }, [isRecording, isPaused, initRecognition]);
 
   const stopRecording = useCallback(() => {
+    if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+    retryTimeoutRef.current = null;
     isIntentActiveRef.current = false;
     isPausedRef.current = false;
     if (recognitionRef.current) {
@@ -234,6 +291,8 @@ export function useAudioRecorder(): AudioRecorderState {
   }, []);
 
   const lockAndAbort = useCallback(() => {
+    if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+    retryTimeoutRef.current = null;
     isLockedRef.current = true;
     setIsLocked(true);
     isIntentActiveRef.current = false;
@@ -264,6 +323,9 @@ export function useAudioRecorder(): AudioRecorderState {
 
   const resetTranscript = useCallback(() => {
     if (isLockedRef.current) return;
+    if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+    retryTimeoutRef.current = null;
+    restartCountRef.current = 0;
     isIntentActiveRef.current = false;
     isPausedRef.current = false;
     if (recognitionRef.current) {
@@ -288,6 +350,8 @@ export function useAudioRecorder(): AudioRecorderState {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
       isLockedRef.current = true;
       isIntentActiveRef.current = false;
       isPausedRef.current = false;
