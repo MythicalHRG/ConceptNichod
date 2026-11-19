@@ -2,6 +2,7 @@
 
 import { callOpenRouter } from '@/lib/openrouter';
 import { requireOwnedTopicGenerationAccess } from '@/lib/ai-flow-auth';
+import { escapePromptText } from '@/lib/prompt-safety';
 
 export type GenerateTopicSummaryInput = {
   topicId: string;
@@ -53,7 +54,9 @@ from subject:
 <untrusted_subject>${safeSubject}</untrusted_subject>
 and chapter:
 <untrusted_chapter>${safeChapter}</untrusted_chapter>
-for a student in ${safeClass}${safeExam ? ` preparing for ${safeExam}` : ''}.
+<untrusted_class_level>${escapePromptText(safeClass)}</untrusted_class_level>
+<untrusted_exam_focus>${escapePromptText(safeExam)}</untrusted_exam_focus>
+for the learner context supplied below.
 
 Requirements:
 1. Start with a simple 1-2 line introduction (what this topic is about in simple words)
