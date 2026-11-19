@@ -89,8 +89,9 @@ export async function getLeaderboardDataAction(
     topicQuery.createdAt = { $gte: timeCutoff };
   }
   const topicSessions = await Topic.find(topicQuery)
-    .select("userId name analysis practiceStatus savedWrittenAnswers savedSpokenAnswers createdAt")
+    .select("userId name analysis.overallScore practiceStatus savedWrittenAnswers savedSpokenAnswers createdAt")
     .sort({ createdAt: 1 })
+    .maxTimeMS(15000)
     .lean();
 
   // Fetch streaks
