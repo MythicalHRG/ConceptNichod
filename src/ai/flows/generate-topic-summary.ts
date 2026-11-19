@@ -1,6 +1,7 @@
 'use server';
 
 import { callOpenRouter } from '@/lib/openrouter';
+import { requireOwnedTopicGenerationAccess } from '@/lib/ai-flow-auth';
 
 export type GenerateTopicSummaryInput = {
   topicId: string;
@@ -16,7 +17,15 @@ export type GenerateTopicSummaryOutput = {
 };
 
 export async function generateTopicSummary(input: GenerateTopicSummaryInput): Promise<GenerateTopicSummaryOutput> {
+  if (!input || typeof input !== "object") throw new Error("Invalid summary-generation request.");
+  await requireOwnedTopicGenerationAccess(input.topicId);
   const { topic, classLevel, subject, chapter, examFocus } = input;
+  if ([topic, classLevel, subject, chapter].some((value) => typeof value !== "string") ||
+      topic.length > 200 || classLevel.length > 50 || subject.length > 100 ||
+      chapter.length > 150 ||
+      (examFocus !== undefined && (typeof examFocus !== "string" || examFocus.length > 100))) {
+    throw new Error("Summary-generation inputs exceed the allowed limits.");
+  }
 
   const safeTopic = (topic || "").slice(0, 200).replace(/[<>{}]/g, "");
   const safeSubject = (subject || "").slice(0, 100).replace(/[<>{}]/g, "");
@@ -57,6 +66,10 @@ Requirements:
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt },
   ]);
+  const summary = typeof raw === "string" ? raw.trim() : "";
+  if (!summary || summary.length > 30000) {
+    throw new Error("The AI model returned an empty or oversized topic summary. Please try again.");
+  }
 
-  return { summary: raw };
+  return { summary };
 }
