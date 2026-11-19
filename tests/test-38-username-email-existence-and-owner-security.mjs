@@ -50,11 +50,9 @@ test('38.4 User Profiles display Birthday with Lucide Cake icon matching other d
   const dashContent = fs.readFileSync(dashboardPath, 'utf-8');
   const btnContent = fs.readFileSync(userProfileBtnPath, 'utf-8');
 
-  // Public profile displays DOB with Lucide Cake icon
-  assert.ok(publicContent.includes('user.dob'), 'Public profile must display user.dob');
-  assert.ok(publicContent.includes('formatDob(user.dob)'), 'Public profile must format user.dob');
-  assert.ok(publicContent.includes('Cake'), 'Public profile must show Lucide Cake icon');
-  assert.ok(publicContent.includes('text-pink-500'), 'Public profile Cake icon must be styled with text-pink-500');
+  // Public profiles must never expose DOB or an empty/invalid date badge.
+  assert.ok(!publicContent.includes('user.dob'), 'Public profile must not render private date of birth');
+  assert.ok(!publicContent.includes('formatDob') && !publicContent.includes('Cake'), 'Public profile must not render an empty or invalid DOB row');
 
   // Dashboard hero card displays DOB with Lucide Cake icon
   assert.ok(dashContent.includes('user.dob'), 'Dashboard must display user.dob');

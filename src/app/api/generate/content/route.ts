@@ -7,13 +7,18 @@ import { getClientIp } from '@/lib/ip';
 import { checkDistributedRateLimit } from '@/lib/distributed-rate-limiter';
 
 const ContentSchema = z.object({
-  topicId: z.string().min(1, 'topicId is required'),
-  topicName: z.string().min(1, 'topicName is required'),
-  classLevel: z.string().min(1, 'classLevel is required'),
+  topicId: z.string().min(1, 'topicId is required').max(64),
+  topicName: z.string().min(1, 'topicName is required').max(200),
+  classLevel: z.string().min(1, 'classLevel is required').max(50),
 });
 
 export async function POST(req: Request) {
   try {
+    const contentLength = Number(req.headers.get('content-length') || 0);
+    if (Number.isFinite(contentLength) && contentLength > 16_000) {
+      return NextResponse.json({ error: 'Request body is too large.' }, { status: 413 });
+    }
+
     // 1. Session authentication check
     const rawSession = (await cookies()).get('user_session')?.value;
     const sessionUuid = verifySessionCookie(rawSession);

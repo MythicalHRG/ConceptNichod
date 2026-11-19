@@ -36,14 +36,23 @@ async function verifyOwner() {
 export async function sendEmailBroadcastAction(formData: FormData) {
   await verifyOwner();
 
-  const recipientType = formData.get("recipientType") as string; // 'all' | 'custom'
-  const customTo = (formData.get("to") as string) || "";
-  const ccStr = (formData.get("cc") as string) || "";
-  const bccStr = (formData.get("bcc") as string) || "";
-  const subject = formData.get("subject") as string;
-  const body = formData.get("body") as string;
-  const rawAttachmentUrl = formData.get("attachmentUrl") as string | null;
-  const attachmentName = (formData.get("attachmentName") as string) || "attachment";
+  const readText = (key: string) => {
+    const value = formData.get(key);
+    return typeof value === "string" ? value : "";
+  };
+  const recipientType = readText("recipientType");
+  const customTo = readText("to");
+  const ccStr = readText("cc");
+  const bccStr = readText("bcc");
+  const subject = readText("subject").trim();
+  const body = readText("body");
+  const rawAttachmentUrl = readText("attachmentUrl");
+  const rawAttachmentName = readText("attachmentName") || "attachment";
+  const attachmentName = rawAttachmentName.replace(/[\r\n\"]/g, "").replace(/[^A-Za-z0-9._ -]/g, "_").slice(0, 120) || "attachment";
+
+  if (recipientType !== "all" && recipientType !== "custom") throw new Error("Invalid recipient selection.");
+  if (!subject || subject.length > 180 || /[\r\n]/.test(subject)) throw new Error("Subject must be 1-180 characters and cannot contain line breaks.");
+  if (!body || body.length > 20000) throw new Error("Email body must contain between 1 and 20,000 characters.");
 
   let attachmentUrl: string | null = null;
   if (rawAttachmentUrl && rawAttachmentUrl.trim().length > 0) {
@@ -54,12 +63,12 @@ export async function sendEmailBroadcastAction(formData: FormData) {
       const isAllowedHost = allowedHosts.some(
         (host) => parsedUrl.hostname === host || parsedUrl.hostname.endsWith(`.${host}`)
       );
-      if (parsedUrl.protocol !== "https:" || !isAllowedHost) {
+      if (parsedUrl.protocol !== "https:" || !isAllowedHost || parsedUrl.username || parsedUrl.password || !parsedUrl.pathname.startsWith("/f/")) {
         throw new Error(
           "Invalid attachment URL. Only secure HTTPS URLs from authorized storage (utfs.io, uploadthing.com) are permitted."
         );
       }
-      attachmentUrl = trimmed;
+      attachmentUrl = parsedUrl.toString();
     } catch (err: any) {
       throw new Error(err.message || "Invalid attachment URL provided.");
     }
@@ -88,28 +97,35 @@ export async function sendEmailBroadcastAction(formData: FormData) {
   // Determine recipients
   let toRecipients: string[] = [];
   if (recipientType === "all") {
-    const allUsers = await User.find({}).select("email").lean();
-    toRecipients = allUsers.map((u) => u.email.toLowerCase().trim()).filter(Boolean);
+    const allUsers = await User.find({}).select("email").limit(501).lean();
+    if (allUsers.length > 500) throw new Error("Gmail broadcasts are limited to 500 recipients per message.");
+    toRecipients = allUsers.map((u) => String(u.email || "").toLowerCase().trim()).filter(Boolean);
   } else {
-    toRecipients = customTo
-      .split(",")
-      .map((e) => e.toLowerCase().trim())
-      .filter((e) => e.length > 0 && e.includes("@"));
+    toRecipients = customTo.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+  }
+  const emailPattern = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/;
+  const maxToRecipients = 500;
+  if (toRecipients.length > maxToRecipients || toRecipients.some((email) => !emailPattern.test(email))) {
+    throw new Error(`Recipient lists must contain at most ${maxToRecipients} valid email addresses.`);
   }
 
   if (toRecipients.length === 0) {
     throw new Error("No valid recipient email addresses found.");
   }
 
-  const ccRecipients = ccStr
-    .split(",")
-    .map((e) => e.toLowerCase().trim())
-    .filter((e) => e.length > 0 && e.includes("@"));
-
-  const bccRecipients = bccStr
-    .split(",")
-    .map((e) => e.toLowerCase().trim())
-    .filter((e) => e.length > 0 && e.includes("@"));
+  const ccRecipients = ccStr.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+  const bccRecipients = bccStr.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+  if (ccRecipients.length > 50 || bccRecipients.length > 50 ||
+      ccRecipients.some((email) => !emailPattern.test(email)) ||
+      bccRecipients.some((email) => !emailPattern.test(email))) {
+    throw new Error("CC and BCC lists must each contain at most 50 valid email addresses.");
+  }
+  const totalRecipientCount = recipientType === "all"
+    ? new Set([...toRecipients, ...bccRecipients]).size
+    : toRecipients.length + ccRecipients.length + bccRecipients.length;
+  if (totalRecipientCount > 500) {
+    throw new Error("A single Gmail broadcast cannot exceed 500 total recipients.");
+  }
 
   const transporter = nodemailer.createTransport({
     service: "gmail",
@@ -133,7 +149,7 @@ export async function sendEmailBroadcastAction(formData: FormData) {
         attachmentUrl
           ? `<div style="margin-top: 24px; padding: 12px; background: #f4f4f5; border-radius: 6px;">
                <p style="margin: 0; font-size: 13px; font-weight: 600;">Attached File:</p>
-               <a href="${attachmentUrl}" target="_blank" style="font-size: 13px; color: #4f46e5; text-decoration: underline;">${escapeHtml(attachmentName)}</a>
+               <a href="${escapeHtml(attachmentUrl)}" target="_blank" style="font-size: 13px; color: #4f46e5; text-decoration: underline;">${escapeHtml(attachmentName)}</a>
              </div>`
           : ""
       }

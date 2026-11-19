@@ -63,12 +63,16 @@ export async function callOpenRouter(
 
   let lastError: Error | null = null;
   const startIndex = currentKeyIndex % keys.length;
+  const deadline = Date.now() + 60_000;
 
   for (let attempt = 0; attempt < keys.length; attempt++) {
+    if (Date.now() >= deadline) break;
     const keyIdx = (startIndex + attempt) % keys.length;
     const apiKey = keys[keyIdx];
 
     for (const currentModel of candidateModels) {
+      const remainingMs = deadline - Date.now();
+      if (remainingMs <= 0) break;
       try {
         const body: any = {
           model: currentModel,
@@ -88,6 +92,7 @@ export async function callOpenRouter(
             "X-Title": "ConceptNichod",
           },
           body: JSON.stringify(body),
+          signal: AbortSignal.timeout(Math.min(20_000, remainingMs)),
         });
 
         if (!res.ok) {
@@ -131,6 +136,9 @@ export async function callOpenRouter(
 export function parseJsonResponse<T>(raw: string): T {
   if (!raw || typeof raw !== "string") {
     throw new Error("Invalid response received from AI model: empty or non-string output.");
+  }
+  if (raw.length > 100_000) {
+    throw new Error("AI response exceeded the 100,000-character safety limit.");
   }
 
   // Models sometimes emit LaTeX commands with a single backslash inside a

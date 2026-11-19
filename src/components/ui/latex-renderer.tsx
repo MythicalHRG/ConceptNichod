@@ -109,6 +109,7 @@ function findMatchingEscapedBrace(str: string, openPos: number): number {
  */
 export function tokenizeInline(text: string | null | undefined): InlineToken[] {
   if (!text || typeof text !== 'string') return [];
+  if (text.length > 5000) return [{ type: 'text', value: text }];
   const tokens: InlineToken[] = [];
   let i = 0;
   let textStart = 0;
@@ -302,10 +303,14 @@ export function renderInlineLine(text: string): React.ReactNode {
 
 export function KatexInline({ formula }: { formula: string }) {
   let html = '';
+  if (typeof formula !== 'string' || formula.length > 5000) return <span>{String(formula || '').slice(0, 5000)}</span>;
   try {
     html = katex.renderToString(formula, {
       throwOnError: false,
       displayMode: false,
+      trust: false,
+      maxExpand: 1000,
+      maxSize: 20,
     });
   } catch {
     return <span>${formula}$</span>;
@@ -315,10 +320,14 @@ export function KatexInline({ formula }: { formula: string }) {
 
 export function KatexBlock({ formula }: { formula: string }) {
   let html = '';
+  if (typeof formula !== 'string' || formula.length > 5000) return <div className="text-center py-2">{String(formula || '').slice(0, 5000)}</div>;
   try {
     html = katex.renderToString(formula, {
       throwOnError: false,
       displayMode: true,
+      trust: false,
+      maxExpand: 1000,
+      maxSize: 20,
     });
   } catch {
     return <div className="text-center py-2">$${formula}$$</div>;
@@ -336,7 +345,8 @@ export function LatexRenderer({ content }: { content?: string | null }) {
     return null;
   }
 
-  const blocks = splitDisplayMathBlocks(content);
+  const boundedContent = content.length > 50000 ? content.slice(0, 50000) + '\n\n[Content truncated for safe rendering]' : content;
+  const blocks = splitDisplayMathBlocks(boundedContent);
 
   return (
     <div className="latex-content space-y-2 text-base leading-relaxed">

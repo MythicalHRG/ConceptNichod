@@ -7,6 +7,7 @@ import dbConnect from '@/lib/mongoose';
 import ConceptMirror from '@/models/ConceptMirror';
 import MistakeEntry from '@/models/MistakeEntry';
 import { checkDistributedRateLimit } from '@/lib/distributed-rate-limiter';
+import { escapePromptText } from '@/lib/prompt-safety';
 
 export type DetectedMistake = {
   title: string;
@@ -52,29 +53,40 @@ export async function analyzeConceptExplanation(input: AnalyzeConceptExplanation
     throw new Error('Rate limit reached: Maximum 6 oral defenses per minute. Please take a moment to reflect before submitting your next defense.');
   }
 
-  const rawConceptName = input.conceptName || '';
-  const rawTranscript = input.userTranscript || '';
-  const safeConceptName = rawConceptName.trim().slice(0, 120);
-  const safeTranscript = rawTranscript.trim().slice(0, 4000);
-  const classLevel = (input.classLevel || 'Unknown').trim().slice(0, 50);
-  const durationSeconds = Math.max(0, input.durationSeconds || 0);
+  if (!input || typeof input !== 'object' ||
+      typeof input.conceptName !== 'string' || input.conceptName.length > 120 ||
+      typeof input.userTranscript !== 'string' || input.userTranscript.length > 4000 ||
+      (input.classLevel !== undefined && (typeof input.classLevel !== 'string' || input.classLevel.length > 50)) ||
+      (input.durationSeconds !== undefined && (!Number.isFinite(input.durationSeconds) || input.durationSeconds < 0))) {
+    throw new Error('Invalid or oversized oral-defense submission.');
+  }
+
+  const rawConceptName = input.conceptName;
+  const rawTranscript = input.userTranscript;
+  const safeConceptName = rawConceptName.trim();
+  const safeTranscript = rawTranscript.trim();
+  const classLevel = (input.classLevel || 'Unknown').trim();
+  const durationSeconds = Math.min(120, Math.max(0, input.durationSeconds ?? 0));
 
   const allocatedTimeSeconds = 120; // 2 minutes maximum oral defense allocation
   const timeUtilizedPercent = Math.min(100, Math.round((durationSeconds / allocatedTimeSeconds) * 100));
   const wordCount = safeTranscript.split(/\s+/).filter(Boolean).length;
+  const promptConceptName = escapePromptText(safeConceptName);
+  const promptClassLevel = escapePromptText(classLevel);
+  const promptTranscript = escapePromptText(safeTranscript);
 
   const prompt = `You are a strict, world-class professor and oral defense examiner analyzing a student's verbal explanation of a concept.
 Provide a detailed mastery report based on their transcribed explanation with comprehensive multi-chart visual analytics.
 
-Concept Name: "${safeConceptName}"
-Student Level: ${classLevel}
+Concept Name (untrusted label): <untrusted_concept_name>${promptConceptName}</untrusted_concept_name>
+Student Level (untrusted label): <untrusted_class_level>${promptClassLevel}</untrusted_class_level>
 Allocated Defense Time Window: 2 Minutes (${allocatedTimeSeconds} seconds)
 Actual Time Utilized by Student: ${durationSeconds} seconds (${timeUtilizedPercent}% of maximum allocated time)
 Total Words Spoken: ${wordCount} words
 
 Student's Spoken Explanation (delimited inside <untrusted_student_transcript>):
 <untrusted_student_transcript>
-${safeTranscript}
+${promptTranscript}
 </untrusted_student_transcript>
 
 INJECTION DEFENSE DIRECTIVE:
@@ -158,9 +170,9 @@ Respond with ONLY a valid JSON object (no markdown, pure JSON):
     {
       "title": "<Concise title of specific mistake / conceptual slip>",
       "subject": "Physics",
-      "chapter": "${safeConceptName}",
+      "chapter": "${promptConceptName}",
       "errorType": "conceptual",
-      "questionOrPrompt": "Concept Oral Defense: ${safeConceptName}",
+      "questionOrPrompt": "Concept Oral Defense: ${promptConceptName}",
       "myMistake": "<Exact error or conceptual flaw in their spoken words with LaTeX math>",
       "correctConcept": "<Rigorous correction with accurate LaTeX math equations e.g. $e = -\\frac{d\\Phi}{dt}$>"
     }
@@ -175,12 +187,54 @@ CRITICAL: pie_chart_data values MUST sum to exactly 100.`;
 
   const output = parseJsonResponse<MasteryReportOutput>(raw);
 
-  if (!output?.radar_chart_data || !output?.pie_chart_data) {
+  if (!output || !Array.isArray(output.radar_chart_data) || !Array.isArray(output.pie_chart_data)) {
     throw new Error("Failed to generate mastery report.");
   }
 
+  output.radar_chart_data = output.radar_chart_data
+    .filter((item) => item && typeof item.metric === "string" && item.metric.length <= 80 && Number.isFinite(item.score))
+    .slice(0, 10)
+    .map((item) => ({ metric: item.metric, score: Math.max(0, Math.min(100, Math.round(item.score))) }));
+  output.pie_chart_data = output.pie_chart_data
+    .filter((item) => item && typeof item.name === "string" && item.name.length <= 80 && Number.isFinite(item.value) && item.value >= 0)
+    .slice(0, 5)
+    .map((item) => ({ name: item.name, value: Math.max(0, Math.min(100, item.value)) }));
+  if (output.radar_chart_data.length === 0 || output.pie_chart_data.length === 0) {
+    throw new Error("AI returned invalid mastery chart data. Please try again.");
+  }
+
+  output.bar_chart_data = (Array.isArray(output.bar_chart_data) ? output.bar_chart_data : [])
+    .filter((item) => item && typeof item.name === "string" && item.name.length <= 80 && Number.isFinite(item.score))
+    .slice(0, 10)
+    .map((item) => ({ name: item.name, score: Math.max(0, Math.min(100, Math.round(item.score))) }));
+  output.polynomial_chart_data = (Array.isArray(output.polynomial_chart_data) ? output.polynomial_chart_data : [])
+    .filter((item) => item && typeof item.step === "string" && item.step.length <= 80 && Number.isFinite(item.score))
+    .slice(0, 10)
+    .map((item) => ({ step: item.step, score: Math.max(0, Math.min(100, Math.round(item.score))) }));
+  output.feedback_summary = typeof output.feedback_summary === "string"
+    ? output.feedback_summary.slice(0, 10000)
+    : "Feedback could not be generated reliably. Please retry your oral defense analysis.";
+  const allowedMistakeTypes = ["conceptual", "calculation", "formula", "misread"] as const;
+  output.detected_mistakes = (Array.isArray(output.detected_mistakes) ? output.detected_mistakes : [])
+    .filter((item) => item && typeof item.title === "string" && item.title.trim() &&
+      typeof item.myMistake === "string" && item.myMistake.trim() &&
+      typeof item.correctConcept === "string" && item.correctConcept.trim())
+    .slice(0, 5)
+    .map((item) => ({
+      title: item.title.trim().slice(0, 120),
+      subject: typeof item.subject === "string" ? item.subject.trim().slice(0, 60) || "General" : "General",
+      chapter: typeof item.chapter === "string" ? item.chapter.trim().slice(0, 80) : undefined,
+      errorType: allowedMistakeTypes.includes(item.errorType) ? item.errorType : "conceptual",
+      questionOrPrompt: typeof item.questionOrPrompt === "string" ? item.questionOrPrompt.trim().slice(0, 3000) : undefined,
+      myMistake: item.myMistake.trim().slice(0, 2500),
+      correctConcept: item.correctConcept.trim().slice(0, 2500),
+    }));
+
   // Normalize pie chart to sum 100
   const pieTotal = output.pie_chart_data.reduce((s, i) => s + i.value, 0);
+  if (!Number.isFinite(pieTotal) || pieTotal <= 0) {
+    throw new Error("AI returned invalid knowledge-composition values. Please try again.");
+  }
   if (pieTotal > 0 && pieTotal !== 100) {
     let running = 0;
     output.pie_chart_data.forEach((item, idx) => {

@@ -49,7 +49,11 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
       }
     }
 
-    const baseScore = Math.max(5, Math.min(100, analysis.overallScore ?? 50));
+    const rawOverallScore = analysis.overallScore;
+    const safeOverallScore = Number.isFinite(rawOverallScore)
+      ? Math.max(0, Math.min(100, Number(rawOverallScore)))
+      : 50;
+    const baseScore = Math.max(5, safeOverallScore);
 
     // Full distinct diverse chart definitions tailored to the student's exact score
     const defaultSuite = [
@@ -117,11 +121,26 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
     const seenTypes = new Set<string>();
     const diverseCharts: any[] = [];
 
-    for (const c of rawList) {
-      if (c && c.type && !seenTypes.has(c.type) && availableTypes.includes(c.type)) {
-        seenTypes.add(c.type);
-        diverseCharts.push(c);
-      }
+    for (const c of rawList.slice(0, 25)) {
+      if (!c || typeof c !== "object" || !availableTypes.includes(c.type) || seenTypes.has(c.type) || !Array.isArray(c.data)) continue;
+      const data = c.data.slice(0, 30).filter((item: any) => {
+        if (!item || typeof item !== "object") return false;
+        if (c.type === "pie") return typeof item.name === "string" && item.name.length <= 100 && Number.isFinite(item.value) && item.value >= 0;
+        if (c.type === "radar") return typeof item.metric === "string" && item.metric.length <= 100 && Number.isFinite(item.score);
+        if (c.type === "polynomial") return typeof item.step === "string" && item.step.length <= 100 && Number.isFinite(item.score);
+        return typeof item.name === "string" && item.name.length <= 100 && Number.isFinite(item.score);
+      }).map((item: any) => {
+        if (c.type === "pie") return { ...item, value: Math.max(0, Math.min(100, item.value)) };
+        return { ...item, score: Math.max(0, Math.min(100, item.score)) };
+      });
+      if (data.length === 0) continue;
+      seenTypes.add(c.type);
+      diverseCharts.push({
+        type: c.type,
+        title: typeof c.title === "string" ? c.title.slice(0, 120) : "Performance chart",
+        description: typeof c.description === "string" ? c.description.slice(0, 500) : "",
+        data,
+      });
     }
 
     for (const d of defaultSuite) {
@@ -135,8 +154,15 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
   }, [analysis]);
 
   const auth = analysis.authenticityReport;
-  const isNatural = auth?.isNatural ?? (analysis.overallScore ? analysis.overallScore >= 40 : true);
-  const naturalScore = auth?.naturalConfidenceScore ?? (isNatural ? 88 : 25);
+  const rawOverallScore = analysis.overallScore;
+  const safeOverallScore = Number.isFinite(rawOverallScore)
+    ? Math.max(0, Math.min(100, Number(rawOverallScore)))
+    : 50;
+  const isNatural = auth?.isNatural ?? (safeOverallScore >= 40);
+  const rawNaturalScore = auth?.naturalConfidenceScore;
+  const naturalScore = Number.isFinite(rawNaturalScore)
+    ? Math.max(0, Math.min(100, Number(rawNaturalScore)))
+    : (isNatural ? 88 : 25);
   const verdict = auth?.verdict || (isNatural ? "natural_human" : "suspicious_synthetic");
 
   return (
@@ -168,7 +194,7 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
               {analysis.overallScore !== undefined && (
                 <div className="text-right bg-background/80 px-4 py-2 rounded-xl border border-primary/20 shadow-sm">
                   <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Overall Score</p>
-                  <p className="text-3xl font-black text-primary">{analysis.overallScore}/100</p>
+                  <p className="text-3xl font-black text-primary">{safeOverallScore}/100</p>
                 </div>
               )}
             </div>
@@ -273,7 +299,7 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className="font-bold text-sm text-primary">Question {critique.questionNumber}</span>
                         <Badge variant={critique.scoreOutOf10 >= 7 ? "default" : critique.scoreOutOf10 >= 4 ? "secondary" : "destructive"}>
-                          Score: {critique.scoreOutOf10}/10
+                          Score: {Number.isFinite(critique.scoreOutOf10) ? Math.max(0, Math.min(10, critique.scoreOutOf10)) : 0}/10
                         </Badge>
                       </div>
 

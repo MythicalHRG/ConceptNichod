@@ -8,6 +8,7 @@ import { verifySessionCookie } from "@/lib/session";
 import { checkDistributedRateLimit } from "@/lib/distributed-rate-limiter";
 import { recordUserStudyActivity } from "@/lib/streak";
 import { callOpenRouter, parseJsonResponse } from "@/lib/openrouter";
+import { escapePromptText } from "@/lib/prompt-safety";
 
 function sanitize(str: string): string {
   return (str || "")
@@ -209,6 +210,9 @@ export interface MistakeQuizQuestion {
 
 export async function generateMistakeQuizAction(subject?: string) {
   const user = await getAuthenticatedUser();
+  const rateCheck = await checkDistributedRateLimit(`mistake-quiz:${user.uuid}`, 5, 15 * 60 * 1000);
+  if (!rateCheck.success) throw new Error("Too many quiz-generation requests. Please try again in 15 minutes.");
+  if (subject !== undefined && (typeof subject !== "string" || subject.length > 60)) throw new Error("Invalid quiz subject.");
   await dbConnect();
 
   const query: any = { userId: user.uuid, status: "unresolved" };
@@ -229,7 +233,7 @@ export async function generateMistakeQuizAction(subject?: string) {
 
   const mistakeSummaries = unresolvedDocs.map(
     (d, i) =>
-      `[Item ${i + 1}] Subject: ${(d.subject || "").slice(0, 80)}, Concept: ${(d.title || "").slice(0, 150)}\nStudent's Past Mistake: ${(d.myMistake || "").slice(0, 500)}\nCorrect Concept: ${(d.correctConcept || "").slice(0, 500)}`
+      `[Item ${i + 1}] Subject: ${escapePromptText((d.subject || "").slice(0, 80))}, Concept: ${escapePromptText((d.title || "").slice(0, 150))}\nStudent's Past Mistake: ${escapePromptText((d.myMistake || "").slice(0, 500))}\nCorrect Concept: ${escapePromptText((d.correctConcept || "").slice(0, 500))}`
   ).join("\n\n");
 
   const prompt = `You are an expert exam tutor for Indian competitive examinations (IIT JEE, NEET, CBSE).
@@ -255,7 +259,7 @@ Respond with ONLY a valid JSON object in this format (no markdown fences, no pre
       "options": ["Option A", "Option B", "Option C", "Option D"],
       "correctIndex": 0,
       "explanation": "Concise pedagogical explanation of why this option is correct and how to avoid the mistake.",
-      "relatedMistake": "${unresolvedDocs[0].title}"
+      "relatedMistake": ${JSON.stringify(escapePromptText(unresolvedDocs[0].title || ""))}
     }
   ]
 }`;
@@ -264,8 +268,18 @@ Respond with ONLY a valid JSON object in this format (no markdown fences, no pre
     const raw = await callOpenRouter([{ role: "user", content: prompt }], undefined, true);
     const parsed = parseJsonResponse<{ questions: MistakeQuizQuestion[] }>(raw);
 
-    if (!parsed.questions || !Array.isArray(parsed.questions) || parsed.questions.length === 0) {
-      throw new Error("Could not parse quiz questions.");
+    if (!Array.isArray(parsed?.questions) || parsed.questions.length !== 3 ||
+        parsed.questions.some((question) =>
+          !question ||
+          typeof question.id !== "string" || question.id.length > 40 ||
+          typeof question.question !== "string" || !question.question.trim() || question.question.length > 3000 ||
+          !Array.isArray(question.options) || question.options.length !== 4 ||
+          question.options.some((option) => typeof option !== "string" || !option.trim() || option.length > 1000) ||
+          !Number.isInteger(question.correctIndex) || question.correctIndex < 0 || question.correctIndex > 3 ||
+          typeof question.explanation !== "string" || question.explanation.length > 3000 ||
+          typeof question.relatedMistake !== "string" || question.relatedMistake.length > 200
+        )) {
+      throw new Error("The AI model returned an invalid quiz. Please try again.");
     }
 
     return {

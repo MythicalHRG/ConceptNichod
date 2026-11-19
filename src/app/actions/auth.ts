@@ -368,7 +368,7 @@ export async function updateProfileAction(formData: FormData) {
     }
 }
 
-export async function requestEmailChangeOtpAction(newEmail: string, currentPassword?: string) {
+export async function requestEmailChangeOtpAction(newEmail: string, currentPassword: string) {
     await dbConnect();
     const rawSession = (await cookies()).get("user_session")?.value;
     const sessionUuid = verifySessionCookie(rawSession);
@@ -377,11 +377,14 @@ export async function requestEmailChangeOtpAction(newEmail: string, currentPassw
     const currentUser = await User.findOne({ uuid: sessionUuid });
     if (!currentUser) throw new Error("User not found");
 
-    if (currentPassword) {
-        const isPasswordValid = await comparePassword(currentPassword, currentUser.password);
-        if (!isPasswordValid) {
-            throw new Error("Incorrect current password.");
-        }
+    const passwordRateLimit = await checkDistributedRateLimit(`email-change:password:${sessionUuid}`, 5, 15 * 60 * 1000);
+    if (!passwordRateLimit.success) throw new Error("Too many password verification attempts. Please try again later.");
+    if (typeof currentPassword !== "string" || !currentPassword) {
+        throw new Error("Your current password is required to authorize an email change.");
+    }
+    const isPasswordValid = await comparePassword(currentPassword, currentUser.password);
+    if (!isPasswordValid) {
+        throw new Error("Incorrect current password.");
     }
 
     const email = newEmail.toLowerCase().trim();
@@ -447,27 +450,42 @@ export async function confirmEmailChangeAction(newEmail: string, otp: string) {
     const sessionUuid = verifySessionCookie(rawSession);
     if (!sessionUuid) throw new Error("Not authenticated");
 
-    const email = newEmail.toLowerCase().trim();
+    const email = (newEmail || "").toLowerCase().trim();
     const sanitizedOtp = (otp || "").trim();
     if (!email || !sanitizedOtp) throw new Error("Missing email or verification code.");
 
-    const otpRecord = await OtpVerification.findOne({ email });
-    if (!otpRecord) throw new Error("No verification code was requested for this email.");
+    const rateCheck = await checkDistributedRateLimit(`email-change:verify:${sessionUuid}:${email}`, 5, 15 * 60 * 1000);
+    if (!rateCheck.success) throw new Error("Too many verification attempts. Please request a new code later.");
 
-    if (otpRecord.otp !== sanitizedOtp) {
-        otpRecord.attempts = (otpRecord.attempts || 0) + 1;
-        await otpRecord.save();
-        if (otpRecord.attempts > 5) {
-            await OtpVerification.deleteOne({ email });
+    const now = new Date();
+    // Atomically reserve one of the five attempts before comparing the code.
+    // Concurrent requests cannot overwrite the counter and extend the guess budget.
+    const otpRecord = await OtpVerification.findOneAndUpdate(
+        { email, expiresAt: { $gt: now }, attempts: { $lt: 5 } },
+        { $inc: { attempts: 1 } },
+        { new: true }
+    );
+
+    if (!otpRecord) {
+        const currentRecord = await OtpVerification.findOne({ email });
+        if (!currentRecord) throw new Error("No verification code was requested for this email.");
+        if (currentRecord.expiresAt <= now) {
+            await OtpVerification.deleteOne({ _id: currentRecord._id, expiresAt: { $lte: now } });
+            throw new Error("Verification code has expired. Please request a new code.");
+        }
+        if ((currentRecord.attempts || 0) >= 5) {
+            await OtpVerification.deleteOne({ _id: currentRecord._id, attempts: { $gte: 5 } });
             throw new Error("Too many incorrect attempts. This code has been invalidated for security.");
         }
-        const remaining = 5 - otpRecord.attempts;
-        throw new Error(`Invalid verification code. ${remaining} attempt(s) remaining.`);
+        throw new Error("Verification code is no longer valid. Please request a new one.");
     }
 
-    if (new Date() > otpRecord.expiresAt) {
-        await OtpVerification.deleteOne({ email });
-        throw new Error("Verification code has expired. Please request a new code.");
+    if (otpRecord.otp !== sanitizedOtp) {
+        if (otpRecord.attempts >= 5) {
+            await OtpVerification.deleteOne({ _id: otpRecord._id, attempts: { $gte: 5 } });
+        }
+        const remaining = Math.max(0, 5 - otpRecord.attempts);
+        throw new Error(`Invalid verification code. ${remaining} attempt(s) remaining.`);
     }
 
     const existing = await User.findOne({ email });
@@ -482,12 +500,11 @@ export async function confirmEmailChangeAction(newEmail: string, otp: string) {
     );
     if (!updatedUser) throw new Error("Email update failed");
 
-    await OtpVerification.deleteOne({ email });
+    await OtpVerification.deleteOne({ _id: otpRecord._id });
 
     const { password, ...userWithoutPassword } = updatedUser.toObject();
     return { success: true, user: userWithoutPassword };
 }
-
 export async function resetPasswordAction(formData: FormData) {
     await dbConnect();
     const email = (formData.get("email") as string).toLowerCase().trim();
@@ -539,6 +556,8 @@ export async function changePasswordAction(formData: FormData) {
     const user = await User.findOne({ uuid: sessionId });
     if (!user) throw new Error("User not found");
 
+    const passwordRateLimit = await checkDistributedRateLimit(`password-change:verify:${sessionId}`, 5, 15 * 60 * 1000);
+    if (!passwordRateLimit.success) throw new Error("Too many password verification attempts. Please try again later.");
     try {
         const isValid = await comparePassword(currentPassword, user.password);
         if (!isValid) throw new Error("Incorrect current password");
@@ -566,6 +585,8 @@ export async function requestDeleteAccountOtpAction(currentPassword: string) {
         throw new Error("The root platform administrator account @mythicalhrg cannot be deleted.");
     }
 
+    const passwordRateLimit = await checkDistributedRateLimit(`delete-account:password:${sessionUuid}`, 5, 15 * 60 * 1000);
+    if (!passwordRateLimit.success) throw new Error("Too many password verification attempts. Please try again later.");
     if (!currentPassword) {
         throw new Error("Please enter your current password to authorize this deletion request.");
     }
@@ -669,21 +690,45 @@ export async function deleteAccountAction(formData: FormData) {
     const otpRecord = await OtpVerification.findOne({ email: userEmail });
     if (!otpRecord) throw new Error("No deletion code requested for this email.");
 
-    // Check if OTP matches directly or was pre-verified
-    if (!otpRecord.isVerified && otpRecord.otp !== otp) {
-        otpRecord.attempts = (otpRecord.attempts || 0) + 1;
-        await otpRecord.save();
-        if (otpRecord.attempts >= 5) {
-            await OtpVerification.deleteOne({ email: userEmail });
-            throw new Error("Too many incorrect attempts. This deletion code has been invalidated.");
-        }
-        const remaining = 5 - otpRecord.attempts;
-        throw new Error(`Invalid verification code. ${remaining} attempt(s) remaining.`);
+    const now = new Date();
+    if (now > otpRecord.expiresAt) {
+        await OtpVerification.deleteOne({ _id: otpRecord._id, expiresAt: { $lte: now } });
+        throw new Error("Verification code has expired. Please request a new code.");
     }
 
-    if (new Date() > otpRecord.expiresAt) {
-        await OtpVerification.deleteOne({ email: userEmail });
-        throw new Error("Verification code has expired. Please request a new code.");
+    // Direct OTP confirmation is used by the account-deletion form. Reserve attempts
+    // atomically so concurrent guesses cannot bypass the five-attempt ceiling.
+    if (!otpRecord.isVerified) {
+        const rateCheck = await checkDistributedRateLimit(`delete-account:verify:${sessionId}`, 5, 15 * 60 * 1000);
+        if (!rateCheck.success) throw new Error("Too many verification attempts. Please request a new code later.");
+
+        const attemptRecord = await OtpVerification.findOneAndUpdate(
+            { email: userEmail, expiresAt: { $gt: now }, attempts: { $lt: 5 }, isVerified: false },
+            { $inc: { attempts: 1 } },
+            { new: true }
+        );
+
+        if (!attemptRecord) {
+            const currentRecord = await OtpVerification.findOne({ email: userEmail });
+            if (!currentRecord) throw new Error("No deletion code requested for this email.");
+            if (currentRecord.expiresAt <= now) {
+                await OtpVerification.deleteOne({ _id: currentRecord._id, expiresAt: { $lte: now } });
+                throw new Error("Verification code has expired. Please request a new code.");
+            }
+            if ((currentRecord.attempts || 0) >= 5) {
+                await OtpVerification.deleteOne({ _id: currentRecord._id, attempts: { $gte: 5 } });
+                throw new Error("Too many incorrect attempts. This deletion code has been invalidated.");
+            }
+            throw new Error("Verification code is no longer valid. Please request a new one.");
+        }
+
+        if (attemptRecord.otp !== otp) {
+            if (attemptRecord.attempts >= 5) {
+                await OtpVerification.deleteOne({ _id: attemptRecord._id, attempts: { $gte: 5 } });
+            }
+            const remaining = Math.max(0, 5 - attemptRecord.attempts);
+            throw new Error(`Invalid verification code. ${remaining} attempt(s) remaining.`);
+        }
     }
 
     // Cascading DB cleanup

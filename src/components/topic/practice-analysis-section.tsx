@@ -71,6 +71,15 @@ export function PracticeAndAnalysisSection({ topic, onFinalAnalysis, isAnalyzing
     isSubmitted,
   ]);
 
+  // Release the local submission lock when the parent analysis request fails.
+  // The parent owns isAnalyzing and clears it in finally; without this reset,
+  // the button remains permanently disabled after a network/AI failure.
+  useEffect(() => {
+    if (isSubmitted && !isAnalyzing && !finalAnalysis) {
+      setIsSubmitted(false);
+    }
+  }, [isSubmitted, isAnalyzing, finalAnalysis]);
+
   // Proctoring & Session Integrity:
   // Minimizing screen or switching tabs auto-submits practice session immediately
   useEffect(() => {

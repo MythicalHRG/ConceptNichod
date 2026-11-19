@@ -341,11 +341,10 @@ test("Tareeka 18: Static verification - User.ts schema and profile.ts projection
   const profileActionPath = path.resolve("src/app/actions/profile.ts");
   const profileContent = fs.readFileSync(profileActionPath, "utf-8");
 
-  assert.ok(profileContent.includes("-firstLoginIp"), "profile.ts must exclude -firstLoginIp");
-  assert.ok(profileContent.includes("-firstLoginAt"), "profile.ts must exclude -firstLoginAt");
-  assert.ok(profileContent.includes("-lastLoginIp"), "profile.ts must exclude -lastLoginIp");
-  assert.ok(profileContent.includes("-lastLoginAt"), "profile.ts must exclude -lastLoginAt");
-  assert.ok(profileContent.includes("-lastKnownIp"), "profile.ts must exclude -lastKnownIp");
+  assert.ok(
+    profileContent.includes('.select("username fullName classLevel examFocus city instagram snapchat bio")'),
+    "profile.ts must use a public-field allowlist that cannot expose IP or login timestamp fields"
+  );
 
   const ipLibPath = path.resolve("src/lib/ip.ts");
   if (fs.existsSync(ipLibPath)) {

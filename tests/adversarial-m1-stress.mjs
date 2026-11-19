@@ -299,85 +299,27 @@ test("Challenger 3.3: Proxy header precedence and comma-separated client resolut
 test("Challenger 4.1: Public profile data projection never leaks sensitive IP or timestamp fields", () => {
   const profileFilePath = path.resolve("src/app/actions/profile.ts");
   const content = fs.readFileSync(profileFilePath, "utf-8");
+  const publicUserQuery = content.slice(content.indexOf("export async function getPublicProfileData("), content.indexOf("if (!user)"));
+  const allowedFields = ["username", "fullName", "classLevel", "examFocus", "city", "instagram", "snapchat", "bio"];
+  assert.ok(publicUserQuery.includes('.select("username fullName classLevel examFocus city instagram snapchat bio")'),
+    "Public profile must use a positive field allowlist");
 
-  // Verify findOne projection includes all negative exclusion selectors
-  const requiredExclusions = [
-    "-password",
-    "-email",
-    "-uuid",
-    "-_id",
-    "-createdAt",
-    "-__v",
-    "-firstLoginIp",
-    "-firstLoginAt",
-    "-lastLoginIp",
-    "-lastLoginAt",
-    "-lastKnownIp"
-  ];
-
-  for (const field of requiredExclusions) {
-    assert.ok(
-      content.includes(field),
-      `Public profile query in src/app/actions/profile.ts MUST explicitly exclude ${field}`
-    );
-  }
-
-  // Simulate Mongoose document serialization with sensitive fields
   const mockDbUser = {
-    username: "victim_student",
-    fullName: "Victim Student",
-    gender: "Female",
-    dob: "2005-01-01",
-    classLevel: "12+",
-    city: "Delhi",
-    firstLoginIp: "203.0.113.99",
-    firstLoginAt: new Date("2026-01-01T00:00:00Z"),
-    lastLoginIp: "198.51.100.88",
-    lastLoginAt: new Date("2026-11-04T00:00:00Z"),
-    lastKnownIp: "198.51.100.88",
-    password: "hashed_secret_password",
-    email: "victim@gmail.com",
-    uuid: "victim-secret-uuid-1234",
-    _id: "mongo-object-id-1234",
-    createdAt: new Date(),
-    __v: 0
+    username: "victim_student", fullName: "Victim Student", gender: "Female", dob: "2005-01-01",
+    classLevel: "12+", city: "Delhi", examFocus: "UPSC", instagram: "student", snapchat: "student", bio: "Learner",
+    futureCollege: "Private College", role: "owner", firstLoginIp: "203.0.113.99",
+    firstLoginAt: new Date("2026-01-01T00:00:00Z"), lastLoginIp: "198.51.100.88",
+    lastLoginAt: new Date("2026-11-04T00:00:00Z"), lastKnownIp: "198.51.100.88",
+    password: "hashed_secret_password", email: "victim@gmail.com", uuid: "victim-secret-uuid-1234",
+    _id: "mongo-object-id-1234", createdAt: new Date(), __v: 0,
   };
-
-  // Simulate negative projection applied by Mongoose
-  const projected = { ...mockDbUser };
-  for (const exclusion of requiredExclusions) {
-    const propName = exclusion.replace(/^-/, "");
-    delete projected[propName];
-  }
-
-  // Assert strictly that NONE of the forbidden fields exist on projected object
-  const forbiddenKeys = [
-    "firstLoginIp",
-    "firstLoginAt",
-    "lastLoginIp",
-    "lastLoginAt",
-    "lastKnownIp",
-    "password",
-    "email",
-    "uuid",
-    "_id",
-    "__v"
-  ];
-
+  const projected = Object.fromEntries(Object.entries(mockDbUser).filter(([key]) => allowedFields.includes(key)));
+  for (const field of allowedFields) assert.ok(field in projected, `Allowed public field ${field} should remain`);
+  const forbiddenKeys = ["gender", "dob", "futureCollege", "role", "firstLoginIp", "firstLoginAt", "lastLoginIp", "lastLoginAt", "lastKnownIp", "password", "email", "uuid", "_id", "createdAt", "__v"];
   for (const key of forbiddenKeys) {
-    assert.strictEqual(
-      key in projected,
-      false,
-      `Property '${key}' must NOT exist on projected public profile`
-    );
-    assert.strictEqual(
-      projected[key],
-      undefined,
-      `Property '${key}' must be undefined`
-    );
+    assert.strictEqual(key in projected, false, `Property ${key} must NOT exist on projected public profile`);
   }
 });
-
 // =====================================================================
 // CHALLENGE 5: Aspirants UUID Redaction Adversarial Verification
 // =====================================================================

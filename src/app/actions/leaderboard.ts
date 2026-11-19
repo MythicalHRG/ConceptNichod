@@ -113,31 +113,38 @@ export async function getLeaderboardDataAction(
   const userOralDefenseSeconds = new Map<string, number>();
 
   for (const session of mirrorSessions) {
+    const rawScore = session.overallScore;
+    const rawDuration = session.durationSeconds;
+    const createdAt = new Date(session.createdAt);
+    if (!Number.isFinite(rawScore) || !Number.isFinite(createdAt.getTime()) || typeof session.userId !== "string") continue;
+    const score = Math.max(0, Math.min(100, rawScore));
+    const dur = Number.isFinite(rawDuration) ? Math.max(0, Math.min(86400, rawDuration)) : 0;
     const list = userActivities.get(session.userId) || [];
-    const dur = session.durationSeconds || 0;
     userOralDefenseSeconds.set(
       session.userId,
       (userOralDefenseSeconds.get(session.userId) || 0) + dur
     );
     list.push({
-      title: session.conceptName,
-      score: Math.min(100, Math.max(0, session.overallScore || 0)),
+      title: typeof session.conceptName === "string" ? session.conceptName.slice(0, 200) : "Concept session",
+      score,
       durationSeconds: dur,
-      createdAt: new Date(session.createdAt),
+      createdAt,
     });
     userActivities.set(session.userId, list);
   }
 
   for (const topic of topicSessions) {
     // Only count topics where the student has actually practiced or completed an evaluation
-    const hasAnalysisScore = topic.analysis && typeof topic.analysis.overallScore === "number";
+    const hasAnalysisScore = topic.analysis && Number.isFinite(topic.analysis.overallScore);
     const isCompleted = topic.practiceStatus === "completed";
     const isInProgress = topic.practiceStatus === "in_progress";
     const hasAnswers =
       (Array.isArray(topic.savedWrittenAnswers) &&
-        topic.savedWrittenAnswers.some((a: string) => a && a.trim().length > 0)) ||
+        topic.savedWrittenAnswers.some((a: unknown) => typeof a === "string" && a.trim().length > 0)) ||
       (Array.isArray(topic.savedSpokenAnswers) &&
-        topic.savedSpokenAnswers.some((a: string) => a && a.trim().length > 0));
+        topic.savedSpokenAnswers.some((a: unknown) => typeof a === "string" && a.trim().length > 0));
+    const topicCreatedAt = new Date(topic.createdAt);
+    if (!Number.isFinite(topicCreatedAt.getTime())) continue;
 
     // Exclude untouched drafts (not_started without analysis, or in_progress without any answers)
     if (!hasAnalysisScore && !isCompleted && (!isInProgress || !hasAnswers)) {
@@ -155,10 +162,10 @@ export async function getLeaderboardDataAction(
 
     const list = userActivities.get(topic.userId) || [];
     list.push({
-      title: topic.name,
-      score: Math.min(100, Math.max(0, score)),
+      title: typeof topic.name === "string" ? topic.name.slice(0, 200) : "Study topic",
+      score: Number.isFinite(score) ? Math.max(0, Math.min(100, score)) : 0,
       durationSeconds: isCompleted ? 180 : 60,
-      createdAt: new Date(topic.createdAt),
+      createdAt: topicCreatedAt,
     });
     userActivities.set(topic.userId, list);
   }
@@ -219,8 +226,10 @@ export async function getLeaderboardDataAction(
       streakDoc &&
       (streakDoc.lastActiveDate === todayStr ||
         streakDoc.lastActiveDate === yesterdayStr);
-    const currentStreak = isStreakActive ? streakDoc.currentStreak : 0;
-    const longestStreak = streakDoc ? streakDoc.longestStreak : 0;
+    const currentStreakValue = isStreakActive ? streakDoc.currentStreak : 0;
+    const longestStreakValue = streakDoc ? streakDoc.longestStreak : 0;
+    const currentStreak = Number.isFinite(currentStreakValue) ? Math.max(0, Math.min(3650, currentStreakValue)) : 0;
+    const longestStreak = Number.isFinite(longestStreakValue) ? Math.max(0, Math.min(3650, longestStreakValue)) : 0;
 
     // 1. Quality & Mastery-Weighted Volume:
     // Reward depth of mastery over superficial churning
