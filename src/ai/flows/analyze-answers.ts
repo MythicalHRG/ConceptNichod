@@ -3,6 +3,7 @@
 import { cookies } from 'next/headers';
 import { callOpenRouter, parseJsonResponse } from '@/lib/openrouter';
 import { verifySessionCookie } from '@/lib/session';
+import { checkDistributedRateLimit } from '@/lib/distributed-rate-limiter';
 import dbConnect from '@/lib/mongoose';
 import MistakeEntry from '@/models/MistakeEntry';
 
@@ -54,7 +55,25 @@ export async function analyzeAnswersFlow(input: AnalyzeAnswersInput): Promise<{ 
     throw new Error('Please log in to generate an analysis.');
   }
 
+  const rateCheck = await checkDistributedRateLimit(`analyze-answers:${sessionUuid}`, 5, 15 * 60 * 1000);
+  if (!rateCheck.success) throw new Error('Too many analysis requests. Please wait before trying again.');
+
+  if (!input || typeof input !== 'object') throw new Error('Invalid analysis request.');
   const { topic, summary, classLevel, writtenAnswers, spokenAnswers } = input;
+  if (typeof topic !== 'string' || topic.length > 200 ||
+      typeof summary !== 'string' || summary.length > 8000 ||
+      typeof classLevel !== 'string' || classLevel.length > 50 ||
+      !Array.isArray(writtenAnswers) || writtenAnswers.length > 10 ||
+      !Array.isArray(spokenAnswers) || spokenAnswers.length > 11) {
+    throw new Error('Analysis inputs exceed the allowed limits.');
+  }
+  const submittedAnswers = [...writtenAnswers, ...spokenAnswers];
+  if (submittedAnswers.some((answer) =>
+    !answer || typeof answer.question !== 'string' || answer.question.length > 500 ||
+    typeof answer.answer !== 'string' || answer.answer.length > 5000
+  )) {
+    throw new Error('Each submitted question and answer must be within the allowed character limits.');
+  }
 
   const boundedTopic = (topic || "").slice(0, 200).replace(/[<>{}]/g, "");
   const boundedClass = (classLevel || "").slice(0, 50).replace(/[<>{}]/g, "");
