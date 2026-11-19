@@ -193,8 +193,15 @@ export function useAudioRecorder(): AudioRecorderState {
     setIsConnecting(true);
 
     if (recognitionRef.current) {
+      const previousRecognition = recognitionRef.current;
+      recognitionRef.current = null;
+      previousRecognition.onstart = null;
+      previousRecognition.onresult = null;
+      previousRecognition.onerror = null;
+      previousRecognition.onend = null;
       try {
-        recognitionRef.current.stop();
+        if (typeof previousRecognition.abort === 'function') previousRecognition.abort();
+        else previousRecognition.stop();
       } catch {}
     }
 
