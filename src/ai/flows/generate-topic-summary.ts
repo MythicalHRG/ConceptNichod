@@ -41,7 +41,7 @@ Your summaries must be:
 - Written in SIMPLE, easy-to-understand English
 - Divided into clear SUBTOPICS with headers (use ## for each subtopic)
 - Explained with REAL LIFE DAILY EXAMPLES (compare with everyday things students know)
-- Comprehensive but clear for a ${safeClass} student
+- Comprehensive and age-appropriate for the learner level supplied as untrusted reference data in the user message
 - For Math/Physics/Chemistry concepts: include LaTeX formatted equations using $...$ for inline math and $$...$$ for block equations. Never use raw symbols like $/ or \\frac without LaTeX wrapping.
 - For exam preparation: highlight important points with **bold**
 
