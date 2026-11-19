@@ -377,6 +377,8 @@ export async function requestEmailChangeOtpAction(newEmail: string, currentPassw
     const currentUser = await User.findOne({ uuid: sessionUuid });
     if (!currentUser) throw new Error("User not found");
 
+    const passwordRateLimit = await checkDistributedRateLimit(`email-change:password:${sessionUuid}`, 5, 15 * 60 * 1000);
+    if (!passwordRateLimit.success) throw new Error("Too many password verification attempts. Please try again later.");
     if (typeof currentPassword !== "string" || !currentPassword) {
         throw new Error("Your current password is required to authorize an email change.");
     }
@@ -554,6 +556,8 @@ export async function changePasswordAction(formData: FormData) {
     const user = await User.findOne({ uuid: sessionId });
     if (!user) throw new Error("User not found");
 
+    const passwordRateLimit = await checkDistributedRateLimit(`password-change:verify:${sessionId}`, 5, 15 * 60 * 1000);
+    if (!passwordRateLimit.success) throw new Error("Too many password verification attempts. Please try again later.");
     try {
         const isValid = await comparePassword(currentPassword, user.password);
         if (!isValid) throw new Error("Incorrect current password");
@@ -581,6 +585,8 @@ export async function requestDeleteAccountOtpAction(currentPassword: string) {
         throw new Error("The root platform administrator account @mythicalhrg cannot be deleted.");
     }
 
+    const passwordRateLimit = await checkDistributedRateLimit(`delete-account:password:${sessionUuid}`, 5, 15 * 60 * 1000);
+    if (!passwordRateLimit.success) throw new Error("Too many password verification attempts. Please try again later.");
     if (!currentPassword) {
         throw new Error("Please enter your current password to authorize this deletion request.");
     }
