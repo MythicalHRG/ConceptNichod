@@ -20,6 +20,7 @@ export async function getPublicProfileData(username: string) {
     .select("uuid username");
   if (!userWithId) return null;
 
+  // Streamed replacement for validMirrorDocs = mirrorDocs.filter(...); only a seven-item recent window is retained.
   // Stream projected topic records in bounded batches. All-time summary math is
   // retained, but historical documents are never materialized as one JS array.
   const topicCursor = Topic.find({ userId: userWithId.uuid })
