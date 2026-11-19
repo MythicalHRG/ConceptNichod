@@ -104,8 +104,9 @@ export async function sendEmailBroadcastAction(formData: FormData) {
     toRecipients = customTo.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
   }
   const emailPattern = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/;
-  if (toRecipients.length > 500 || toRecipients.some((email) => !emailPattern.test(email))) {
-    throw new Error("Custom recipient lists must contain at most 500 valid email addresses.");
+  const maxToRecipients = recipientType === "all" ? 5000 : 500;
+  if (toRecipients.length > maxToRecipients || toRecipients.some((email) => !emailPattern.test(email))) {
+    throw new Error(`Recipient lists must contain at most ${maxToRecipients} valid email addresses.`);
   }
 
   if (toRecipients.length === 0) {
