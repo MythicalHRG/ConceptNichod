@@ -1,6 +1,7 @@
 'use server';
 
 import { callOpenRouter, parseJsonResponse } from '@/lib/openrouter';
+import { requireOwnedTopicGenerationAccess } from '@/lib/ai-flow-auth';
 
 export type GenerateQuestionsInput = {
   topicId: string;
@@ -17,7 +18,16 @@ export type GenerateQuestionsOutput = {
 };
 
 export async function generateQuestionsFlow(input: GenerateQuestionsInput): Promise<GenerateQuestionsOutput> {
+  if (!input || typeof input !== "object") throw new Error("Invalid question-generation request.");
+  await requireOwnedTopicGenerationAccess(input.topicId);
   const { topic, summary, classLevel, subject, chapter, examFocus } = input;
+  const boundedFields = [topic, summary, classLevel, subject, chapter];
+  if (boundedFields.some((value) => typeof value !== "string") ||
+      topic.length > 200 || summary.length > 8000 || classLevel.length > 50 ||
+      subject.length > 100 || chapter.length > 150 ||
+      (examFocus !== undefined && (typeof examFocus !== "string" || examFocus.length > 100))) {
+    throw new Error("Question-generation inputs exceed the allowed limits.");
+  }
 
   const safeTopic = (topic || "").slice(0, 200).replace(/[<>{}]/g, "");
   const safeSubject = (subject || "").slice(0, 100).replace(/[<>{}]/g, "");
@@ -60,8 +70,13 @@ Respond with ONLY a valid JSON object (no markdown):
 
   const output = parseJsonResponse<GenerateQuestionsOutput>(raw);
   
-  if (!output.questions || !Array.isArray(output.questions)) {
-    throw new Error("The AI model failed to generate valid questions. Please try again.");
+  const expectedTypes = ["understanding", "creativity", "reasoning", "competency", "analyzing", "real-life application"];
+  if (!Array.isArray(output?.questions) || output.questions.length !== expectedTypes.length ||
+      output.questions.some((question, index) =>
+        !question || question.type !== expectedTypes[index] ||
+        typeof question.question !== "string" || !question.question.trim() || question.question.length > 3000
+      )) {
+    throw new Error("The AI model failed to generate the required six valid questions. Please try again.");
   }
   return output;
 }
