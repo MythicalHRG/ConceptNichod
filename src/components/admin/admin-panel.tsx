@@ -772,7 +772,7 @@ export function AdminPanel() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Attachment (Max 512MB, Optional)</label>
+                  <label className="text-sm font-medium">Attachment (Images/PDF up to 16MB; text up to 2MB, Optional)</label>
                   {!uploadedFileUrl ? (
                     <UploadButton
                       endpoint="broadcastAttachment"
