@@ -23,57 +23,64 @@ export async function GET(request: Request) {
 
     await dbConnect();
 
-    // Select only a bounded batch. Each row is atomically rechecked at deletion time
-    // so a broadcast renewed after the initial query is never removed as expired.
+    // MongoDB TTL must not delete broadcast rows before UploadThing cleanup.
+    const existingIndexes = await Broadcast.collection.indexes();
+    const expiryIndex = existingIndexes.find((index: any) => index.key?.expiresAt === 1);
+    if (expiryIndex && expiryIndex.expireAfterSeconds !== undefined) {
+      await Broadcast.collection.dropIndex(expiryIndex.name);
+      await Broadcast.collection.createIndex({ expiresAt: 1 });
+    } else if (!expiryIndex) {
+      await Broadcast.collection.createIndex({ expiresAt: 1 });
+    }
+
     const cleanupCutoff = new Date();
     const candidates = await Broadcast.find({ expiresAt: { $lt: cleanupCutoff } })
-      .select("_id")
-      .sort({ expiresAt: 1 })
-      .limit(100)
-      .lean();
-
+      .select("_id fileUrl").sort({ expiresAt: 1 }).limit(100).lean();
     if (candidates.length === 0) {
       return new Response(JSON.stringify({ success: true, message: "No expired broadcasts found" }), { status: 200 });
     }
 
-    const deletedBroadcasts = [];
-    for (const candidate of candidates) {
-      const deleted = await Broadcast.findOneAndDelete({
-        _id: candidate._id,
-        expiresAt: { $lt: cleanupCutoff },
-      }).select("_id fileUrl").lean();
-      if (deleted) deletedBroadcasts.push(deleted);
-    }
-
-    const fileKeysToDelete: string[] = [];
-    for (const broadcast of deletedBroadcasts) {
-      if (!broadcast.fileUrl) continue;
-      try {
-        const fileUrl = new URL(broadcast.fileUrl);
-        const allowedHosts = ["utfs.io", "uploadthing.com", "ufs.sh"];
-        const isAllowedHost = allowedHosts.some(
-          (host) => fileUrl.hostname === host || fileUrl.hostname.endsWith("." + host)
-        );
-        const pathPrefix = "/f/";
-        if (fileUrl.protocol === "https:" && isAllowedHost && fileUrl.pathname.startsWith(pathPrefix)) {
-          const fileKey = fileUrl.pathname.slice(pathPrefix.length);
-          if (fileKey && !fileKey.includes("/")) fileKeysToDelete.push(fileKey);
-        }
-      } catch {
-        console.warn("Skipping malformed UploadThing file URL for expired broadcast", String(broadcast._id));
-      }
-    }
-
-    // Database rows are deleted only after the atomic expiry recheck above. File
-    // deletion failures are reported; they must not cause an active row to be lost.
+    let deletedCount = 0;
     let filesDeleted = 0;
-    if (fileKeysToDelete.length > 0) {
-      const utapi = new UTApi();
-      const result = await utapi.deleteFiles(fileKeysToDelete);
-      filesDeleted = result?.success ? fileKeysToDelete.length : 0;
-      if (!result?.success) {
-        console.error("UploadThing reported unsuccessful cleanup for expired broadcast attachments.");
+    const utapi = new UTApi();
+    for (const candidate of candidates) {
+      const broadcast = await Broadcast.findOne({ _id: candidate._id, expiresAt: { $lt: cleanupCutoff } })
+        .select("_id fileUrl").lean();
+      if (!broadcast) continue;
+
+      if (broadcast.fileUrl) {
+        let fileKey: string | null = null;
+        try {
+          const fileUrl = new URL(broadcast.fileUrl);
+          const allowedHosts = ["utfs.io", "uploadthing.com", "ufs.sh"];
+          const isAllowedHost = allowedHosts.some((host) => fileUrl.hostname === host || fileUrl.hostname.endsWith("." + host));
+          if (fileUrl.protocol === "https:" && isAllowedHost && fileUrl.pathname.startsWith("/f/")) {
+            const candidateKey = fileUrl.pathname.slice(3);
+            if (candidateKey && !candidateKey.includes("/")) fileKey = candidateKey;
+          }
+        } catch {
+          console.warn("Skipping malformed UploadThing file URL for expired broadcast", String(broadcast._id));
+        }
+        if (!fileKey) {
+          console.error("Skipping broadcast DB cleanup because its attachment URL could not be safely resolved.", String(broadcast._id));
+          continue;
+        }
+        try {
+          const result = await utapi.deleteFiles([fileKey]);
+          if (!result?.success) {
+            console.error("UploadThing attachment deletion failed; broadcast record retained for retry.", String(broadcast._id));
+            continue;
+          }
+          filesDeleted += 1;
+        } catch (error) {
+          console.error("UploadThing attachment deletion threw; broadcast record retained for retry.", String(broadcast._id), error);
+          continue;
+        }
       }
+
+      // Remote attachment deletion completes before MongoDB removes the row.
+      const result = await Broadcast.deleteOne({ _id: broadcast._id, expiresAt: { $lt: cleanupCutoff } });
+      if (result.deletedCount === 1) deletedCount += 1;
     }
 
     return new Response(JSON.stringify({ 
