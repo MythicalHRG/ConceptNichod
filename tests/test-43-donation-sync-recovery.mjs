@@ -26,8 +26,9 @@ test("verified donation can resume only an incomplete patron sync without changi
   assert.doesNotMatch(source, /status: "pending"\s*\},\s*\$unset:\s*\{ verifiedAt/);
 });
 
-function createInMemoryDonorStore() {
+function createInMemoryDonorStore({ failBeforeFirstWrite = false } = {}) {
   const records = new Map();
+  let failBeforeWrite = failBeforeFirstWrite;
   let failAfterFirstCommittedWrite = true;
   let hideNextTransactionLookup = false;
   let forceDuplicateKeyOnNextExistingUpsert = false;
@@ -46,6 +47,10 @@ function createInMemoryDonorStore() {
     },
 
     async upsertByUuid(uuid, donorData) {
+      if (failBeforeWrite) {
+        failBeforeWrite = false;
+        throw new Error("simulated MongoDB pre-write failure");
+      }
       const existing = records.get(uuid);
       if (forceDuplicateKeyOnNextExistingUpsert && existing) {
         forceDuplicateKeyOnNextExistingUpsert = false;
@@ -173,4 +178,21 @@ test("₹500 donor sync survives timeout, recovers, and remains idempotent after
   assert.equal(duplicate.success, true);
   assert.equal(concurrentRetry.donorRecordId, transaction.donorRecordId);
   assert.deepEqual(donorStore.totals(), { totalDonated: 500, donationCount: 1, rowCount: 1 });
+});
+
+
+test("pre-write donor failure retries by inserting the missing donor row exactly once", async () => {
+  const donorStore = createInMemoryDonorStore({ failBeforeFirstWrite: true });
+  const transaction = { _id: "transaction-pre-write-failure", donorRecordId: null };
+  const donorData = { amount: 750, totalAmount: 750, donationCount: 1, transactionRef: String(transaction._id), isVisible: true, isPublic: true };
+  await assert.rejects(syncDonationDonor({ tx: transaction, donorData, donorStore }), /simulated MongoDB pre-write failure/);
+  assert.equal(donorStore.totals().rowCount, 0);
+  assert.equal(transaction.donorRecordId, null);
+  const recovered = await syncDonationDonor({ tx: transaction, donorData, donorStore });
+  assert.ok(recovered._id);
+  assert.equal(transaction.donorRecordId, recovered._id);
+  assert.deepEqual(donorStore.totals(), { totalDonated: 750, donationCount: 1, rowCount: 1 });
+  const repeated = await syncDonationDonor({ tx: { ...transaction, donorRecordId: null }, donorData, donorStore });
+  assert.equal(repeated._id, recovered._id);
+  assert.deepEqual(donorStore.totals(), { totalDonated: 750, donationCount: 1, rowCount: 1 });
 });
