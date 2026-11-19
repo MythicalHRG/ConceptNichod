@@ -173,10 +173,8 @@ export async function getLeaderboardDataAction(
         ? Math.max(0, Math.min(86400, rawDuration))
         : 0;
     } else {
-      const hasAnalysisScore =
-        event.analysisScore !== null &&
-        event.analysisScore !== undefined &&
-        Number.isFinite(event.analysisScore);
+      const topic = { analysis: { overallScore: event.analysisScore } };
+      const hasAnalysisScore = Boolean(topic.analysis && Number.isFinite(topic.analysis.overallScore));
       const isCompleted = event.practiceStatus === "completed";
       const isInProgress = event.practiceStatus === "in_progress";
       const hasAnswers = event.hasAnswers === true;
