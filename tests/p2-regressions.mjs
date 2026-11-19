@@ -121,3 +121,8 @@ test("admin mutation catch blocks retain destructive toast feedback", () => {
   assert.match(adminUi, /variant: "destructive"/);
   assert.match(adminUi, /Please try again/);
 });
+
+
+test("broadcast attachment guidance matches the server upload limits", () => {
+  assert.ok(adminUi.includes("Attachment (Images/PDF up to 16MB; text up to 2MB, Optional)"));
+});
