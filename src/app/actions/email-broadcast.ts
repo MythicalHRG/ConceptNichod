@@ -63,12 +63,12 @@ export async function sendEmailBroadcastAction(formData: FormData) {
       const isAllowedHost = allowedHosts.some(
         (host) => parsedUrl.hostname === host || parsedUrl.hostname.endsWith(`.${host}`)
       );
-      if (parsedUrl.protocol !== "https:" || !isAllowedHost) {
+      if (parsedUrl.protocol !== "https:" || !isAllowedHost || parsedUrl.username || parsedUrl.password || !parsedUrl.pathname.startsWith("/f/")) {
         throw new Error(
           "Invalid attachment URL. Only secure HTTPS URLs from authorized storage (utfs.io, uploadthing.com) are permitted."
         );
       }
-      attachmentUrl = trimmed;
+      attachmentUrl = parsedUrl.toString();
     } catch (err: any) {
       throw new Error(err.message || "Invalid attachment URL provided.");
     }
@@ -97,28 +97,28 @@ export async function sendEmailBroadcastAction(formData: FormData) {
   // Determine recipients
   let toRecipients: string[] = [];
   if (recipientType === "all") {
-    const allUsers = await User.find({}).select("email").lean();
-    toRecipients = allUsers.map((u) => u.email.toLowerCase().trim()).filter(Boolean);
+    const allUsers = await User.find({}).select("email").limit(5001).lean();
+    if (allUsers.length > 5000) throw new Error("All-user broadcasts are limited to 5,000 recipients.");
+    toRecipients = allUsers.map((u) => String(u.email || "").toLowerCase().trim()).filter(Boolean);
   } else {
-    toRecipients = customTo
-      .split(",")
-      .map((e) => e.toLowerCase().trim())
-      .filter((e) => e.length > 0 && e.includes("@"));
+    toRecipients = customTo.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+  }
+  const emailPattern = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/;
+  if (toRecipients.length > 500 || toRecipients.some((email) => !emailPattern.test(email))) {
+    throw new Error("Custom recipient lists must contain at most 500 valid email addresses.");
   }
 
   if (toRecipients.length === 0) {
     throw new Error("No valid recipient email addresses found.");
   }
 
-  const ccRecipients = ccStr
-    .split(",")
-    .map((e) => e.toLowerCase().trim())
-    .filter((e) => e.length > 0 && e.includes("@"));
-
-  const bccRecipients = bccStr
-    .split(",")
-    .map((e) => e.toLowerCase().trim())
-    .filter((e) => e.length > 0 && e.includes("@"));
+  const ccRecipients = ccStr.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+  const bccRecipients = bccStr.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+  if (ccRecipients.length > 50 || bccRecipients.length > 50 ||
+      ccRecipients.some((email) => !emailPattern.test(email)) ||
+      bccRecipients.some((email) => !emailPattern.test(email))) {
+    throw new Error("CC and BCC lists must each contain at most 50 valid email addresses.");
+  }
 
   const transporter = nodemailer.createTransport({
     service: "gmail",
@@ -142,7 +142,7 @@ export async function sendEmailBroadcastAction(formData: FormData) {
         attachmentUrl
           ? `<div style="margin-top: 24px; padding: 12px; background: #f4f4f5; border-radius: 6px;">
                <p style="margin: 0; font-size: 13px; font-weight: 600;">Attached File:</p>
-               <a href="${attachmentUrl}" target="_blank" style="font-size: 13px; color: #4f46e5; text-decoration: underline;">${escapeHtml(attachmentName)}</a>
+               <a href="${escapeHtml(attachmentUrl)}" target="_blank" style="font-size: 13px; color: #4f46e5; text-decoration: underline;">${escapeHtml(attachmentName)}</a>
              </div>`
           : ""
       }
