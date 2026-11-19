@@ -52,12 +52,20 @@ export async function analyzeConceptExplanation(input: AnalyzeConceptExplanation
     throw new Error('Rate limit reached: Maximum 6 oral defenses per minute. Please take a moment to reflect before submitting your next defense.');
   }
 
-  const rawConceptName = input.conceptName || '';
-  const rawTranscript = input.userTranscript || '';
-  const safeConceptName = rawConceptName.trim().slice(0, 120);
-  const safeTranscript = rawTranscript.trim().slice(0, 4000);
-  const classLevel = (input.classLevel || 'Unknown').trim().slice(0, 50);
-  const durationSeconds = Math.max(0, input.durationSeconds || 0);
+  if (!input || typeof input !== 'object' ||
+      typeof input.conceptName !== 'string' || input.conceptName.length > 120 ||
+      typeof input.userTranscript !== 'string' || input.userTranscript.length > 4000 ||
+      (input.classLevel !== undefined && (typeof input.classLevel !== 'string' || input.classLevel.length > 50)) ||
+      (input.durationSeconds !== undefined && (!Number.isFinite(input.durationSeconds) || input.durationSeconds < 0))) {
+    throw new Error('Invalid or oversized oral-defense submission.');
+  }
+
+  const rawConceptName = input.conceptName;
+  const rawTranscript = input.userTranscript;
+  const safeConceptName = rawConceptName.trim();
+  const safeTranscript = rawTranscript.trim();
+  const classLevel = (input.classLevel || 'Unknown').trim();
+  const durationSeconds = Math.min(120, Math.max(0, input.durationSeconds ?? 0));
 
   const allocatedTimeSeconds = 120; // 2 minutes maximum oral defense allocation
   const timeUtilizedPercent = Math.min(100, Math.round((durationSeconds / allocatedTimeSeconds) * 100));
@@ -175,12 +183,27 @@ CRITICAL: pie_chart_data values MUST sum to exactly 100.`;
 
   const output = parseJsonResponse<MasteryReportOutput>(raw);
 
-  if (!output?.radar_chart_data || !output?.pie_chart_data) {
+  if (!output || !Array.isArray(output.radar_chart_data) || !Array.isArray(output.pie_chart_data)) {
     throw new Error("Failed to generate mastery report.");
+  }
+
+  output.radar_chart_data = output.radar_chart_data
+    .filter((item) => item && typeof item.metric === "string" && item.metric.length <= 80 && Number.isFinite(item.score))
+    .slice(0, 10)
+    .map((item) => ({ metric: item.metric, score: Math.max(0, Math.min(100, Math.round(item.score))) }));
+  output.pie_chart_data = output.pie_chart_data
+    .filter((item) => item && typeof item.name === "string" && item.name.length <= 80 && Number.isFinite(item.value) && item.value >= 0)
+    .slice(0, 5)
+    .map((item) => ({ name: item.name, value: Math.max(0, Math.min(100, item.value)) }));
+  if (output.radar_chart_data.length === 0 || output.pie_chart_data.length === 0) {
+    throw new Error("AI returned invalid mastery chart data. Please try again.");
   }
 
   // Normalize pie chart to sum 100
   const pieTotal = output.pie_chart_data.reduce((s, i) => s + i.value, 0);
+  if (!Number.isFinite(pieTotal) || pieTotal <= 0) {
+    throw new Error("AI returned invalid knowledge-composition values. Please try again.");
+  }
   if (pieTotal > 0 && pieTotal !== 100) {
     let running = 0;
     output.pie_chart_data.forEach((item, idx) => {
