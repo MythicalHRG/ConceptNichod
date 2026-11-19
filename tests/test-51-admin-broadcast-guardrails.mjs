@@ -15,7 +15,9 @@ test("email broadcasts reject header injection, malformed recipients, and oversi
   const source = fs.readFileSync("src/app/actions/email-broadcast.ts", "utf8");
   assert.match(source, /subject\.length > 180 \|\| \/\[\\r\\n\]\//);
   assert.match(source, /body\.length > 20000/);
-  assert.match(source, /maxToRecipients = recipientType === "all" \? 5000 : 500/);
+  assert.match(source, /const maxToRecipients = 500/);
+  assert.match(source, /totalRecipientCount > 500/);
+  assert.match(source, /\.limit\(501\)/);
   assert.match(source, /ccRecipients\.length > 50 \|\| bccRecipients\.length > 50/);
   assert.match(source, /escapeHtml\(body\)/);
   assert.match(source, /href="\$\{escapeHtml\(attachmentUrl\)\}"/);
