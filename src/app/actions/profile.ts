@@ -21,7 +21,9 @@ export async function getPublicProfileData(username: string) {
   
   const topics = await Topic.find({ userId: userWithId.uuid }).lean();
   
-  const analyzedTopics = topics.filter(t => t.analysis && typeof t.analysis.overallScore === 'number');
+  const analyzedTopics = topics.filter(t =>
+    t.analysis && Number.isFinite(t.analysis.overallScore) && t.analysis.overallScore >= 0 && t.analysis.overallScore <= 100
+  );
   const totalTopics = topics.length;
   
   // 1. Overall Score Average (ConceptNichod Topics)
@@ -69,12 +71,12 @@ export async function getPublicProfileData(username: string) {
               charts.forEach((chart: any) => {
                   if (Array.isArray(chart.data)) {
                       chart.data.forEach((d: any) => {
-                          if (d.name && typeof d.score === 'number') {
+                          if (typeof d.name === 'string' && d.name.trim() && d.name.length <= 80 && Number.isFinite(d.score)) {
                               if (!skillAggregator.has(d.name)) {
                                   skillAggregator.set(d.name, { total: 0, count: 0 });
                               }
                               const metric = skillAggregator.get(d.name)!;
-                              metric.total += d.score;
+                              metric.total += Math.max(0, Math.min(100, d.score));
                               metric.count++;
                           }
                       });
@@ -121,37 +123,40 @@ export async function getPublicProfileData(username: string) {
       .sort({ createdAt: -1 })
       .lean();
 
-    if (mirrorDocs.length > 0) {
+    const validMirrorDocs = mirrorDocs.filter((doc: any) =>
+      Number.isFinite(doc.overallScore) && doc.overallScore >= 0 && doc.overallScore <= 100
+    );
+
+    if (validMirrorDocs.length > 0) {
       let totalMirrorScore = 0;
       let totalMirrorDuration = 0;
       const mirrorSkillMap = new Map<string, { total: number; count: number }>();
 
-      mirrorDocs.forEach((doc: any) => {
-        totalMirrorScore += doc.overallScore || 0;
-        totalMirrorDuration += doc.durationSeconds || 0;
+      validMirrorDocs.forEach((doc: any) => {
+        totalMirrorScore += Math.max(0, Math.min(100, doc.overallScore));
+        const duration = Number.isFinite(doc.durationSeconds) ? Math.max(0, Math.min(86400, doc.durationSeconds)) : 0;
+        totalMirrorDuration += duration;
         if (Array.isArray(doc.radarData)) {
           doc.radarData.forEach((r: any) => {
-            if (r.metric && typeof r.score === 'number') {
-              if (!mirrorSkillMap.has(r.metric)) {
-                mirrorSkillMap.set(r.metric, { total: 0, count: 0 });
-              }
-              const m = mirrorSkillMap.get(r.metric)!;
-              m.total += r.score;
-              m.count++;
+            if (typeof r.metric === "string" && r.metric.trim() && r.metric.length <= 80 && Number.isFinite(r.score)) {
+              if (!mirrorSkillMap.has(r.metric)) mirrorSkillMap.set(r.metric, { total: 0, count: 0 });
+              const metric = mirrorSkillMap.get(r.metric)!;
+              metric.total += Math.max(0, Math.min(100, r.score));
+              metric.count++;
             }
           });
         }
       });
 
-      const avgMirrorScore = Math.round(totalMirrorScore / mirrorDocs.length);
+      const avgMirrorScore = Math.round(totalMirrorScore / validMirrorDocs.length);
       const mirrorSkillAverages = Array.from(mirrorSkillMap.entries()).map(([name, m]) => ({
         name,
         score: Math.round(m.total / m.count),
       })).sort((a, b) => b.score - a.score);
 
       // If no written topics exist yet, populate learning trajectory from oral defenses
-      if (learningProgression.length === 0 && mirrorDocs.length > 0) {
-        mirrorDocs
+      if (learningProgression.length === 0 && validMirrorDocs.length > 0) {
+        validMirrorDocs
           .slice()
           .reverse()
           .slice(-7)
@@ -163,16 +168,16 @@ export async function getPublicProfileData(username: string) {
           });
       }
 
-      const recentSessions = mirrorDocs.slice(0, 6).map((doc: any) => ({
+      const recentSessions = validMirrorDocs.slice(0, 6).map((doc: any) => ({
         id: doc._id?.toString() || '',
-        conceptName: doc.conceptName,
-        overallScore: doc.overallScore,
-        durationSeconds: doc.durationSeconds || 0,
-        createdAt: doc.createdAt,
+        conceptName: typeof doc.conceptName === "string" ? doc.conceptName.slice(0, 200) : "Concept session",
+        overallScore: Math.max(0, Math.min(100, doc.overallScore)),
+        durationSeconds: Number.isFinite(doc.durationSeconds) ? Math.max(0, Math.min(86400, doc.durationSeconds)) : 0,
+        createdAt: Number.isFinite(new Date(doc.createdAt).getTime()) ? doc.createdAt : new Date(0),
       }));
 
       conceptMirrorAnalytics = {
-        totalSessions: mirrorDocs.length,
+        totalSessions: validMirrorDocs.length,
         averageScore: avgMirrorScore,
         totalDurationSeconds: totalMirrorDuration,
         skillAverages: mirrorSkillAverages,
