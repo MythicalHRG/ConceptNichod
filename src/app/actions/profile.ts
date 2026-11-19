@@ -19,7 +19,9 @@ export async function getPublicProfileData(username: string) {
   const userWithId = await User.findOne({ username: new RegExp(`^${safeUsername}$`, 'i') }).select("uuid username");
   if (!userWithId) return null;
   
-  const topics = await Topic.find({ userId: userWithId.uuid }).lean();
+  const topics = await Topic.find({ userId: userWithId.uuid })
+    .select("subject analysis.overallScore analysis.chartsData name createdAt")
+    .lean();
   
   const analyzedTopics = topics.filter(t =>
     t.analysis && Number.isFinite(t.analysis.overallScore) && t.analysis.overallScore >= 0 && t.analysis.overallScore <= 100
@@ -120,6 +122,7 @@ export async function getPublicProfileData(username: string) {
 
   try {
     const mirrorDocs = await ConceptMirror.find({ userId: userWithId.uuid })
+      .select("overallScore durationSeconds radarData conceptName createdAt")
       .sort({ createdAt: -1 })
       .lean();
 
