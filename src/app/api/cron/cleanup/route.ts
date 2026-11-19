@@ -27,6 +27,7 @@ export async function GET(request: Request) {
     const existingIndexes = await Broadcast.collection.indexes();
     const expiryIndex = existingIndexes.find((index: any) => index.key?.expiresAt === 1);
     if (expiryIndex && expiryIndex.expireAfterSeconds !== undefined) {
+      if (!expiryIndex.name) throw new Error("Broadcast expiry index name could not be resolved.");
       await Broadcast.collection.dropIndex(expiryIndex.name);
       await Broadcast.collection.createIndex({ expiresAt: 1 });
     } else if (!expiryIndex) {
@@ -85,7 +86,7 @@ export async function GET(request: Request) {
 
     return new Response(JSON.stringify({ 
       success: true, 
-      deletedCount: deletedBroadcasts.length, 
+      deletedCount, 
       filesDeleted 
     }), { status: 200 });
   } catch (error: any) {
