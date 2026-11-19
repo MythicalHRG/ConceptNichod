@@ -368,7 +368,7 @@ export async function updateProfileAction(formData: FormData) {
     }
 }
 
-export async function requestEmailChangeOtpAction(newEmail: string, currentPassword?: string) {
+export async function requestEmailChangeOtpAction(newEmail: string, currentPassword: string) {
     await dbConnect();
     const rawSession = (await cookies()).get("user_session")?.value;
     const sessionUuid = verifySessionCookie(rawSession);
@@ -377,11 +377,12 @@ export async function requestEmailChangeOtpAction(newEmail: string, currentPassw
     const currentUser = await User.findOne({ uuid: sessionUuid });
     if (!currentUser) throw new Error("User not found");
 
-    if (currentPassword) {
-        const isPasswordValid = await comparePassword(currentPassword, currentUser.password);
-        if (!isPasswordValid) {
-            throw new Error("Incorrect current password.");
-        }
+    if (typeof currentPassword !== "string" || !currentPassword) {
+        throw new Error("Your current password is required to authorize an email change.");
+    }
+    const isPasswordValid = await comparePassword(currentPassword, currentUser.password);
+    if (!isPasswordValid) {
+        throw new Error("Incorrect current password.");
     }
 
     const email = newEmail.toLowerCase().trim();
