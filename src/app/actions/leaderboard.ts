@@ -246,6 +246,8 @@ export async function getLeaderboardDataAction(
 
   const streakDocs = await StudyStreak.find({ userId: { $in: userIds } }).lean();
   const streakMap = new Map(streakDocs.map((s) => [s.userId, s]));
+  const todayStr = getIstDateString(now);
+  const yesterdayStr = getYesterdayIstDateString(now);
 
   const entries: LeaderboardEntry[] = [];
 
