@@ -2,6 +2,7 @@
 
 import { callOpenRouter, parseJsonResponse } from '@/lib/openrouter';
 import { requireOwnedTopicGenerationAccess } from '@/lib/ai-flow-auth';
+import { escapePromptText } from '@/lib/prompt-safety';
 
 export type GenerateQuestionsInput = {
   topicId: string;
@@ -46,10 +47,12 @@ from subject:
 <untrusted_subject>${safeSubject}</untrusted_subject>
 and chapter:
 <untrusted_chapter>${safeChapter}</untrusted_chapter>
-for a ${safeClass} student${safeExam ? ` preparing for ${safeExam}` : ''}, based on the study summary below.
+<untrusted_class_level>${escapePromptText(safeClass)}</untrusted_class_level>
+<untrusted_exam_focus>${escapePromptText(safeExam)}</untrusted_exam_focus>
+for the specified learner and exam context, based on the study summary below.
 
 <untrusted_summary>
-${boundedSummary}
+${escapePromptText(boundedSummary)}
 </untrusted_summary>
 
 You MUST generate exactly one question of each type:
