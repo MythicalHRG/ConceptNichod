@@ -8,7 +8,11 @@ import { isPlatformOwner } from "@/lib/owner-access";
 const f = createUploadthing();
 
 export const ourFileRouter = {
-  broadcastAttachment: f({ blob: { maxFileSize: "512MB" } })
+  broadcastAttachment: f({
+    image: { maxFileSize: "16MB", maxFileCount: 1 },
+    pdf: { maxFileSize: "16MB", maxFileCount: 1 },
+    text: { maxFileSize: "2MB", maxFileCount: 1 },
+  })
     .middleware(async ({ req }) => {
       await dbConnect();
       const rawSession = (await cookies()).get("user_session")?.value;
