@@ -50,8 +50,12 @@ export async function GET(request: Request) {
       if (!broadcast.fileUrl) continue;
       try {
         const fileUrl = new URL(broadcast.fileUrl);
+        const allowedHosts = ["utfs.io", "uploadthing.com", "ufs.sh"];
+        const isAllowedHost = allowedHosts.some(
+          (host) => fileUrl.hostname === host || fileUrl.hostname.endsWith("." + host)
+        );
         const pathPrefix = "/f/";
-        if (fileUrl.pathname.startsWith(pathPrefix)) {
+        if (fileUrl.protocol === "https:" && isAllowedHost && fileUrl.pathname.startsWith(pathPrefix)) {
           const fileKey = fileUrl.pathname.slice(pathPrefix.length);
           if (fileKey && !fileKey.includes("/")) fileKeysToDelete.push(fileKey);
         }
@@ -66,8 +70,8 @@ export async function GET(request: Request) {
     if (fileKeysToDelete.length > 0) {
       const utapi = new UTApi();
       const result = await utapi.deleteFiles(fileKeysToDelete);
-      filesDeleted = fileKeysToDelete.length;
-      if (result && result.success === false) {
+      filesDeleted = result?.success ? fileKeysToDelete.length : 0;
+      if (!result?.success) {
         console.error("UploadThing reported unsuccessful cleanup for expired broadcast attachments.");
       }
     }
