@@ -97,14 +97,14 @@ export async function sendEmailBroadcastAction(formData: FormData) {
   // Determine recipients
   let toRecipients: string[] = [];
   if (recipientType === "all") {
-    const allUsers = await User.find({}).select("email").limit(5001).lean();
-    if (allUsers.length > 5000) throw new Error("All-user broadcasts are limited to 5,000 recipients.");
+    const allUsers = await User.find({}).select("email").limit(501).lean();
+    if (allUsers.length > 500) throw new Error("Gmail broadcasts are limited to 500 recipients per message.");
     toRecipients = allUsers.map((u) => String(u.email || "").toLowerCase().trim()).filter(Boolean);
   } else {
     toRecipients = customTo.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
   }
   const emailPattern = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/;
-  const maxToRecipients = recipientType === "all" ? 5000 : 500;
+  const maxToRecipients = 500;
   if (toRecipients.length > maxToRecipients || toRecipients.some((email) => !emailPattern.test(email))) {
     throw new Error(`Recipient lists must contain at most ${maxToRecipients} valid email addresses.`);
   }
@@ -119,6 +119,12 @@ export async function sendEmailBroadcastAction(formData: FormData) {
       ccRecipients.some((email) => !emailPattern.test(email)) ||
       bccRecipients.some((email) => !emailPattern.test(email))) {
     throw new Error("CC and BCC lists must each contain at most 50 valid email addresses.");
+  }
+  const totalRecipientCount = recipientType === "all"
+    ? new Set([...toRecipients, ...bccRecipients]).size
+    : toRecipients.length + ccRecipients.length + bccRecipients.length;
+  if (totalRecipientCount > 500) {
+    throw new Error("A single Gmail broadcast cannot exceed 500 total recipients.");
   }
 
   const transporter = nodemailer.createTransport({
