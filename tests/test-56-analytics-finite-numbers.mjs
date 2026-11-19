@@ -17,7 +17,9 @@ test("leaderboard filters invalid scores, durations, dates, and streak values be
   assert.match(source, /Number\.isFinite\(rawScore\)/);
   assert.match(source, /Number\.isFinite\(createdAt\.getTime\(\)\)/);
   assert.match(source, /Number\.isFinite\(rawDuration\)/);
-  assert.match(source, /Number\.isFinite\(event\.analysisScore\)/);\n  assert.match(source, /\$unionWith/);\n  assert.match(source, /summary\.trajectory\.length > 100/);
+  assert.match(source, /Number\.isFinite\(event\.analysisScore\)/);
+  assert.match(source, /\$unionWith/);
+  assert.match(source, /summary\.trajectory\.length > 100/);
   assert.match(source, /Number\.isFinite\(currentStreakValue\)/);
   assert.match(source, /Number\.isFinite\(longestStreakValue\)/);
 });
