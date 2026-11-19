@@ -79,7 +79,7 @@ export async function GET(request: Request) {
     return new Response(JSON.stringify({ 
       success: true, 
       deletedCount: deletedBroadcasts.length, 
-      filesDeleted: fileKeysToDelete.length 
+      filesDeleted 
     }), { status: 200 });
   } catch (error: any) {
     console.error("Cron Job Error:", error);
