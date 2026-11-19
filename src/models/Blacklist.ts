@@ -9,8 +9,8 @@ export interface IBlacklist extends Document {
 
 const BlacklistSchema: Schema<IBlacklist> = new Schema({
   type: { type: String, enum: ["ip", "email", "username"], required: true },
-  value: { type: String, required: true },
-  reason: { type: String, required: false },
+  value: { type: String, required: true, trim: true, lowercase: true },
+  reason: { type: String, required: false, trim: true, maxlength: 500 },
   createdAt: { type: Date, default: Date.now }
 });
 

@@ -6,13 +6,16 @@ import { createHash } from "node:crypto";
  * owns the deterministic identity and duplicate-key recovery behavior.
  */
 export async function syncDonationDonor({ tx, donorData, donorStore }) {
-  const transactionRef = String(tx._id);
+  if (!tx || tx._id == null || String(tx._id).trim() === "") {
+    throw new Error("Donation transaction ID is required for donor synchronization.");
+  }
+  const transactionRef = String(tx._id).trim();
   const existingDonor = tx.donorRecordId
     ? null
     : await donorStore.findOneByTransactionRef(transactionRef);
   const donorUuid =
     existingDonor?.uuid ||
-    createHash("sha256").update(`conceptnichod:donation:${tx._id}`).digest("hex");
+    createHash("sha256").update(`conceptnichod:donation:${transactionRef}`).digest("hex");
 
   let donor;
   if (tx.donorRecordId) {

@@ -9,10 +9,10 @@ export interface IGroupMessage extends Document {
 }
 
 const GroupMessageSchema = new Schema<IGroupMessage>({
-  groupId: { type: String, required: true, index: true },
-  senderId: { type: String, required: true },
-  senderUsername: { type: String, required: true },
-  body: { type: String, required: true, maxlength: 2000 },
+  groupId: { type: String, required: true, trim: true },
+  senderId: { type: String, required: true, trim: true },
+  senderUsername: { type: String, required: true, trim: true },
+  body: { type: String, required: true, trim: true, minlength: 1, maxlength: 2000 },
   createdAt: { type: Date, default: Date.now },
 });
 

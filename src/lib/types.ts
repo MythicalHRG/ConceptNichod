@@ -1,4 +1,3 @@
-import type { GenerateQuestionsOutput } from "@/ai/flows/generate-questions";
 import type { FinalAnalysisOutput } from "@/ai/flows/analyze-answers";
 
 export type Topic = {
@@ -12,7 +11,7 @@ export type Topic = {
   summary?: string;
   questions?: Question[];
   analysis?: FinalAnalysisOutput;
-  practiceStatus?: 'in_progress' | 'completed';
+  practiceStatus?: 'not_started' | 'in_progress' | 'completed';
   summaryViewed?: boolean;
   savedWrittenAnswers?: string[];
   savedSpokenAnswers?: string[];

@@ -35,6 +35,12 @@ export interface IDonationTransaction extends Document {
   updatedAt: Date;
 }
 
+const isNullableFiniteCurrency = (v: number | null | undefined) =>
+  v == null || (Number.isFinite(v) && v >= 0 && v <= 10_000_000);
+
+const isNullableVerifiedCurrency = (v: number | null | undefined) =>
+  v == null || (Number.isFinite(v) && v >= 1 && v <= 10_000_000);
+
 const DonationTransactionSchema = new Schema<IDonationTransaction>({
   uuid: { type: String, required: true, unique: true, default: () => randomUUID() },
   // Both IDs remain strings: ConceptNichod uses UUID strings, not Mongo ObjectIds.
@@ -48,10 +54,10 @@ const DonationTransactionSchema = new Schema<IDonationTransaction>({
   // Sparse unique index allows legacy rows without a Transaction ID.
   transactionId: { type: String, required: function (this: any) { return this.isNew; }, unique: true, sparse: true, trim: true, uppercase: true, minlength: 6, maxlength: 45, match: /^[A-Z0-9_-]{6,45}$/ },
   message: { type: String, trim: true, maxlength: 250, default: "" },
-  claimedAmount: { type: Number, default: null, min: 0 },
-  amount: { type: Number, default: null, min: 0 },
+  claimedAmount: { type: Number, default: null, min: 0, validate: { validator: isNullableFiniteCurrency, message: "Claimed amount must be a finite valid number" } },
+  amount: { type: Number, default: null, min: 0, validate: { validator: isNullableFiniteCurrency, message: "Amount must be a finite valid number" } },
   status: { type: String, enum: ["pending", "verified", "rejected"], default: "pending", index: true },
-  verifiedAmount: { type: Number, default: null, min: 1 },
+  verifiedAmount: { type: Number, default: null, min: 1, validate: { validator: isNullableVerifiedCurrency, message: "Verified amount must be a finite valid number" } },
   patronTier: { type: String, enum: ["LEGEND", "DIAMOND", "GOLD", "SILVER", "SUPPORTER", "Legend", "Benefactor", "Patron", "Supporter", null], default: null },
   isPublishedToPatrons: { type: Boolean, default: false, index: true },
   donorRecordId: { type: String, default: null },
@@ -69,9 +75,10 @@ const DonationTransactionSchema = new Schema<IDonationTransaction>({
 
 DonationTransactionSchema.index({ status: 1, createdAt: -1 });
 DonationTransactionSchema.index({ status: 1, isPublishedToPatrons: 1, verifiedAmount: -1 });
+DonationTransactionSchema.index({ userId: 1, createdAt: -1 });
 
 DonationTransactionSchema.pre("save", function (this: IDonationTransaction) {
-  if (this.status !== "verified" || !this.verifiedAmount || this.verifiedAmount <= 0) {
+  if (this.status !== "verified" || !this.verifiedAmount || !Number.isFinite(this.verifiedAmount) || this.verifiedAmount <= 0) {
     this.isPublishedToPatrons = false;
     this.isPublic = false;
     this.patronTier = null;

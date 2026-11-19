@@ -7,7 +7,15 @@ export interface ValidationResult<T> { valid: boolean; data?: T; error?: string;
 
 export function sanitizeDonationText(input: unknown, maxLength = 250): string {
   if (typeof input !== "string") return "";
-  return input.replace(/<[^>]*>?/gm, "").replace(/[\u0000-\u001F\u007F-\u009F]/g, "").trim().slice(0, maxLength);
+  const safeMax = Number.isFinite(maxLength) ? Math.max(0, Math.floor(maxLength)) : 250;
+  let cleaned = input.replace(/[\u0000-\u001F\u007F-\u009F]/g, "");
+  let prev: string;
+  do {
+    prev = cleaned;
+    cleaned = cleaned.replace(/<[^<>]*>/g, "");
+  } while (cleaned !== prev);
+  cleaned = cleaned.replace(/[<>]/g, "");
+  return cleaned.trim().slice(0, safeMax);
 }
 export function validateUtr(rawUtr: unknown): ValidationResult<string> {
   if (typeof rawUtr !== "string") return { valid: false, error: "UTR number is required." };
@@ -22,6 +30,7 @@ export function validateTransactionId(raw: unknown): ValidationResult<string> {
   return { valid: true, data: normalized };
 }
 export function validateDonationSubmission(payload: Record<string, unknown>): ValidationResult<DonationSubmissionInput> {
+  if (!payload || typeof payload !== "object") return { valid: false, error: "Invalid donation submission payload." };
   const donorName = sanitizeDonationText(payload.donorName, 60).replace(/\s+/g, " ");
   if (donorName.length < 2) return { valid: false, error: "Please enter your name (at least 2 characters)." };
   const utr = validateUtr(payload.utr); if (!utr.valid || !utr.data) return { valid: false, error: utr.error };
@@ -29,11 +38,21 @@ export function validateDonationSubmission(payload: Record<string, unknown>): Va
   return { valid: true, data: { donorName, utr: utr.data, transactionId: transactionId.data, message: sanitizeDonationText(payload.message, 250), isAnonymous: payload.isAnonymous === true } };
 }
 export function validateAdminVerifiedAmount(raw: unknown): ValidationResult<number> {
-  const amount = typeof raw === "string" ? Number(raw.trim()) : Number(raw);
+  let amount: number;
+  if (typeof raw === "number") {
+    amount = raw;
+  } else if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!/^\d+(?:\.\d+)?$/.test(trimmed)) return { valid: false, error: "Enter a verified amount between ₹1 and ₹1,00,00,000." };
+    amount = Number(trimmed);
+  } else {
+    return { valid: false, error: "Enter a verified amount between ₹1 and ₹1,00,00,000." };
+  }
   if (!Number.isFinite(amount) || amount < 1 || amount > 10000000) return { valid: false, error: "Enter a verified amount between ₹1 and ₹1,00,00,000." };
   return { valid: true, data: Math.round(amount * 100) / 100 };
 }
 export function computePatronTier(amount: number): PatronTier {
+  if (!Number.isFinite(amount) || amount < 1) return "SUPPORTER";
   if (amount >= 5000) return "LEGEND"; if (amount >= 2000) return "DIAMOND"; if (amount >= 500) return "GOLD"; if (amount >= 100) return "SILVER"; return "SUPPORTER";
 }
 // Backward-compatible helper exports used by existing ConceptNichod modules and tests.
@@ -45,5 +64,16 @@ export function normalizeDonationMessage(value: unknown): string { return saniti
 export function parseVerifiedAmount(value: unknown): number | null { const r=validateAdminVerifiedAmount(value); return r.valid?r.data??null:null; }
 export function parseDonationAmount(value: unknown): number | null { return parseVerifiedAmount(value); }
 export function normalizeUpiReference(value: unknown): string | null { return normalizeUtr(value); }
-export function normalizeVpa(value: unknown): string | null { if(typeof value!=="string")return null;const v=value.trim().toLowerCase();return /^[a-z0-9._-]{2,256}@[a-z0-9.-]{2,64}$/.test(v)?v:null; }
-export function isExactDonationMatch(a:number,b:number,c:string,d:string):boolean { return Number.isFinite(a)&&Number.isFinite(b)&&Math.round(a*100)===Math.round(b*100)&&c.trim().toLowerCase()===d.trim().toLowerCase(); }
+export function normalizeVpa(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const v = value.trim().toLowerCase();
+  if (v.includes("..")) return null;
+  return /^[a-z0-9][a-z0-9._-]{0,254}[a-z0-9]@[a-z0-9][a-z0-9.-]{0,62}[a-z0-9]$/.test(v) ? v : null;
+}
+export function isExactDonationMatch(a:number,b:number,c:string,d:string):boolean {
+  if (!Number.isFinite(a) || !Number.isFinite(b) || typeof c !== "string" || typeof d !== "string") return false;
+  const normC = c.trim().toLowerCase();
+  const normD = d.trim().toLowerCase();
+  if (!normC || !normD) return false;
+  return Math.round(a*100)===Math.round(b*100) && normC===normD;
+}

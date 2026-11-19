@@ -14,7 +14,7 @@ export interface IDonationSetting extends Document {
 }
 
 const DonationSettingSchema = new Schema<IDonationSetting>({
-  upiId: { type: String, default: "" },
+  upiId: { type: String, trim: true, lowercase: true, default: "" },
   payeeName: { type: String, required: true, trim: true, default: process.env.NEXT_PUBLIC_UPI_NAME || "ConceptNichod" },
   qrCodeUrl: { type: String, trim: true, default: "" },
   isEnabled: { type: Boolean, default: false },

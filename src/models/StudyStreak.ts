@@ -4,15 +4,17 @@ export interface IStudyStreak extends Document {
   userId: string;
   currentStreak: number;
   longestStreak: number;
-  lastActiveDate: string; // YYYY-MM-DD in UTC server time
-  activityDates: string[]; // List of YYYY-MM-DD
+  lastActiveDate: string; // YYYY-MM-DD in IST (Asia/Kolkata)
+  activityDates: string[]; // List of YYYY-MM-DD in IST
   updatedAt: Date;
 }
 
+const isNonNegativeSafeInt = (v: number) => Number.isSafeInteger(v) && v >= 0;
+
 const StudyStreakSchema = new Schema<IStudyStreak>({
-  userId: { type: String, required: true, unique: true, index: true },
-  currentStreak: { type: Number, default: 0 },
-  longestStreak: { type: Number, default: 0 },
+  userId: { type: String, required: true, unique: true },
+  currentStreak: { type: Number, default: 0, min: 0, validate: { validator: isNonNegativeSafeInt, message: "Current streak must be a non-negative integer" } },
+  longestStreak: { type: Number, default: 0, min: 0, validate: { validator: isNonNegativeSafeInt, message: "Longest streak must be a non-negative integer" } },
   lastActiveDate: { type: String, default: "" },
   activityDates: { type: [String], default: [] },
   updatedAt: { type: Date, default: Date.now },

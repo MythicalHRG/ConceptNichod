@@ -12,11 +12,11 @@ export interface IStudyGroup extends Document {
 }
 
 const StudyGroupSchema = new Schema<IStudyGroup>({
-  name: { type: String, required: true, maxlength: 100 },
-  description: { type: String, required: true, maxlength: 1000 },
-  subject: { type: String, required: true, maxlength: 80 },
-  examFocus: { type: String, maxlength: 80 },
-  schedule: { type: String, maxlength: 160 },
+  name: { type: String, required: true, trim: true, maxlength: 100 },
+  description: { type: String, required: true, trim: true, maxlength: 1000 },
+  subject: { type: String, required: true, trim: true, maxlength: 80 },
+  examFocus: { type: String, trim: true, maxlength: 80 },
+  schedule: { type: String, trim: true, maxlength: 160 },
   ownerId: { type: String, required: true, index: true },
   memberIds: { type: [String], default: [] },
   createdAt: { type: Date, default: Date.now },
@@ -24,6 +24,7 @@ const StudyGroupSchema = new Schema<IStudyGroup>({
 
 StudyGroupSchema.index({ memberIds: 1 });
 StudyGroupSchema.index({ subject: 1 });
+StudyGroupSchema.index({ createdAt: -1 });
 
 const StudyGroup: Model<IStudyGroup> =
   mongoose.models.StudyGroup ||

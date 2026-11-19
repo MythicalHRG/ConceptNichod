@@ -1,6 +1,8 @@
+import dbConnect from "@/lib/mongoose";
 import ConceptMirror from "@/models/ConceptMirror";
 import Topic from "@/models/Topic";
 import StudyStreak from "@/models/StudyStreak";
+import { getIstDateString, getYesterdayIstDateString } from "@/lib/streak";
 import { getLeaderboardDataAction } from "@/app/actions/leaderboard";
 
 export interface UserBadge {
@@ -22,22 +24,54 @@ export async function computeUserBadges(userUuid: string, username: string): Pro
   badges: UserBadge[];
   topBadge: UserBadge | null;
 }> {
+  const cleanUuid = typeof userUuid === "string" ? userUuid.trim() : "";
+  const normalizedUsername = typeof username === "string" ? username.trim().toLowerCase() : "";
+  if (!cleanUuid) {
+    return { badges: [], topBadge: null };
+  }
+
+  await dbConnect();
+
   const badges: UserBadge[] = [];
 
-  // 1. Fetch Leaderboard Standings for Weekly, Monthly, and Overall
-  try {
-    const [weeklyBoard, monthlyBoard, overallBoard] = await Promise.all([
-      getLeaderboardDataAction("week", "All"),
-      getLeaderboardDataAction("month", "All"),
-      getLeaderboardDataAction("all", "All"),
-    ]);
+  const [leaderboardResult, streakResult, topicsResult, mirrorResult] = await Promise.allSettled([
+    normalizedUsername
+      ? Promise.all([
+          getLeaderboardDataAction("week", "All"),
+          getLeaderboardDataAction("month", "All"),
+          getLeaderboardDataAction("all", "All"),
+        ])
+      : Promise.resolve(null),
+    StudyStreak.findOne({ userId: cleanUuid })
+      .select("currentStreak lastActiveDate")
+      .lean(),
+    Topic.find({ userId: cleanUuid })
+      .select("analysis.overallScore createdAt")
+      .sort({ createdAt: 1 })
+      .lean(),
+    ConceptMirror.find({ userId: cleanUuid })
+      .select("durationSeconds overallScore")
+      .lean(),
+  ]);
 
-    const weeklyEntry = weeklyBoard.entries.find((e) => e.username.toLowerCase() === username.toLowerCase());
-    const monthlyEntry = monthlyBoard.entries.find((e) => e.username.toLowerCase() === username.toLowerCase());
-    const overallEntry = overallBoard.entries.find((e) => e.username.toLowerCase() === username.toLowerCase());
+  // 1. Leaderboard Standings for Weekly, Monthly, and Overall
+  if (leaderboardResult.status === "fulfilled" && leaderboardResult.value) {
+    const [weeklyBoard, monthlyBoard, overallBoard] = leaderboardResult.value;
+    const findUserEntry = (board: { entries?: Array<{ username?: string; rank: number; conceptsCovered: number }> } | null | undefined) =>
+      Array.isArray(board?.entries)
+        ? board.entries.find(
+            (e) =>
+              typeof e?.username === "string" &&
+              e.username.trim().toLowerCase() === normalizedUsername
+          )
+        : undefined;
+
+    const weeklyEntry = findUserEntry(weeklyBoard);
+    const monthlyEntry = findUserEntry(monthlyBoard);
+    const overallEntry = findUserEntry(overallBoard);
 
     // Weekly Performer Badge (single highest earned for this cycle)
-    if (weeklyEntry && weeklyEntry.conceptsCovered > 0) {
+    if (weeklyEntry && weeklyEntry.conceptsCovered > 0 && Number.isFinite(weeklyEntry.rank) && weeklyEntry.rank >= 1) {
       if (weeklyEntry.rank === 1) {
         badges.push({
           id: "weekly-1",
@@ -102,7 +136,7 @@ export async function computeUserBadges(userUuid: string, username: string): Pro
     }
 
     // Monthly Performer Badge (single highest earned for this cycle)
-    if (monthlyEntry && monthlyEntry.conceptsCovered > 0) {
+    if (monthlyEntry && monthlyEntry.conceptsCovered > 0 && Number.isFinite(monthlyEntry.rank) && monthlyEntry.rank >= 1) {
       if (monthlyEntry.rank === 1) {
         badges.push({
           id: "monthly-1",
@@ -152,7 +186,7 @@ export async function computeUserBadges(userUuid: string, username: string): Pro
     }
 
     // Overall / All-Time Badge
-    if (overallEntry && overallEntry.conceptsCovered > 0) {
+    if (overallEntry && overallEntry.conceptsCovered > 0 && Number.isFinite(overallEntry.rank) && overallEntry.rank >= 1) {
       if (overallEntry.rank === 1) {
         badges.push({
           id: "overall-legend",
@@ -200,25 +234,26 @@ export async function computeUserBadges(userUuid: string, username: string): Pro
         });
       }
     }
-  } catch (err) {
-    console.warn("Could not calculate leaderboard badges:", err);
+  } else if (leaderboardResult.status === "rejected") {
+    console.warn("Could not calculate leaderboard badges:", leaderboardResult.reason);
   }
 
-  // 2. Active Daily Streak Badge (single highest active tier)
-  try {
-    const streakDoc = await StudyStreak.findOne({ userId: userUuid }).lean();
+  // 2. Active Daily Streak Badge (IST-aligned to match StudyStreak storage)
+  if (streakResult.status === "fulfilled") {
+    const streakDoc = streakResult.value;
     if (streakDoc) {
       const now = new Date();
-      const todayStr = now.toISOString().slice(0, 10);
-      const yesterdayStr = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-        .toISOString()
-        .slice(0, 10);
+      const todayStr = getIstDateString(now);
+      const yesterdayStr = getYesterdayIstDateString(now);
 
       const isLive =
-        streakDoc.lastActiveDate === todayStr ||
-        streakDoc.lastActiveDate === yesterdayStr;
+        typeof streakDoc.lastActiveDate === "string" &&
+        (streakDoc.lastActiveDate >= todayStr || streakDoc.lastActiveDate === yesterdayStr);
 
-      const currentStreak = isLive ? streakDoc.currentStreak : 0;
+      const currentStreak =
+        isLive && Number.isFinite(streakDoc.currentStreak) && streakDoc.currentStreak > 0
+          ? Math.floor(streakDoc.currentStreak)
+          : 0;
 
       if (currentStreak >= 100) {
         badges.push({
@@ -282,15 +317,20 @@ export async function computeUserBadges(userUuid: string, username: string): Pro
         });
       }
     }
-  } catch (err) {
-    console.warn("Could not calculate streak badges:", err);
+  } else {
+    console.warn("Could not calculate streak badges:", streakResult.reason);
   }
 
   // 3. Learning Velocity Badge
-  try {
-    const topics = await Topic.find({ userId: userUuid }).lean();
+  if (topicsResult.status === "fulfilled") {
+    const topics = topicsResult.value;
     const analyzed = topics.filter(
-      (t) => t.analysis && typeof t.analysis.overallScore === "number"
+      (t) =>
+        t.analysis &&
+        typeof t.analysis.overallScore === "number" &&
+        Number.isFinite(t.analysis.overallScore) &&
+        t.analysis.overallScore >= 0 &&
+        t.analysis.overallScore <= 100
     );
 
     if (analyzed.length >= 3) {
@@ -306,7 +346,8 @@ export async function computeUserBadges(userUuid: string, username: string): Pro
       }
       const num = N * sumXY - sumX * sumY;
       const den = N * sumX2 - sumX * sumX;
-      const slope = den !== 0 ? Math.round((num / den) * 100) / 100 : 0;
+      const rawSlope = den !== 0 ? num / den : 0;
+      const slope = Number.isFinite(rawSlope) ? Math.round(rawSlope * 100) / 100 : 0;
 
       if (slope >= 10.0) {
         badges.push({
@@ -340,20 +381,29 @@ export async function computeUserBadges(userUuid: string, username: string): Pro
         });
       }
     }
-  } catch (err) {
-    console.warn("Could not calculate velocity badges:", err);
+  } else {
+    console.warn("Could not calculate velocity badges:", topicsResult.reason);
   }
 
   // 4. Concept Mirror Oral Defense Badge
-  try {
-    const mirrorDocs = await ConceptMirror.find({ userId: userUuid }).lean();
+  if (mirrorResult.status === "fulfilled") {
+    const mirrorDocs = mirrorResult.value;
     if (mirrorDocs.length > 0) {
-      const totalSec = mirrorDocs.reduce((acc, m) => acc + (m.durationSeconds || 0), 0);
-      const avgScore =
-        Math.round(
-          mirrorDocs.reduce((acc, m) => acc + (m.overallScore || 0), 0) /
-            mirrorDocs.length
-        );
+      let totalSec = 0;
+      let scoreSum = 0;
+      let validScoreCount = 0;
+
+      for (const m of mirrorDocs) {
+        if (typeof m.durationSeconds === "number" && Number.isFinite(m.durationSeconds) && m.durationSeconds > 0) {
+          totalSec += m.durationSeconds;
+        }
+        if (typeof m.overallScore === "number" && Number.isFinite(m.overallScore) && m.overallScore >= 0 && m.overallScore <= 100) {
+          scoreSum += m.overallScore;
+          validScoreCount += 1;
+        }
+      }
+
+      const avgScore = validScoreCount > 0 ? Math.round(scoreSum / validScoreCount) : 0;
 
       if (totalSec >= 1800 && avgScore >= 85) {
         badges.push({
@@ -402,8 +452,8 @@ export async function computeUserBadges(userUuid: string, username: string): Pro
         });
       }
     }
-  } catch (err) {
-    console.warn("Could not calculate oral defense badges:", err);
+  } else {
+    console.warn("Could not calculate oral defense badges:", mirrorResult.reason);
   }
 
   // Strict sorting: Highest level / priority first
