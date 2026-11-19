@@ -93,7 +93,7 @@ test("leaderboard streams every scoring input while bounding only displayed traj
 });
 
 test("broadcast cleanup deletes remote files before database records and retains failures", () => {
-  assert.ok(cleanup.indexOf("utapi.deleteFiles") < cleanup.indexOf("Broadcast.deleteOne"));
+  assert.ok(cleanup.indexOf("utapi.deleteFiles") < cleanup.indexOf("Broadcast.findOneAndDelete"));
   assert.match(cleanup, /broadcast record retained for retry/);
   assert.match(cleanup, /Broadcast\.collection\.indexes\(\)/);
 });
