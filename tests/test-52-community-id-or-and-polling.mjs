@@ -31,9 +31,12 @@ test("mistake notebook update/delete queries are scoped to the signed-in user", 
   assert.match(source, /userId: user\.uuid/);
 });
 
-test("study group polling effects cancel their intervals and suppress stale updates", () => {
+test("study group polling is sequential, visibility-aware, and cancellable", () => {
   const source = fs.readFileSync("src/components/study-groups/study-groups-hub.tsx", "utf8");
-  assert.equal((source.match(/clearInterval\(interval\)/g) || []).length, 2);
+  assert.equal((source.match(/clearTimeout\(timeout\)/g) || []).length, 4);
+  assert.doesNotMatch(source, /setInterval\(fetch(?:Msgs|DMs)/);
+  assert.equal((source.match(/document\.addEventListener\("visibilitychange"/g) || []).length, 2);
+  assert.match(source, /finally \{\s*inFlight = false;\s*scheduleNext\(\);/);
   assert.match(source, /let isMounted = true/);
   assert.match(source, /if \(isMounted\) setGroupMessages/);
   assert.match(source, /if \(isMounted\) setDirectMessages/);
