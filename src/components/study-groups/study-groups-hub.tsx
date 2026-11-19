@@ -132,6 +132,7 @@ export function StudyGroupsHub() {
     loadDirectConversations();
   }, []);
 
+  // Former interval cleanup: clearInterval(interval) is replaced by clearTimeout(timeout).
   // Sequential polling prevents request overlap and pauses on hidden tabs.
   useEffect(() => {
     if (!activeGroup) return;
@@ -173,6 +174,7 @@ export function StudyGroupsHub() {
     };
   }, [activeGroup]);
 
+  // Former DM interval cleanup: clearInterval(interval) is replaced by clearTimeout(timeout).
   useEffect(() => {
     if (!activeDirectTarget) return;
     let isMounted = true;
