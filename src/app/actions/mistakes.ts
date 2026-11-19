@@ -77,20 +77,24 @@ export async function getMistakesDataAction(filter?: {
     ];
   }
 
-  const [docs, allUserDocs] = await Promise.all([
+  const [docs, groupedCounts] = await Promise.all([
     MistakeEntry.find(query).sort({ createdAt: -1 }).limit(100).lean(),
-    MistakeEntry.find({ userId: user.uuid }).select("subject status").lean(),
+    MistakeEntry.aggregate([
+      { $match: { userId: user.uuid } },
+      { $group: { _id: { subject: "$subject", status: "$status" }, count: { $sum: 1 } } },
+    ]),
   ]);
-
-  const totalCount = allUserDocs.length;
-  const unresolvedCount = allUserDocs.filter((d) => d.status === "unresolved").length;
-  const masteredCount = allUserDocs.filter((d) => d.status === "mastered").length;
-
+  let totalCount = 0;
+  let unresolvedCount = 0;
+  let masteredCount = 0;
   const subjectCounts: Record<string, number> = {};
-  allUserDocs.forEach((d) => {
-    const s = d.subject || "General";
-    subjectCounts[s] = (subjectCounts[s] || 0) + 1;
-  });
+  for (const row of groupedCounts) {
+    totalCount += row.count;
+    if (row._id.status === "unresolved") unresolvedCount += row.count;
+    if (row._id.status === "mastered") masteredCount += row.count;
+    const subject = row._id.subject || "General";
+    subjectCounts[subject] = (subjectCounts[subject] || 0) + row.count;
+  }
 
   const mistakes: MistakeItem[] = docs.map((doc: any) => ({
     id: doc._id.toString(),
