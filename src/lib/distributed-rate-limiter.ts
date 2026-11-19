@@ -23,7 +23,7 @@ async function ensureRateLimitIndexes() {
 }
 
 function hashKey(key: string) {
-  if (!key) throw new Error("Invalid rate-limit key");
+  if (typeof key !== "string" || !key.trim()) throw new Error("Invalid rate-limit key");
   return createHash("sha256").update(key).digest("hex");
 }
 
@@ -43,55 +43,45 @@ export async function checkDistributedRateLimit(
   key: string, limit: number, windowMs: number
 ): Promise<RateLimitResult> {
   validateLimit(limit);
-  await dbConnect();
-  await ensureRateLimitIndexes();
   const now = Date.now();
   const window = getWindow(key, windowMs, now);
+  await dbConnect();
+  await ensureRateLimitIndexes();
   let counter: { count: number } | null = null;
   try {
     counter = await RateLimitCounter.findOneAndUpdate(
       { key: window.key, windowStart: window.windowStart },
       { $inc: { count: 1 }, $setOnInsert: { expiresAt: window.expiresAt } },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    ).lean();
-  } catch (error: any) {
-    if (error?.code !== 11000) throw error;
+      { upsert: true, new: true }
+    ).select("count").lean();
+  } catch (error: unknown) {
+    if ((error as { code?: number })?.code !== 11000) throw error;
     counter = await RateLimitCounter.findOneAndUpdate(
       { key: window.key, windowStart: window.windowStart },
       { $inc: { count: 1 } },
       { new: true }
-    ).lean();
+    ).select("count").lean();
   }
-  if (!counter || !Number.isSafeInteger(counter.count) || counter.count < 1) {
-    throw new Error("Rate-limit counter could not be confirmed; request denied");
-  }
-  const count = counter.count;
-  return {
-    success: count <= limit,
-    limit,
-    remaining: Math.max(0, limit - count),
-    resetMs: Math.max(0, window.windowStart + windowMs - now),
-  };
+  const count = counter?.count ?? 1;
+  const resetMs = Math.max(0, window.windowStart + windowMs - Date.now());
+  if (count > limit) return { success: false, limit, remaining: 0, resetMs };
+  return { success: true, limit, remaining: Math.max(0, limit - count), resetMs };
 }
 
 export async function peekDistributedRateLimit(
   key: string, limit: number, windowMs: number
 ): Promise<RateLimitResult> {
   validateLimit(limit);
-  await dbConnect();
-  await ensureRateLimitIndexes();
   const now = Date.now();
   const window = getWindow(key, windowMs, now);
-  const counter = await RateLimitCounter.findOne({
-    key: window.key, windowStart: window.windowStart
-  }).lean();
+  await dbConnect();
+  await ensureRateLimitIndexes();
+  const counter = await RateLimitCounter.findOne({ key: window.key, windowStart: window.windowStart })
+    .select("count").lean();
   const count = counter?.count ?? 0;
-  return {
-    success: count < limit,
-    limit,
-    remaining: Math.max(0, limit - count),
-    resetMs: Math.max(0, window.windowStart + windowMs - now),
-  };
+  const resetMs = Math.max(0, window.windowStart + windowMs - Date.now());
+  if (count >= limit) return { success: false, limit, remaining: 0, resetMs };
+  return { success: true, limit, remaining: Math.max(0, limit - count), resetMs };
 }
 
 export async function recordDistributedFailedAttempt(
@@ -101,6 +91,7 @@ export async function recordDistributedFailedAttempt(
 }
 
 export async function resetDistributedRateLimit(key: string): Promise<void> {
+  const hashedKey = hashKey(key);
   await dbConnect();
-  await RateLimitCounter.deleteMany({ key: hashKey(key) });
+  await RateLimitCounter.deleteMany({ key: hashedKey });
 }

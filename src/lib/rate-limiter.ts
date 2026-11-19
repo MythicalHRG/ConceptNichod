@@ -22,12 +22,17 @@ function cleanupOldEntries(now: number) {
   }
 
   // Expired-key cleanup alone cannot enforce a bound during a burst of
-  // distinct active keys. Evict oldest inserted keys to cap process memory.
+  // distinct active keys. Evict least-recently-used keys to cap process memory.
   while (hitMap.size > MAX_KEYS) {
     const oldestKey = hitMap.keys().next().value;
     if (oldestKey === undefined) break;
     hitMap.delete(oldestKey);
   }
+}
+
+function touchEntry(key: string, timestamps: number[]) {
+  hitMap.delete(key);
+  hitMap.set(key, timestamps);
 }
 
 /**
@@ -39,35 +44,46 @@ export function checkRateLimit(
   limit: number,
   windowMs: number
 ): RateLimitResult {
-  const now = Date.now();
-  cleanupOldEntries(now);
+  const safeLimit = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 0;
+  const safeWindowMs = Number.isFinite(windowMs) && windowMs > 0 ? windowMs : 0;
+  if (safeLimit < 1 || safeWindowMs <= 0) {
+    return {
+      success: false,
+      limit: safeLimit,
+      remaining: 0,
+      resetMs: safeWindowMs,
+    };
+  }
 
-  const windowStart = now - windowMs;
+  const now = Date.now();
+  const windowStart = now - safeWindowMs;
   let timestamps = hitMap.get(key) || [];
 
   // Filter timestamps within the current sliding window
   timestamps = timestamps.filter((t) => t > windowStart);
 
-  if (timestamps.length >= limit) {
+  if (timestamps.length >= safeLimit) {
     const oldestInWindow = timestamps[0];
-    const resetMs = Math.max(0, oldestInWindow + windowMs - now);
-    hitMap.set(key, timestamps);
+    const resetMs = Math.max(0, oldestInWindow + safeWindowMs - now);
+    touchEntry(key, timestamps);
+    cleanupOldEntries(now);
     return {
       success: false,
-      limit,
+      limit: safeLimit,
       remaining: 0,
       resetMs,
     };
   }
 
   timestamps.push(now);
-  hitMap.set(key, timestamps);
+  touchEntry(key, timestamps);
+  cleanupOldEntries(now);
 
   return {
     success: true,
-    limit,
-    remaining: Math.max(0, limit - timestamps.length),
-    resetMs: windowMs,
+    limit: safeLimit,
+    remaining: Math.max(0, safeLimit - timestamps.length),
+    resetMs: safeWindowMs,
   };
 }
 
@@ -79,17 +95,32 @@ export function peekRateLimit(
   limit: number,
   windowMs: number
 ): RateLimitResult {
+  const safeLimit = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 0;
+  const safeWindowMs = Number.isFinite(windowMs) && windowMs > 0 ? windowMs : 0;
+  if (safeLimit < 1 || safeWindowMs <= 0) {
+    return {
+      success: false,
+      limit: safeLimit,
+      remaining: 0,
+      resetMs: safeWindowMs,
+    };
+  }
+
   const now = Date.now();
-  const windowStart = now - windowMs;
+  const windowStart = now - safeWindowMs;
   let timestamps = hitMap.get(key) || [];
   timestamps = timestamps.filter((t) => t > windowStart);
 
-  if (timestamps.length >= limit) {
+  if (timestamps.length === 0) {
+    hitMap.delete(key);
+  }
+
+  if (timestamps.length >= safeLimit) {
     const oldestInWindow = timestamps[0];
-    const resetMs = Math.max(0, oldestInWindow + windowMs - now);
+    const resetMs = Math.max(0, oldestInWindow + safeWindowMs - now);
     return {
       success: false,
-      limit,
+      limit: safeLimit,
       remaining: 0,
       resetMs,
     };
@@ -97,10 +128,10 @@ export function peekRateLimit(
 
   return {
     success: true,
-    limit,
-    remaining: Math.max(0, limit - timestamps.length),
+    limit: safeLimit,
+    remaining: Math.max(0, safeLimit - timestamps.length),
     resetMs:
-      timestamps.length > 0 ? Math.max(0, timestamps[0] + windowMs - now) : 0,
+      timestamps.length > 0 ? Math.max(0, timestamps[0] + safeWindowMs - now) : 0,
   };
 }
 

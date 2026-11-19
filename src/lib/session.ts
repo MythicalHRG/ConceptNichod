@@ -21,8 +21,10 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 
 export function createSignedSessionCookie(uuid: string): string {
   if (!uuid || typeof uuid !== "string") throw new Error("UUID is required to create a session cookie.");
-  const signature = crypto.createHmac("sha256", getSessionSecret()).update(uuid).digest("hex");
-  return `${uuid}.${signature}`;
+  const trimmedUuid = uuid.trim();
+  if (!UUID_REGEX.test(trimmedUuid)) throw new Error("A valid UUID is required to create a session cookie.");
+  const signature = crypto.createHmac("sha256", getSessionSecret()).update(trimmedUuid).digest("hex");
+  return `${trimmedUuid}.${signature}`;
 }
 
 export function verifySessionCookie(cookieValue?: string | null): string | null {
@@ -33,9 +35,8 @@ export function verifySessionCookie(cookieValue?: string | null): string | null 
     const uuid = trimmed.substring(0, dotIndex);
     const signature = trimmed.substring(dotIndex + 1);
     if (!UUID_REGEX.test(uuid) || !/^[a-f0-9]{64}$/i.test(signature)) return null;
-    const expectedSignature = crypto.createHmac("sha256", getSessionSecret()).update(uuid).digest("hex");
-    const sigBuf = Buffer.from(signature);
-    const expectedBuf = Buffer.from(expectedSignature);
+    const expectedBuf = crypto.createHmac("sha256", getSessionSecret()).update(uuid).digest();
+    const sigBuf = Buffer.from(signature, "hex");
     if (sigBuf.length === expectedBuf.length && crypto.timingSafeEqual(sigBuf, expectedBuf)) return uuid;
   }
   if (process.env.NODE_ENV !== "production" && process.env.STRICT_SESSION_SIGNING !== "true" && UUID_REGEX.test(trimmed)) return trimmed;

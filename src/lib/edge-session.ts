@@ -16,6 +16,31 @@ function getSessionSecret(): string {
   return "local-development-only-session-secret-not-for-production";
 }
 
+let cachedSecret: string | null = null;
+let cachedKeyPromise: Promise<CryptoKey> | null = null;
+
+function getVerificationKey(secret: string): Promise<CryptoKey> {
+  if (cachedSecret !== secret || !cachedKeyPromise) {
+    cachedSecret = secret;
+    cachedKeyPromise = globalThis.crypto.subtle
+      .importKey(
+        "raw",
+        new TextEncoder().encode(secret),
+        { name: "HMAC", hash: "SHA-256" },
+        false,
+        ["verify"]
+      )
+      .catch((error) => {
+        if (cachedSecret === secret) {
+          cachedSecret = null;
+          cachedKeyPromise = null;
+        }
+        throw error;
+      });
+  }
+  return cachedKeyPromise;
+}
+
 /** Edge-runtime equivalent of verifySessionCookie; uses Web Crypto, not Node crypto. */
 export async function verifyEdgeSessionCookie(cookieValue?: string | null): Promise<string | null> {
   if (!cookieValue || typeof cookieValue !== "string") return null;
@@ -26,7 +51,7 @@ export async function verifyEdgeSessionCookie(cookieValue?: string | null): Prom
     const signature = trimmed.slice(dotIndex + 1);
     if (UUID_REGEX.test(uuid) && /^[a-f0-9]{64}$/i.test(signature)) {
       const secret = getSessionSecret();
-      const key = await globalThis.crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
+      const key = await getVerificationKey(secret);
       const signatureBytes = new Uint8Array(signature.match(/.{2}/g)!.map((byte) => Number.parseInt(byte, 16)));
       const valid = await globalThis.crypto.subtle.verify("HMAC", key, signatureBytes, new TextEncoder().encode(uuid));
       if (valid) return uuid;

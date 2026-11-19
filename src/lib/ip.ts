@@ -1,23 +1,51 @@
 import { headers } from "next/headers";
 
+function isValidIpv6(candidate: string): boolean {
+  if (!candidate || candidate.length > 45) return false;
+  if (!/^[a-fA-F0-9:]+$/.test(candidate)) return false;
+  if (candidate.includes(":::")) return false;
+
+  const doubleColonParts = candidate.split("::");
+  if (doubleColonParts.length > 2) return false;
+
+  const hasCompression = doubleColonParts.length === 2;
+  if (!hasCompression) {
+    const groups = candidate.split(":");
+    return groups.length === 8 && groups.every((g) => /^[a-fA-F0-9]{1,4}$/.test(g));
+  }
+
+  const leftGroups = doubleColonParts[0] ? doubleColonParts[0].split(":") : [];
+  const rightGroups = doubleColonParts[1] ? doubleColonParts[1].split(":") : [];
+
+  // Reject leading/trailing single colon like ":1::2" or "1::2:"
+  if (leftGroups.some((g) => !/^[a-fA-F0-9]{1,4}$/.test(g))) return false;
+  if (rightGroups.some((g) => !/^[a-fA-F0-9]{1,4}$/.test(g))) return false;
+
+  return leftGroups.length + rightGroups.length < 8;
+}
+
 export function sanitizeIp(ip: string): string {
   if (!ip || typeof ip !== "string") return "127.0.0.1";
   let trimmed = ip.trim();
-  if (trimmed === "::1" || trimmed === "::ffff:127.0.0.1" || trimmed === "localhost") return "127.0.0.1";
-  if (trimmed.startsWith("::ffff:")) {
+  const lower = trimmed.toLowerCase();
+  if (lower === "::1" || lower === "::ffff:127.0.0.1" || lower === "localhost") return "127.0.0.1";
+  if (lower.startsWith("::ffff:")) {
     trimmed = trimmed.substring(7);
     if (trimmed === "127.0.0.1") return "127.0.0.1";
   }
+
   const ipv4Match = trimmed.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/);
   if (ipv4Match) {
     const octets = ipv4Match[0].split(".").map(Number);
     if (octets.every((o) => o >= 0 && o <= 255)) return ipv4Match[0];
   }
+
   if (trimmed.includes(":")) {
-    const ipv6Clean = trimmed.replace(/[^a-fA-F0-9:]/g, "");
-    if (/^[a-fA-F0-9:]+$/.test(ipv6Clean) && ipv6Clean.split(":").length >= 3) {
-      if (ipv6Clean === "::1") return "127.0.0.1";
-      return ipv6Clean.slice(0, 45);
+    const bracketMatch = trimmed.match(/^\[([^\]]+)\](?::\d{1,5})?$/);
+    const candidate = bracketMatch ? bracketMatch[1] : trimmed;
+    if (isValidIpv6(candidate)) {
+      if (candidate === "::1") return "127.0.0.1";
+      return candidate.toLowerCase();
     }
   }
   return "127.0.0.1";

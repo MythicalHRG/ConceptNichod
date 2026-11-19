@@ -1,4 +1,4 @@
-import crypto from 'crypto';
+import crypto, { scrypt, randomBytes, timingSafeEqual } from 'crypto';
 
 class PRNG {
     state: number;
@@ -101,8 +101,8 @@ function deobfuscateBytes(obfBytes: Uint8Array, password: string, salt: Uint8Arr
 function getDerivedKey(password: string, salt: Uint8Array, iterations: number = 10000): Promise<Buffer> {
     return new Promise((resolve, reject) => {
         crypto.pbkdf2(password, salt, iterations, 32, 'sha256', (err, derivedKey) => {
-            if (err) reject(err);
-            else resolve(derivedKey);
+            if (err) return reject(err);
+            return resolve(derivedKey);
         });
     });
 }
@@ -116,6 +116,9 @@ async function encryptAesGcm(key: Buffer, plaintext: Buffer, iv: Buffer): Promis
 }
 
 async function decryptAesGcm(key: Buffer, ciphertextWithTag: Buffer, iv: Buffer): Promise<Buffer> {
+    if (ciphertextWithTag.length < 16 || iv.length !== 12) {
+        throw new Error('Malformed ciphertext or IV');
+    }
     const ciphertext = ciphertextWithTag.subarray(0, -16);
     const authTag = ciphertextWithTag.subarray(-16);
     const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
@@ -125,7 +128,12 @@ async function decryptAesGcm(key: Buffer, ciphertextWithTag: Buffer, iv: Buffer)
     return decrypted;
 }
 
+const MIN_ENCRYPTED_PAYLOAD_BYTES = 16 + 600 + 50 * 16;
+
 export async function encryptData(plaintext: string, password: string): Promise<string> {
+    if (typeof plaintext !== 'string' || typeof password !== 'string' || !password) {
+        throw new Error('Plaintext and password are required for encryption');
+    }
     let expStr = "0000000000000";
     plaintext = expStr + "|" + plaintext;
 
@@ -138,12 +146,12 @@ export async function encryptData(plaintext: string, password: string): Promise<
     const plainBytes = new Uint8Array(Buffer.from(processedText));
     const obfBytes = obfuscateBytes(plainBytes, password, salt);
 
-    let currentBytes = Buffer.from(obfBytes);
+    let currentBytes: Buffer = Buffer.from(obfBytes);
     const ivStack = new Uint8Array(600);
     for (let i = 0; i < 50; i++) {
         let curIv = crypto.randomBytes(12);
         ivStack.set(curIv, i * 12);
-        currentBytes = (await encryptAesGcm(key, currentBytes, curIv)) as any;
+        currentBytes = await encryptAesGcm(key, currentBytes, curIv);
     }
 
     const rawCiphertext = new Uint8Array(currentBytes);
@@ -167,9 +175,13 @@ export async function encryptData(plaintext: string, password: string): Promise<
 }
 
 export async function decryptData(inputPayload: string, password: string): Promise<string> {
+    if (typeof inputPayload !== 'string' || typeof password !== 'string' || !password) {
+        throw new Error('Payload and password are required for decryption');
+    }
     let hexPayload = inputPayload.trim();
     if (hexPayload.startsWith("data:") && hexPayload.includes(";base64,")) {
         const b64 = hexPayload.split(',')[1];
+        if (!b64) throw new Error("Malformed data payload");
         const decodedStr = Buffer.from(b64, 'base64').toString('utf8');
         const markerIdx = decodedStr.lastIndexOf("---STEGO---");
         if (markerIdx !== -1) {
@@ -177,12 +189,17 @@ export async function decryptData(inputPayload: string, password: string): Promi
         }
     }
     hexPayload = hexPayload.replace(/\s+/g, '');
+    if (hexPayload.length === 0 || hexPayload.length % 2 !== 0 || !/^[0-9a-fA-F]+$/.test(hexPayload)) {
+        throw new Error("Malformed hex payload");
+    }
 
     const base64Payload = hexToText(hexPayload);
     const payloadBuffer = Buffer.from(base64Payload, 'base64');
     const transposedPayload = new Uint8Array(payloadBuffer);
 
-    if (transposedPayload.length < 28) throw new Error("Payload too short");
+    if (transposedPayload.length < MIN_ENCRYPTED_PAYLOAD_BYTES) {
+        throw new Error("Payload too short");
+    }
 
     const transposeWidth = (password.length % 11) + 5;
     const payload = matrixUntranspose(transposedPayload, transposeWidth);
@@ -192,13 +209,13 @@ export async function decryptData(inputPayload: string, password: string): Promi
     const rawCiphertext = Buffer.from(payload.slice(616));
 
     let key = await getDerivedKey(password, salt, 10000);
-    
+
     // Helper to attempt decryption with a given key
     const attemptDecryption = async (decKey: Buffer) => {
         let currentBytes = rawCiphertext;
         for (let i = 49; i >= 0; i--) {
             let curIv = Buffer.from(ivStack.slice(i * 12, (i + 1) * 12));
-            currentBytes = (await decryptAesGcm(decKey, currentBytes, curIv)) as any;
+            currentBytes = await decryptAesGcm(decKey, currentBytes, curIv);
         }
         const obfBytes = new Uint8Array(currentBytes);
         const plainBytes = deobfuscateBytes(obfBytes, password, salt);
@@ -211,10 +228,14 @@ export async function decryptData(inputPayload: string, password: string): Promi
     let decryptedText;
     try {
         decryptedText = await attemptDecryption(key);
-    } catch (e) {
+    } catch {
         // Fallback to 100000 iterations for old passwords
         key = await getDerivedKey(password, salt, 100000);
         decryptedText = await attemptDecryption(key);
+    }
+
+    if (decryptedText.length < 14) {
+        throw new Error("Decrypted payload format invalid");
     }
 
     return decryptedText.substring(14);
@@ -223,33 +244,42 @@ export async function decryptData(inputPayload: string, password: string): Promi
 // --------------------------------------------------------------------------------
 // STANDARD SECURE PASSWORD HASHING (Replaces the custom encryption above for passwords)
 // --------------------------------------------------------------------------------
-import { scrypt, randomBytes, timingSafeEqual } from 'crypto';
 
 export async function hashPassword(password: string): Promise<string> {
+    if (typeof password !== 'string' || password.length === 0) {
+        throw new Error('Password must be a non-empty string');
+    }
     return new Promise((resolve, reject) => {
         const salt = randomBytes(16).toString('hex');
         scrypt(password, salt, 64, (err, derivedKey) => {
-            if (err) reject(err);
-            resolve(salt + ":" + derivedKey.toString('hex'));
+            if (err) return reject(err);
+            return resolve(salt + ":" + derivedKey.toString('hex'));
         });
     });
 }
 
 export async function comparePassword(password: string, hash: string): Promise<boolean> {
+    if (typeof password !== 'string' || typeof hash !== 'string') {
+        return false;
+    }
+    const parts = hash.split(":");
+    if (parts.length !== 2) {
+        return false;
+    }
+    const [salt, key] = parts;
+    if (!salt || !key || key.length !== 128 || !/^[0-9a-f]+$/i.test(key)) {
+        // It might be an old encrypted password or malformed hash, which will fail safely here.
+        return false;
+    }
+
+    const keyBuffer = Buffer.from(key, 'hex');
     return new Promise((resolve, reject) => {
-        const [salt, key] = hash.split(":");
-        if (!salt || !key) {
-            // It might be an old encrypted password, which will fail here.
-            return resolve(false);
-        }
-        
-        const keyBuffer = Buffer.from(key, 'hex');
         scrypt(password, salt, 64, (err, derivedKey) => {
-            if (err) reject(err);
-            
+            if (err) return reject(err);
+
             // Protect against timing attacks
             const isEqual = keyBuffer.length === derivedKey.length && timingSafeEqual(keyBuffer, derivedKey);
-            resolve(isEqual);
+            return resolve(isEqual);
         });
     });
 }

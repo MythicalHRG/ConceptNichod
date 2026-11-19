@@ -1,6 +1,5 @@
 import mongoose from "mongoose";
 import fs from "fs";
-import path from "path";
 
 // Simple .env parser for standalone script
 function loadEnv(file) {
@@ -39,33 +38,33 @@ async function runCleanup() {
   await mongoose.connect(MONGODB_URI);
   console.log("Connected successfully.");
 
-  const now = new Date();
+  try {
+    const now = new Date();
 
-  // 1. Clean up expired OTPs
-  const OtpVerification = mongoose.models.OtpVerification || mongoose.model("OtpVerification", new mongoose.Schema({}, { strict: false }));
-  const expiredOtps = await OtpVerification.deleteMany({
-    $or: [
-      { expiresAt: { $lt: now } },
-      { isVerified: true }
-    ]
-  });
-  console.log(`[CLEANUP] Deleted ${expiredOtps.deletedCount} expired/stale OTP verification records.`);
+    // 1. Clean up expired OTPs only (do not delete active in-flight verified OTPs before expiry)
+    const OtpVerification = mongoose.models.OtpVerification || mongoose.model("OtpVerification", new mongoose.Schema({}, { strict: false }));
+    const expiredOtps = await OtpVerification.deleteMany({
+      expiresAt: { $lt: now }
+    });
+    console.log(`[CLEANUP] Deleted ${expiredOtps.deletedCount} expired OTP verification records.`);
 
-  // 2. Clean up expired Broadcasts
-  const Broadcast = mongoose.models.Broadcast || mongoose.model("Broadcast", new mongoose.Schema({}, { strict: false }));
-  const expiredBroadcasts = await Broadcast.deleteMany({ expiresAt: { $lt: now } });
-  console.log(`[CLEANUP] Deleted ${expiredBroadcasts.deletedCount} expired broadcasts.`);
+    // 2. Clean up expired Broadcasts
+    const Broadcast = mongoose.models.Broadcast || mongoose.model("Broadcast", new mongoose.Schema({}, { strict: false }));
+    const expiredBroadcasts = await Broadcast.deleteMany({ expiresAt: { $lt: now } });
+    console.log(`[CLEANUP] Deleted ${expiredBroadcasts.deletedCount} expired broadcasts.`);
 
-  // 3. Purge orphaned notification reads
-  const NotificationRead = mongoose.models.NotificationRead || mongoose.model("NotificationRead", new mongoose.Schema({}, { strict: false }));
-  const activeBroadcasts = await Broadcast.find({});
-  if (activeBroadcasts.length === 0) {
-    const deletedReads = await NotificationRead.deleteMany({});
-    console.log(`[CLEANUP] Deleted ${deletedReads.deletedCount} stale notification read markers.`);
+    // 3. Purge orphaned notification reads
+    const NotificationRead = mongoose.models.NotificationRead || mongoose.model("NotificationRead", new mongoose.Schema({}, { strict: false }));
+    const activeBroadcasts = await Broadcast.find({}).select("_id").lean();
+    if (activeBroadcasts.length === 0) {
+      const deletedReads = await NotificationRead.deleteMany({});
+      console.log(`[CLEANUP] Deleted ${deletedReads.deletedCount} stale notification read markers.`);
+    }
+
+    console.log("Database cleanup completed successfully.");
+  } finally {
+    await mongoose.disconnect();
   }
-
-  console.log("Database cleanup completed successfully.");
-  await mongoose.disconnect();
 }
 
 runCleanup().catch(err => {
