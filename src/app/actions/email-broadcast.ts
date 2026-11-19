@@ -36,14 +36,23 @@ async function verifyOwner() {
 export async function sendEmailBroadcastAction(formData: FormData) {
   await verifyOwner();
 
-  const recipientType = formData.get("recipientType") as string; // 'all' | 'custom'
-  const customTo = (formData.get("to") as string) || "";
-  const ccStr = (formData.get("cc") as string) || "";
-  const bccStr = (formData.get("bcc") as string) || "";
-  const subject = formData.get("subject") as string;
-  const body = formData.get("body") as string;
-  const rawAttachmentUrl = formData.get("attachmentUrl") as string | null;
-  const attachmentName = (formData.get("attachmentName") as string) || "attachment";
+  const readText = (key: string) => {
+    const value = formData.get(key);
+    return typeof value === "string" ? value : "";
+  };
+  const recipientType = readText("recipientType");
+  const customTo = readText("to");
+  const ccStr = readText("cc");
+  const bccStr = readText("bcc");
+  const subject = readText("subject").trim();
+  const body = readText("body");
+  const rawAttachmentUrl = readText("attachmentUrl");
+  const rawAttachmentName = readText("attachmentName") || "attachment";
+  const attachmentName = rawAttachmentName.replace(/[\r\n\"]/g, "").replace(/[^A-Za-z0-9._ -]/g, "_").slice(0, 120) || "attachment";
+
+  if (recipientType !== "all" && recipientType !== "custom") throw new Error("Invalid recipient selection.");
+  if (!subject || subject.length > 180 || /[\r\n]/.test(subject)) throw new Error("Subject must be 1-180 characters and cannot contain line breaks.");
+  if (!body || body.length > 20000) throw new Error("Email body must contain between 1 and 20,000 characters.");
 
   let attachmentUrl: string | null = null;
   if (rawAttachmentUrl && rawAttachmentUrl.trim().length > 0) {
