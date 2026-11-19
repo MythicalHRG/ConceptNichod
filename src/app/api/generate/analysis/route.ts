@@ -7,21 +7,26 @@ import { getClientIp } from '@/lib/ip';
 import { checkDistributedRateLimit } from '@/lib/distributed-rate-limiter';
 
 const AnswerSchema = z.object({
-  question: z.string(),
-  answer: z.string(),
+  question: z.string().max(500),
+  answer: z.string().max(5000),
 });
 
 const AnalysisSchema = z.object({
-  topicName: z.string().min(1, 'topicName is required'),
-  classLevel: z.string().min(1, 'classLevel is required'),
-  summary: z.string().min(1, 'summary is required'),
-  topicId: z.string().min(1, 'topicId is required'),
-  writtenAnswers: z.array(AnswerSchema).max(50).optional().default([]),
-  spokenAnswers: z.array(AnswerSchema).max(50).optional().default([]),
+  topicName: z.string().min(1, 'topicName is required').max(200),
+  classLevel: z.string().min(1, 'classLevel is required').max(50),
+  summary: z.string().min(1, 'summary is required').max(8000),
+  topicId: z.string().min(1, 'topicId is required').max(64),
+  writtenAnswers: z.array(AnswerSchema).max(10).optional().default([]),
+  spokenAnswers: z.array(AnswerSchema).max(11).optional().default([]),
 });
 
 export async function POST(req: Request) {
   try {
+    const contentLength = Number(req.headers.get('content-length') || 0);
+    if (Number.isFinite(contentLength) && contentLength > 150_000) {
+      return NextResponse.json({ error: 'Request body is too large.' }, { status: 413 });
+    }
+
     // 1. Session authentication check
     const rawSession = (await cookies()).get('user_session')?.value;
     const sessionUuid = verifySessionCookie(rawSession);
