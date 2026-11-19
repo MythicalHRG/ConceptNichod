@@ -77,7 +77,7 @@ export async function askFollowUpAction(input: FollowUpInput): Promise<{ answer:
     "<topic_name>" + JSON.stringify(safeTopic) + "</topic_name>",
     "<class_level>" + JSON.stringify(safeClass) + "</class_level>",
     "<subject>" + JSON.stringify(safeSubject) + "</subject>",
-    "<untrusted_topic_summary>" + safeSummary + "</untrusted_topic_summary>",
+    "<untrusted_topic_summary>" + safeSummary.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") + "</untrusted_topic_summary>",
   ].join("\n");
 
   const messages = [
