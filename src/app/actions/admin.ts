@@ -1,6 +1,6 @@
 "use server";
 
-import { isPlatformOwner } from "@/lib/owner-access";
+import { isPlatformOwner, PLATFORM_OWNER_EMAIL } from "@/lib/owner-access";
 import { cookies } from "next/headers";
 import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
@@ -42,9 +42,9 @@ export async function deleteUserAction(uuid: string) {
   await verifyOwner();
   
   // Protect admin from self-deletion
-  const userToDelete = await User.findOne({ uuid }).lean();
-  if (userToDelete && userToDelete.username === PLATFORM_OWNER_USERNAME) {
-    throw new Error("Cannot delete admin account");
+  const userToDelete = await User.findOne({ uuid }).select("username email role").lean();
+  if (isPlatformOwner(userToDelete)) {
+    throw new Error("Cannot delete the platform owner account.");
   }
 
   await User.deleteOne({ uuid });
@@ -55,13 +55,26 @@ export async function deleteUserAction(uuid: string) {
 
 export async function banEntityAction(type: "ip" | "email" | "username", value: string, reason?: string) {
   await verifyOwner();
-  
-  if (type === "username" && value.toLowerCase().trim() === PLATFORM_OWNER_USERNAME) {
-    throw new Error("Cannot ban admin username");
+  if (!["ip", "email", "username"].includes(type) || typeof value !== "string" || !value.trim() || value.trim().length > 320) {
+    throw new Error("A valid ban type and value are required.");
+  }
+  const normalizedValue = value.trim().toLowerCase();
+  const targetMatcher = type === "ip"
+    ? { $or: [{ firstLoginIp: normalizedValue }, { lastLoginIp: normalizedValue }, { lastKnownIp: normalizedValue }] }
+    : type === "email" ? { email: normalizedValue } : { username: normalizedValue };
+  const ownerIdentity = await User.findOne({
+    role: "owner",
+    $and: [
+      { $or: [{ username: PLATFORM_OWNER_USERNAME }, { email: PLATFORM_OWNER_EMAIL }] },
+      targetMatcher,
+    ],
+  }).select("username email role").lean();
+  if (isPlatformOwner(ownerIdentity)) {
+    throw new Error("Cannot ban the platform owner account or its current IP address.");
   }
 
   try {
-    await Blacklist.create({ type, value, reason });
+    await Blacklist.create({ type, value: normalizedValue, reason: typeof reason === "string" ? reason.trim().slice(0, 500) : undefined });
     return { success: true };
   } catch (e: any) {
     if (e.code === 11000) {
