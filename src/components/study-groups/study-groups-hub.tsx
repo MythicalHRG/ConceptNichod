@@ -154,6 +154,8 @@ export function StudyGroupsHub() {
         scheduleNext();
       }
     };
+    // The former clearInterval(interval) cleanup is now clearTimeout(timeout) for sequential polling.
+    // The former clearInterval(interval) cleanup is now clearTimeout(timeout) for sequential polling.
     const onVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
         if (timeout) clearTimeout(timeout);
