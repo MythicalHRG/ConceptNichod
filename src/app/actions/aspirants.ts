@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
 import { verifySessionCookie } from "@/lib/session";
+import { checkDistributedRateLimit } from "@/lib/distributed-rate-limiter";
 
 export type SearchFilters = {
     searchQuery?: string;
@@ -16,6 +17,9 @@ export async function searchAspirantsAction(filters: SearchFilters) {
     const rawSession = (await cookies()).get("user_session")?.value;
     const sessionUuid = verifySessionCookie(rawSession);
     if (!sessionUuid) throw new Error("Not authenticated");
+
+    const rateLimit = await checkDistributedRateLimit("aspirant-search:" + sessionUuid, 30, 60_000);
+    if (!rateLimit.success) throw new Error("Search limit reached. Please wait a minute before searching again.");
 
     const query: any = { uuid: { $ne: sessionUuid } }; // don't return the logged-in user
 
