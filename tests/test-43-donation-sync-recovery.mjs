@@ -26,10 +26,10 @@ test("verified donation can resume only an incomplete patron sync without changi
   assert.doesNotMatch(source, /status: "pending"\s*\},\s*\$unset:\s*\{ verifiedAt/);
 });
 
-function createInMemoryDonorStore({ failBeforeFirstWrite = false } = {}) {
+function createInMemoryDonorStore({ failBeforeFirstWrite = false, failAfterFirstCommittedWrite = true } = {}) {
   const records = new Map();
   let failBeforeWrite = failBeforeFirstWrite;
-  let failAfterFirstCommittedWrite = true;
+  let failAfterWrite = failAfterFirstCommittedWrite;
   let hideNextTransactionLookup = false;
   let forceDuplicateKeyOnNextExistingUpsert = false;
 
@@ -64,8 +64,8 @@ function createInMemoryDonorStore({ failBeforeFirstWrite = false } = {}) {
       records.set(uuid, record);
 
       // The database commits, but the network acknowledgement is lost.
-      if (failAfterFirstCommittedWrite) {
-        failAfterFirstCommittedWrite = false;
+      if (failAfterWrite) {
+        failAfterWrite = false;
         throw new Error("simulated MongoDB write acknowledgement timeout");
       }
       return copy(record);
@@ -182,7 +182,7 @@ test("₹500 donor sync survives timeout, recovers, and remains idempotent after
 
 
 test("pre-write donor failure retries by inserting the missing donor row exactly once", async () => {
-  const donorStore = createInMemoryDonorStore({ failBeforeFirstWrite: true });
+  const donorStore = createInMemoryDonorStore({ failBeforeFirstWrite: true, failAfterFirstCommittedWrite: false });
   const transaction = { _id: "transaction-pre-write-failure", donorRecordId: null };
   const donorData = { amount: 750, totalAmount: 750, donationCount: 1, transactionRef: String(transaction._id), isVisible: true, isPublic: true };
   await assert.rejects(syncDonationDonor({ tx: transaction, donorData, donorStore }), /simulated MongoDB pre-write failure/);
