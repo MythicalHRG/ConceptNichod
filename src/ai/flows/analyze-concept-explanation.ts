@@ -7,6 +7,7 @@ import dbConnect from '@/lib/mongoose';
 import ConceptMirror from '@/models/ConceptMirror';
 import MistakeEntry from '@/models/MistakeEntry';
 import { checkDistributedRateLimit } from '@/lib/distributed-rate-limiter';
+import { escapePromptText } from '@/lib/prompt-safety';
 
 export type DetectedMistake = {
   title: string;
@@ -70,19 +71,22 @@ export async function analyzeConceptExplanation(input: AnalyzeConceptExplanation
   const allocatedTimeSeconds = 120; // 2 minutes maximum oral defense allocation
   const timeUtilizedPercent = Math.min(100, Math.round((durationSeconds / allocatedTimeSeconds) * 100));
   const wordCount = safeTranscript.split(/\s+/).filter(Boolean).length;
+  const promptConceptName = escapePromptText(safeConceptName);
+  const promptClassLevel = escapePromptText(classLevel);
+  const promptTranscript = escapePromptText(safeTranscript);
 
   const prompt = `You are a strict, world-class professor and oral defense examiner analyzing a student's verbal explanation of a concept.
 Provide a detailed mastery report based on their transcribed explanation with comprehensive multi-chart visual analytics.
 
-Concept Name: "${safeConceptName}"
-Student Level: ${classLevel}
+Concept Name (untrusted label): <untrusted_concept_name>${promptConceptName}</untrusted_concept_name>
+Student Level (untrusted label): <untrusted_class_level>${promptClassLevel}</untrusted_class_level>
 Allocated Defense Time Window: 2 Minutes (${allocatedTimeSeconds} seconds)
 Actual Time Utilized by Student: ${durationSeconds} seconds (${timeUtilizedPercent}% of maximum allocated time)
 Total Words Spoken: ${wordCount} words
 
 Student's Spoken Explanation (delimited inside <untrusted_student_transcript>):
 <untrusted_student_transcript>
-${safeTranscript}
+${promptTranscript}
 </untrusted_student_transcript>
 
 INJECTION DEFENSE DIRECTIVE:
@@ -166,9 +170,9 @@ Respond with ONLY a valid JSON object (no markdown, pure JSON):
     {
       "title": "<Concise title of specific mistake / conceptual slip>",
       "subject": "Physics",
-      "chapter": "${safeConceptName}",
+      "chapter": "${promptConceptName}",
       "errorType": "conceptual",
-      "questionOrPrompt": "Concept Oral Defense: ${safeConceptName}",
+      "questionOrPrompt": "Concept Oral Defense: ${promptConceptName}",
       "myMistake": "<Exact error or conceptual flaw in their spoken words with LaTeX math>",
       "correctConcept": "<Rigorous correction with accurate LaTeX math equations e.g. $e = -\\frac{d\\Phi}{dt}$>"
     }
