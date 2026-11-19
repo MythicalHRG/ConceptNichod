@@ -8,4 +8,5 @@ test("public profile data never selects or exposes a user birth date", () => {
   const publicUserQuery = publicQuery.slice(0, publicQuery.indexOf("if (!user)"));
   assert.match(publicUserQuery, /\.select\("username fullName classLevel examFocus city instagram snapchat bio"\)/);
   assert.doesNotMatch(publicUserQuery, /password|email|uuid|dob|role|LoginIp|lastKnownIp/i);
+  assert.match(publicQuery, /\.select\("uuid username"\)/);
 });
