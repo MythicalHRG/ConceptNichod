@@ -87,8 +87,8 @@ export async function analyzeAnswersFlow(input: AnalyzeAnswersInput): Promise<{ 
   }).join('\n\n');
 
   const safeSpokenSection = (spokenAnswers || []).map((a, i) => {
-    const q = (a.question || "").slice(0, 500);
-    const ans = (a.answer || "").slice(0, 3000);
+    const q = escapePromptText((a.question || "").slice(0, 500));
+    const ans = escapePromptText((a.answer || "").slice(0, 3000));
     return `[Spoken Q${i+1}] ${q}\nUser Transcript: ${ans}`;
   }).join('\n\n');
 
