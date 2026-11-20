@@ -9,13 +9,13 @@ export async function syncDonationDonor({ tx, donorData, donorStore }) {
   if (!tx || tx._id == null || String(tx._id).trim() === "") {
     throw new Error("Donation transaction ID is required for donor synchronization.");
   }
-  const transactionRef = String(tx._id).trim();
+  const transactionRef = String(tx._id);
   const existingDonor = tx.donorRecordId
     ? null
     : await donorStore.findOneByTransactionRef(transactionRef);
   const donorUuid =
     existingDonor?.uuid ||
-    createHash("sha256").update(`conceptnichod:donation:${transactionRef}`).digest("hex");
+    createHash("sha256").update(`conceptnichod:donation:${tx._id}`).digest("hex");
 
   let donor;
   if (tx.donorRecordId) {
