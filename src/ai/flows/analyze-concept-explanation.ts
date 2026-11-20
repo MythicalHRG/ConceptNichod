@@ -278,26 +278,6 @@ CRITICAL: pie_chart_data values MUST sum to exactly 100.`;
   const fluffItem = pieChartData.find((p) => p.name.toLowerCase() === 'fluff');
   const fluffPercentage = fluffItem ? fluffItem.value : 0;
 
-  // Fallback defaults if LLM omitted additional diverse charts
-  if (barChartData.length === 0) {
-    barChartData = [
-      { name: "Definitions", score: Math.min(100, Math.round(overallScore * 1.04)) },
-      { name: "Core Principles", score: Math.round(overallScore) },
-      { name: "Application", score: Math.max(20, Math.round(overallScore * 0.92)) },
-      { name: "Edge Cases", score: Math.max(20, Math.round(overallScore * 0.85)) },
-    ];
-  }
-
-  if (polynomialChartData.length === 0) {
-    polynomialChartData = [
-      { step: "Initial Recall", score: Math.max(15, Math.round(overallScore * 0.7)) },
-      { step: "Concept Framing", score: Math.max(25, Math.round(overallScore * 0.85)) },
-      { step: "Analytical Nuance", score: Math.min(100, Math.round(overallScore * 0.95)) },
-      { step: "Synthesis & Proof", score: Math.round(overallScore) },
-      { step: "Final Mastery", score: Math.min(100, Math.round(overallScore * 1.08)) },
-    ];
-  }
-
   const output: MasteryReportOutput = {
     feedback_summary: feedbackSummary,
     radar_chart_data: radarChartData,
@@ -309,6 +289,26 @@ CRITICAL: pie_chart_data values MUST sum to exactly 100.`;
     fluffPercentage,
     detected_mistakes: detectedMistakes,
   };
+
+  // Fallback defaults if LLM omitted additional diverse charts
+  if (!output.bar_chart_data || output.bar_chart_data.length === 0) {
+    output.bar_chart_data = [
+      { name: "Definitions", score: Math.min(100, Math.round(overallScore * 1.04)) },
+      { name: "Core Principles", score: Math.round(overallScore) },
+      { name: "Application", score: Math.max(20, Math.round(overallScore * 0.92)) },
+      { name: "Edge Cases", score: Math.max(20, Math.round(overallScore * 0.85)) },
+    ];
+  }
+
+  if (!output.polynomial_chart_data || output.polynomial_chart_data.length === 0) {
+    output.polynomial_chart_data = [
+      { step: "Initial Recall", score: Math.max(15, Math.round(overallScore * 0.7)) },
+      { step: "Concept Framing", score: Math.max(25, Math.round(overallScore * 0.85)) },
+      { step: "Analytical Nuance", score: Math.min(100, Math.round(overallScore * 0.95)) },
+      { step: "Synthesis & Proof", score: Math.round(overallScore) },
+      { step: "Final Mastery", score: Math.min(100, Math.round(overallScore * 1.08)) },
+    ];
+  }
 
   // Persist session to MongoDB for public profile analytics and mastery tracking
   try {

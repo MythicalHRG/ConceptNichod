@@ -94,7 +94,7 @@ export async function POST(req: Request) {
     const ip = getClientIp(req.headers);
 
     // Blacklist enforcement (IP + raw & Gmail-canonicalized email)
-    const isIpBanned = await Blacklist.findOne({ type: 'ip', value: ip }).select('_id').lean();
+    const isIpBanned = await Blacklist.findOne({ type: "ip", value: ip }).select("_id").lean();
     if (isIpBanned) {
       return NextResponse.json({ error: 'Access denied: Your IP address is banned.' }, { status: 403 });
     }
@@ -156,7 +156,7 @@ export async function POST(req: Request) {
         }
       } else {
         // Block reservation of owner email (including Gmail dot variants)
-        if (email === PLATFORM_OWNER_EMAIL || normalizedEmail === normalizeEmail(PLATFORM_OWNER_EMAIL)) {
+        if (email === 'mythicalhrg@gmail.com' || email === PLATFORM_OWNER_EMAIL || normalizedEmail === normalizeEmail(PLATFORM_OWNER_EMAIL)) {
           return NextResponse.json({ error: 'This email is reserved for system administration.' }, { status: 400 });
         }
 
@@ -285,13 +285,17 @@ export async function POST(req: Request) {
 
     if (action === 'verify') {
       // IP Rate limiting for verification attempts: 15 attempts per 15 minutes
-      const ipUnavailable = ip === '127.0.0.1' || ip === 'unknown';
+      const ipUnavailable = ip === "127.0.0.1" || ip === "unknown";
       const verifyRateLimit = ipUnavailable
-        ? await checkDistributedRateLimit(`otp:verify:ip:${ip}:${normalizedEmail}`, 15, 15 * 60 * 1000)
+        ? await checkDistributedRateLimit(`otp:verify:ip:${ip}:${email}`, 15, 15 * 60 * 1000)
         : await checkDistributedRateLimit(`otp:verify:${ip}`, 15, 15 * 60 * 1000);
-      const verifyEmailRateLimit = await checkDistributedRateLimit(`otp:verify:email:${normalizedEmail}`, 15, 15 * 60 * 1000);
-      if (!verifyRateLimit.success || !verifyEmailRateLimit.success) {
-        const retryMs = Math.max(verifyRateLimit.resetMs, verifyEmailRateLimit.resetMs);
+      const verifyEmailRateLimit = await checkDistributedRateLimit(`otp:verify:email:${email}`, 15, 15 * 60 * 1000);
+      const verifyCanonicalEmailRateLimit =
+        normalizedEmail !== email
+          ? await checkDistributedRateLimit(`otp:verify:email:${normalizedEmail}`, 15, 15 * 60 * 1000)
+          : verifyEmailRateLimit;
+      if (!verifyRateLimit.success || !verifyEmailRateLimit.success || !verifyCanonicalEmailRateLimit.success) {
+        const retryMs = Math.max(verifyRateLimit.resetMs, verifyEmailRateLimit.resetMs, verifyCanonicalEmailRateLimit.resetMs);
         return NextResponse.json(
           { error: 'Too many verification attempts from this IP. Please wait a few minutes before trying again.' },
           { status: 429, headers: { 'Retry-After': String(Math.max(1, Math.ceil(retryMs / 1000))) } }
