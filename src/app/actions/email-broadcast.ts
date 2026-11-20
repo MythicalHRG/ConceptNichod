@@ -1,15 +1,13 @@
 "use server";
 
-
-import { isPlatformOwner } from "@/lib/owner-access";
+import { isPlatformOwner, PLATFORM_OWNER_EMAIL } from "@/lib/owner-access";
 import { cookies } from "next/headers";
 import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
 import EmailBroadcast from "@/models/EmailBroadcast";
 import nodemailer from "nodemailer";
 import { verifySessionCookie } from "@/lib/session";
-
-const ADMIN_USERNAME = "mythicalhrg";
+import { checkDistributedRateLimit } from "@/lib/distributed-rate-limiter";
 
 function escapeHtml(str: string): string {
   return (str || "")
@@ -26,7 +24,9 @@ async function verifyOwner() {
   const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
 
-  const user = await User.findOne({ uuid: sessionUuid }).lean();
+  const user = await User.findOne({ uuid: sessionUuid })
+    .select("uuid username email role")
+    .lean();
   if (!isPlatformOwner(user)) {
     throw new Error("Forbidden: Admin access only");
   }
@@ -35,6 +35,15 @@ async function verifyOwner() {
 
 export async function sendEmailBroadcastAction(formData: FormData) {
   await verifyOwner();
+
+  if (!(formData instanceof FormData)) {
+    throw new Error("Invalid email broadcast submission.");
+  }
+
+  const ownerRateCheck = await checkDistributedRateLimit("email-broadcast:owner", 10, 60 * 60 * 1000);
+  if (!ownerRateCheck.success) {
+    throw new Error("Too many email broadcasts sent recently. Please wait before sending another.");
+  }
 
   const readText = (key: string) => {
     const value = formData.get(key);
@@ -48,11 +57,11 @@ export async function sendEmailBroadcastAction(formData: FormData) {
   const body = readText("body");
   const rawAttachmentUrl = readText("attachmentUrl");
   const rawAttachmentName = readText("attachmentName") || "attachment";
-  const attachmentName = rawAttachmentName.replace(/[\r\n\"]/g, "").replace(/[^A-Za-z0-9._ -]/g, "_").slice(0, 120) || "attachment";
+  const attachmentName = rawAttachmentName.replace(/[\r\n\\"]/g, "").replace(/[^A-Za-z0-9._ -]/g, "_").slice(0, 120) || "attachment";
 
   if (recipientType !== "all" && recipientType !== "custom") throw new Error("Invalid recipient selection.");
   if (!subject || subject.length > 180 || /[\r\n]/.test(subject)) throw new Error("Subject must be 1-180 characters and cannot contain line breaks.");
-  if (!body || body.length > 20000) throw new Error("Email body must contain between 1 and 20,000 characters.");
+  if (!body || !body.trim() || body.length > 20000) throw new Error("Email body must contain between 1 and 20,000 characters.");
 
   let attachmentUrl: string | null = null;
   if (rawAttachmentUrl && rawAttachmentUrl.trim().length > 0) {
@@ -70,18 +79,15 @@ export async function sendEmailBroadcastAction(formData: FormData) {
       }
       attachmentUrl = parsedUrl.toString();
     } catch (err: any) {
-      throw new Error(err.message || "Invalid attachment URL provided.");
+      throw new Error(err?.message || "Invalid attachment URL provided.");
     }
   }
 
-  if (!subject || !body) {
-    throw new Error("Subject and Body are required.");
-  }
-
-  const senderUser =
+  const senderUser = (
     process.env.EMAIL_SERVER_USER ||
     process.env.GMAIL_USER ||
-    "mythicalhrg@gmail.com";
+    PLATFORM_OWNER_EMAIL
+  ).trim();
 
   const senderPass =
     process.env.EMAIL_SERVER_PASSWORD ||
@@ -94,14 +100,18 @@ export async function sendEmailBroadcastAction(formData: FormData) {
     );
   }
 
-  // Determine recipients
+  // Determine recipients (deduplicated)
   let toRecipients: string[] = [];
   if (recipientType === "all") {
     const allUsers = await User.find({}).select("email").limit(501).lean();
     if (allUsers.length > 500) throw new Error("Gmail broadcasts are limited to 500 recipients per message.");
-    toRecipients = allUsers.map((u) => String(u.email || "").toLowerCase().trim()).filter(Boolean);
+    toRecipients = Array.from(
+      new Set(allUsers.map((u) => String(u.email || "").toLowerCase().trim()).filter(Boolean))
+    );
   } else {
-    toRecipients = customTo.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+    toRecipients = Array.from(
+      new Set(customTo.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean))
+    );
   }
   const emailPattern = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/;
   const maxToRecipients = 500;
@@ -113,15 +123,20 @@ export async function sendEmailBroadcastAction(formData: FormData) {
     throw new Error("No valid recipient email addresses found.");
   }
 
-  const ccRecipients = ccStr.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
-  const bccRecipients = bccStr.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+  const ccRecipients = Array.from(
+    new Set(ccStr.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean))
+  );
+  const bccRecipients = Array.from(
+    new Set(bccStr.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean))
+  );
   if (ccRecipients.length > 50 || bccRecipients.length > 50 ||
       ccRecipients.some((email) => !emailPattern.test(email)) ||
       bccRecipients.some((email) => !emailPattern.test(email))) {
     throw new Error("CC and BCC lists must each contain at most 50 valid email addresses.");
   }
+  const allModeBcc = Array.from(new Set([...toRecipients, ...bccRecipients]));
   const totalRecipientCount = recipientType === "all"
-    ? new Set([...toRecipients, ...bccRecipients]).size
+    ? allModeBcc.length + ccRecipients.length
     : toRecipients.length + ccRecipients.length + bccRecipients.length;
   if (totalRecipientCount > 500) {
     throw new Error("A single Gmail broadcast cannot exceed 500 total recipients.");
@@ -133,6 +148,9 @@ export async function sendEmailBroadcastAction(formData: FormData) {
       user: senderUser,
       pass: senderPass,
     },
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 15_000,
   });
 
   // Prepare HTML content
@@ -140,7 +158,7 @@ export async function sendEmailBroadcastAction(formData: FormData) {
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 650px; margin: 0 auto; padding: 24px; border: 1px solid #e4e4e7; border-radius: 10px; color: #18181b;">
       <div style="border-bottom: 2px solid #6366f1; padding-bottom: 12px; margin-bottom: 20px;">
         <h2 style="margin: 0; color: #4f46e5; font-size: 20px;">ConceptNichod Official Broadcast</h2>
-        <p style="margin: 4px 0 0; color: #71717a; font-size: 13px;">Sent from ${senderUser}</p>
+        <p style="margin: 4px 0 0; color: #71717a; font-size: 13px;">Sent from ${escapeHtml(senderUser)}</p>
       </div>
       <div style="font-size: 15px; line-height: 1.6; color: #27272a; white-space: pre-wrap;">
         ${escapeHtml(body)}
@@ -167,8 +185,9 @@ export async function sendEmailBroadcastAction(formData: FormData) {
   };
 
   if (recipientType === "all") {
-    mailOptions.to = senderUser; // To: ConceptNichod <mythicalhrg@gmail.com>
-    mailOptions.bcc = Array.from(new Set([...toRecipients, ...bccRecipients]));
+    mailOptions.to = senderUser;
+    if (ccRecipients.length > 0) mailOptions.cc = ccRecipients;
+    mailOptions.bcc = allModeBcc;
   } else {
     mailOptions.to = toRecipients;
     if (ccRecipients.length > 0) mailOptions.cc = ccRecipients;
@@ -184,49 +203,52 @@ export async function sendEmailBroadcastAction(formData: FormData) {
     ];
   }
 
+  const loggedTo = recipientType === "all" ? [senderUser] : toRecipients;
+  const loggedBcc = recipientType === "all" ? allModeBcc : bccRecipients;
+
   try {
     const info = await transporter.sendMail(mailOptions);
 
     await EmailBroadcast.create({
       sender: senderUser,
-      to: recipientType === "all" ? [senderUser] : toRecipients,
+      to: loggedTo,
       cc: ccRecipients,
-      bcc: recipientType === "all" ? toRecipients : bccRecipients,
+      bcc: loggedBcc,
       subject,
       body,
       attachmentUrl: attachmentUrl || undefined,
       attachmentName: attachmentUrl ? attachmentName : undefined,
-      sentCount: toRecipients.length,
+      sentCount: totalRecipientCount,
       status: "sent",
     });
 
     return {
       success: true,
       messageId: info.messageId,
-      recipientCount: toRecipients.length,
-      sentCount: toRecipients.length,
+      recipientCount: totalRecipientCount,
+      sentCount: totalRecipientCount,
     };
   } catch (error: any) {
     console.error("Nodemailer broadcast error:", error);
 
-    // Save failed attempt
+    // Save failed attempt with privacy-consistent recipient fields
     try {
       await EmailBroadcast.create({
         sender: senderUser,
-        to: toRecipients,
+        to: loggedTo,
         cc: ccRecipients,
-        bcc: bccRecipients,
+        bcc: loggedBcc,
         subject,
         body,
         attachmentUrl: attachmentUrl || undefined,
         attachmentName: attachmentUrl ? attachmentName : undefined,
         sentCount: 0,
         status: "failed",
-        error: error.message,
+        error: String(error?.message || "SMTP delivery failed").slice(0, 2000),
       });
     } catch {}
 
-    throw new Error(`Email sending failed: ${error.message}`);
+    throw new Error("Email broadcast failed to send. Please check SMTP credentials and try again.");
   }
 }
 

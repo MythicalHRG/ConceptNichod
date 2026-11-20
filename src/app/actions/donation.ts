@@ -1,7 +1,7 @@
 // src/app/actions/donation.ts
 "use server";
 
-
+import mongoose from "mongoose";
 import { isPlatformOwner } from "@/lib/owner-access";
 import { revalidatePath } from "next/cache";
 import connectToDatabase from "@/lib/mongoose";
@@ -9,12 +9,14 @@ import DonationTransaction from "@/models/DonationTransaction";
 import Donor from "@/models/Donor";
 import DonationSetting from "@/models/DonationSetting";
 import User from "@/models/User";
+import Blacklist from "@/models/Blacklist";
 import { cookies } from "next/headers";
 import { verifySessionCookie } from "@/lib/session";
 import crypto from "crypto";
 import { syncDonationDonor } from "@/lib/donation-donor-sync.js";
 import { getClientIp } from "@/lib/ip";
 import { checkDistributedRateLimit } from "@/lib/distributed-rate-limiter";
+import { normalizeEmail } from "@/lib/email-utils";
 import {
   validateDonationSubmission,
   validateAdminVerifiedAmount,
@@ -25,7 +27,41 @@ import {
 } from "@/lib/donation-validation";
 
 const VALID_TIERS: PatronTier[] = ["LEGEND", "DIAMOND", "GOLD", "SILVER", "SUPPORTER"];
-const DONATIONS_ENABLED = process.env.DONATIONS_ENABLED === "true";
+
+function createDonorStore() {
+  return {
+    findOneByTransactionRef: async (transactionRef: string) =>
+      await Donor.findOne({ transactionRef }),
+    upsertByUuid: async (donorUuid: string, data: Record<string, unknown>) =>
+      await Donor.findOneAndUpdate(
+        { uuid: donorUuid },
+        { $set: data, $setOnInsert: { uuid: donorUuid } },
+        { upsert: true, new: true, runValidators: true }
+      ),
+    updateByUuid: async (donorUuid: string, data: Record<string, unknown>) =>
+      await Donor.findOneAndUpdate(
+        { uuid: donorUuid },
+        { $set: data },
+        { new: true, runValidators: true }
+      ),
+    updateById: async (donorId: string, data: Record<string, unknown>) => {
+      if (!mongoose.isValidObjectId(donorId)) return null;
+      return await Donor.findByIdAndUpdate(
+        donorId,
+        { $set: data },
+        { new: true, runValidators: true }
+      );
+    },
+  };
+}
+
+function getSafeAdminError(error: unknown, fallback: string): string {
+  const message = error instanceof Error ? error.message : "";
+  if (message.startsWith("Unauthorized") || message.startsWith("Forbidden")) {
+    return message;
+  }
+  return fallback;
+}
 
 async function requireOwnerSession() {
   await connectToDatabase();
@@ -42,20 +78,11 @@ async function requireOwnerSession() {
 export async function getPublicDonationPageData() {
   try {
     await connectToDatabase();
+    const DONATIONS_ENABLED = process.env.DONATIONS_ENABLED === "true";
 
-    let settings = await DonationSetting.findOne().lean();
-    if (!settings) {
-      const created = await DonationSetting.create({
-        upiId: "",
-        payeeName: process.env.NEXT_PUBLIC_UPI_NAME || "ConceptNichod",
-        qrCodeUrl: "",
-        isEnabled: false,
-      });
-      settings = created.toObject();
-    }
-
-    const configuredVpa = normalizeVpa(settings.upiId || "");
-    const donationsAvailable = DONATIONS_ENABLED && Boolean(settings.isEnabled) && Boolean(configuredVpa);
+    const settings = await DonationSetting.findOne().lean();
+    const configuredVpa = normalizeVpa(settings?.upiId || "");
+    const donationsAvailable = DONATIONS_ENABLED && Boolean(settings?.isEnabled) && Boolean(configuredVpa);
 
     const [patronsRaw, totalRaisedAgg] = await Promise.all([
       Donor.find({ isVisible: true, isPublic: true, amount: { $gt: 0 } })
@@ -65,7 +92,7 @@ export async function getPublicDonationPageData() {
         .lean(),
       Donor.aggregate([
         { $match: { isVisible: true, isPublic: true, amount: { $gt: 0 } } },
-        { $group: { _id: null, totalRaised: { $sum: "$amount" } } },
+        { $group: { _id: null, totalRaised: { $sum: "$amount" }, totalPatrons: { $sum: 1 } } },
       ]),
     ]);
 
@@ -82,36 +109,37 @@ export async function getPublicDonationPageData() {
     }));
 
     const totalRaised = Number(totalRaisedAgg[0]?.totalRaised || 0);
+    const totalPatrons = Number(totalRaisedAgg[0]?.totalPatrons ?? patrons.length);
 
     return {
       success: true,
       settings: {
         upiId: donationsAvailable ? configuredVpa || "" : "",
-        payeeName: settings.payeeName || "ConceptNichod",
+        payeeName: settings?.payeeName || process.env.NEXT_PUBLIC_UPI_NAME || "ConceptNichod",
         qrCodeUrl: "",
         isEnabled: donationsAvailable,
         headline:
-          settings.headline || "Support ConceptNichod & Join the Hall of Patrons",
+          settings?.headline || "Support ConceptNichod & Join the Hall of Patrons",
         subtext:
-          settings.subtext ||
-          "Scan the UPI QR code to contribute any amount, then submit your 12-digit UTR and Transaction ID below for manual Admin verification.",
+          settings?.subtext ||
+          "Pay using any UPI app to the verified UPI ID above, then submit your 12-digit UTR and Transaction ID below for manual Admin verification.",
       },
       patrons,
       totalRaised,
-      totalPatrons: patrons.length,
+      totalPatrons,
     };
   } catch (error) {
     console.error("[getPublicDonationPageData] Error:", error);
     return {
       success: false,
       settings: {
-        upiId: process.env.NEXT_PUBLIC_UPI_ID || "",
+        upiId: "",
         payeeName: process.env.NEXT_PUBLIC_UPI_NAME || "ConceptNichod",
         qrCodeUrl: "",
         isEnabled: false,
         headline: "Support ConceptNichod & Join the Hall of Patrons",
         subtext:
-          "Scan the UPI QR code to contribute any amount, then submit your 12-digit UTR and Transaction ID below.",
+          "Pay using any UPI app to the verified UPI ID above, then submit your 12-digit UTR and Transaction ID below.",
       },
       patrons: [],
       totalRaised: 0,
@@ -133,10 +161,15 @@ export async function submitDonationTransaction(formData: {
   honeypot?: string;
 }) {
   try {
-    if (formData.honeypot && formData.honeypot.trim() !== "") {
+    if (!formData || typeof formData !== "object") {
+      return { success: false, error: "Invalid submission details." };
+    }
+
+    if (typeof formData.honeypot === "string" && formData.honeypot.trim() !== "") {
       return { success: true, message: "Your UTR & Transaction ID have been sent to the Admin Panel for verification." };
     }
 
+    const DONATIONS_ENABLED = process.env.DONATIONS_ENABLED === "true";
     if (!DONATIONS_ENABLED) {
       return { success: false, error: "Donations are temporarily unavailable while the recipient account is being confirmed." };
     }
@@ -150,6 +183,13 @@ export async function submitDonationTransaction(formData: {
     const clientIp = await getClientIp();
 
     await connectToDatabase();
+
+    // Enforce IP blacklist before allowing queue writes
+    const isIpBanned = await Blacklist.findOne({ type: "ip", value: clientIp }).select("_id").lean();
+    if (isIpBanned) {
+      return { success: false, error: "Access denied: Your IP address is banned." };
+    }
+
     const settings = await DonationSetting.findOne().select("upiId isEnabled").lean();
     const configuredVpa = normalizeVpa((settings as any)?.upiId || "");
     if (!settings?.isEnabled || !configuredVpa) {
@@ -163,6 +203,33 @@ export async function submitDonationTransaction(formData: {
       return { success: false, error: "Too many submissions from your network. Please wait 15 minutes before trying again." };
     }
 
+    const sessionUuid = verifySessionCookie((await cookies()).get("user_session")?.value);
+    let userId: string | null = null;
+    let username: string | null = null;
+    if (sessionUuid) {
+      const userRateLimit = await checkDistributedRateLimit(`donate_submit:user:${sessionUuid}`, 5, 15 * 60 * 1000);
+      if (!userRateLimit.success) {
+        return { success: false, error: "Too many submissions from your account. Please wait 15 minutes before trying again." };
+      }
+      const dbUser = await User.findOne({ uuid: sessionUuid }).select("uuid username email").lean();
+      if (dbUser) {
+        const emailVals = Array.from(
+          new Set([String(dbUser.email || "").toLowerCase(), normalizeEmail(String(dbUser.email || ""))].filter(Boolean))
+        );
+        const userBanned = await Blacklist.findOne({
+          $or: [
+            ...(emailVals.length > 0 ? [{ type: "email", value: { $in: emailVals } }] : []),
+            ...(dbUser.username ? [{ type: "username", value: String(dbUser.username).toLowerCase() }] : []),
+          ],
+        }).select("_id").lean();
+        if (userBanned) {
+          return { success: false, error: "Access denied: Your account has been suspended." };
+        }
+        userId = sessionUuid;
+        username = (dbUser as any).username || null;
+      }
+    }
+
     const existing = await DonationTransaction.findOne({
       $or: [{ utr }, { transactionId }],
     }).select("utr transactionId status").lean();
@@ -171,17 +238,6 @@ export async function submitDonationTransaction(formData: {
       const dupField = existing.utr === utr ? "12-digit UTR" : "Transaction ID";
       const existingStatus = String(existing.status || "pending").toUpperCase();
       return { success: false, error: "This " + dupField + " has already been submitted (Status: " + existingStatus + ")." };
-    }
-
-    const sessionUuid = verifySessionCookie((await cookies()).get("user_session")?.value);
-    let userId: string | null = null;
-    let username: string | null = null;
-    if (sessionUuid) {
-      const dbUser = await User.findOne({ uuid: sessionUuid }).select("uuid username").lean();
-      if (dbUser) {
-        userId = sessionUuid;
-        username = (dbUser as any).username || null;
-      }
     }
 
     const createdTx = await DonationTransaction.create({
@@ -237,8 +293,8 @@ export async function getAdminDonationDashboard(filterStatus?: string, search?: 
       queryParts.push({ status: filterStatus });
     }
 
-    if (search && search.trim() !== "") {
-      const escaped = search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (typeof search === "string" && search.trim() !== "") {
+      const escaped = search.trim().slice(0, 100).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const regex = new RegExp(escaped, "i");
       queryParts.push({ $or: [
         { utr: regex },
@@ -337,7 +393,7 @@ export async function getAdminDonationDashboard(filterStatus?: string, search?: 
     console.error("[getAdminDonationDashboard] Error:", error);
     return {
       success: false,
-      error: error.message || "Failed to load Admin Donation Dashboard.",
+      error: getSafeAdminError(error, "Failed to load Admin Donation Dashboard."),
     };
   }
 }
@@ -356,6 +412,10 @@ export async function adminVerifyDonationAndSetAmount(payload: {
 }) {
   try {
     const adminUser = await requireOwnerSession();
+
+    if (!payload || typeof payload !== "object" || typeof payload.transactionDbId !== "string" || !mongoose.isValidObjectId(payload.transactionDbId)) {
+      return { success: false, error: "Invalid donation transaction ID." };
+    }
 
     const amountCheck = validateAdminVerifiedAmount(payload.verifiedAmount);
     if (!amountCheck.valid || !amountCheck.data) {
@@ -401,6 +461,7 @@ export async function adminVerifyDonationAndSetAmount(payload: {
         : computePatronTier(confirmedAmount);
 
     if (!isDonorSyncRecovery) {
+      const shouldPublish = Boolean(payload.publishToHallOfPatrons);
       // Atomically claim a pending transaction so concurrent approvals cannot both proceed.
       const claimedTx = await DonationTransaction.findOneAndUpdate(
         {
@@ -418,8 +479,10 @@ export async function adminVerifyDonationAndSetAmount(payload: {
             recipientVpa: configuredVpa,
             verificationMethod: "manual-bank-reconciliation",
             verifiedAmount: confirmedAmount,
+            amount: confirmedAmount,
             patronTier: tier,
-            isPublishedToPatrons: Boolean(payload.publishToHallOfPatrons),
+            isPublishedToPatrons: shouldPublish,
+            isPublic: shouldPublish,
             adminNote: sanitizeDonationText(payload.adminNote || "", 500),
             verifiedBy: (adminUser as any).username || "Admin",
             verifiedAt: new Date(),
@@ -461,37 +524,15 @@ export async function adminVerifyDonationAndSetAmount(payload: {
       await syncDonationDonor({
         tx,
         donorData: patronData,
-        donorStore: {
-          findOneByTransactionRef: async (transactionRef: string) =>
-            await Donor.findOne({ transactionRef }),
-          upsertByUuid: async (donorUuid: string, data: Record<string, unknown>) =>
-            await Donor.findOneAndUpdate(
-              { uuid: donorUuid },
-              { $set: data, $setOnInsert: { uuid: donorUuid } },
-              { upsert: true, new: true, runValidators: true }
-            ),
-          updateByUuid: async (donorUuid: string, data: Record<string, unknown>) =>
-            await Donor.findOneAndUpdate(
-              { uuid: donorUuid },
-              { $set: data },
-              { new: true, runValidators: true }
-            ),
-          updateById: async (donorId: string, data: Record<string, unknown>) =>
-            await Donor.findByIdAndUpdate(
-              donorId,
-              data,
-              { new: true, runValidators: true }
-            ),
-        },
+        donorStore: createDonorStore(),
       });
-    } else if (tx.donorRecordId) {
-      await Donor.findByIdAndUpdate(tx.donorRecordId, { isVisible: false, isPublic: false });
+    } else if (tx.donorRecordId && mongoose.isValidObjectId(tx.donorRecordId)) {
+      await Donor.findByIdAndUpdate(tx.donorRecordId, { $set: { isVisible: false, isPublic: false } });
     }
 
     // Keep the bank-verified status if patron sync fails. A retry is safe because
     // the deterministic donor UUID prevents duplicate credits.
     await tx.save();
-
 
     revalidatePath("/donate");
     revalidatePath("/dashboard/admin");
@@ -507,7 +548,7 @@ export async function adminVerifyDonationAndSetAmount(payload: {
     console.error("[adminVerifyDonationAndSetAmount] Error:", error);
     return {
       success: false,
-      error: error.message || "Failed to verify donation.",
+      error: getSafeAdminError(error, "Failed to verify donation."),
     };
   }
 }
@@ -522,12 +563,16 @@ export async function adminToggleHallOfPatrons(
   try {
     const adminUser = await requireOwnerSession();
 
+    if (typeof transactionDbId !== "string" || !mongoose.isValidObjectId(transactionDbId)) {
+      return { success: false, error: "Invalid transaction ID." };
+    }
+
     const tx = await DonationTransaction.findById(transactionDbId);
     if (!tx) {
       return { success: false, error: "Transaction record not found." };
     }
 
-    if (tx.status !== "verified" || !tx.verifiedAmount || tx.verifiedAmount <= 0) {
+    if (tx.status !== "verified" || !tx.verifiedAmount || !Number.isFinite(tx.verifiedAmount) || tx.verifiedAmount <= 0) {
       return {
         success: false,
         error: "You must verify the UTR and enter a valid ₹ amount before adding to the Hall of Patrons.",
@@ -540,47 +585,35 @@ export async function adminToggleHallOfPatrons(
     tx.patronTier = tier;
 
     if (publish) {
-      if (tx.donorRecordId) {
-        await Donor.findByIdAndUpdate(tx.donorRecordId, {
-          name: tx.donorName,
-          amount: tx.verifiedAmount,
-          tier,
-          message: tx.message || "",
-          isAnonymous: tx.isAnonymous,
-          isVisible: true,
-          isPublic: true,
-          totalAmount: tx.verifiedAmount,
-          donationCount: 1,
-          latestMessage: tx.message || "",
-          lastDonatedAt: tx.createdAt || new Date(),
-        });
-      } else {
-        const createdDonor = await Donor.create({
-          uuid: crypto.randomUUID(),
-          userId: tx.userId || null,
-          userUuid: tx.userId || null,
-          username: tx.username || null,
-          name: tx.donorName,
-          amount: tx.verifiedAmount,
-          tier,
-          message: tx.message || "",
-          isAnonymous: tx.isAnonymous,
-          isVisible: true,
-          utr: tx.utr,
-          transactionId: tx.transactionId,
-          transactionRef: String(tx._id),
-          verifiedBy: (adminUser as any).username || "Admin",
-          donatedAt: tx.createdAt || new Date(),
-          lastDonatedAt: tx.createdAt || new Date(),
-          totalAmount: tx.verifiedAmount,
-          donationCount: 1,
-          latestMessage: tx.message || "",
-          isPublic: true,
-        });
-        tx.donorRecordId = String(createdDonor._id);
-      }
-    } else if (tx.donorRecordId) {
-      await Donor.findByIdAndUpdate(tx.donorRecordId, { isVisible: false });
+      const patronData = {
+        userId: tx.userId || null,
+        userUuid: tx.userId || null,
+        username: tx.username || null,
+        name: tx.donorName,
+        amount: tx.verifiedAmount,
+        tier,
+        message: tx.message || "",
+        isAnonymous: tx.isAnonymous,
+        isVisible: true,
+        utr: tx.utr,
+        transactionId: tx.transactionId || undefined,
+        transactionRef: String(tx._id),
+        verifiedBy: tx.verifiedBy || (adminUser as any).username || "Admin",
+        donatedAt: tx.createdAt || new Date(),
+        lastDonatedAt: tx.createdAt || new Date(),
+        totalAmount: tx.verifiedAmount,
+        donationCount: 1,
+        latestMessage: tx.message || "",
+        isPublic: true,
+      };
+
+      await syncDonationDonor({
+        tx,
+        donorData: patronData,
+        donorStore: createDonorStore(),
+      });
+    } else if (tx.donorRecordId && mongoose.isValidObjectId(tx.donorRecordId)) {
+      await Donor.findByIdAndUpdate(tx.donorRecordId, { $set: { isVisible: false, isPublic: false } });
     }
 
     await tx.save();
@@ -599,7 +632,7 @@ export async function adminToggleHallOfPatrons(
     console.error("[adminToggleHallOfPatrons] Error:", error);
     return {
       success: false,
-      error: error.message || "Failed to toggle Hall of Patrons status.",
+      error: getSafeAdminError(error, "Failed to toggle Hall of Patrons status."),
     };
   }
 }
@@ -614,6 +647,10 @@ export async function adminRejectDonationTransaction(
   try {
     const adminUser = await requireOwnerSession();
 
+    if (typeof transactionDbId !== "string" || !mongoose.isValidObjectId(transactionDbId)) {
+      return { success: false, error: "Invalid transaction ID." };
+    }
+
     const tx = await DonationTransaction.findById(transactionDbId);
     if (!tx) {
       return { success: false, error: "Transaction not found." };
@@ -621,7 +658,11 @@ export async function adminRejectDonationTransaction(
 
     tx.status = "rejected";
     tx.verifiedAmount = null;
+    tx.amount = null;
     tx.patronTier = null;
+    tx.bankReference = null;
+    tx.recipientVpa = null;
+    tx.verificationMethod = null;
     tx.isPublishedToPatrons = false;
     tx.isPublic = false;
     tx.adminNote = sanitizeDonationText(
@@ -631,8 +672,8 @@ export async function adminRejectDonationTransaction(
     tx.verifiedBy = (adminUser as any).username || "Admin";
     tx.verifiedAt = new Date();
 
-    if (tx.donorRecordId) {
-      await Donor.findByIdAndUpdate(tx.donorRecordId, { isVisible: false });
+    if (tx.donorRecordId && mongoose.isValidObjectId(tx.donorRecordId)) {
+      await Donor.findByIdAndUpdate(tx.donorRecordId, { $set: { isVisible: false, isPublic: false } });
     }
 
     await tx.save();
@@ -649,7 +690,7 @@ export async function adminRejectDonationTransaction(
     console.error("[adminRejectDonationTransaction] Error:", error);
     return {
       success: false,
-      error: error.message || "Failed to reject transaction.",
+      error: getSafeAdminError(error, "Failed to reject donation."),
     };
   }
 }
@@ -668,13 +709,17 @@ export async function adminUpdateDonationSettings(input: {
   try {
     const adminUser = await requireOwnerSession();
 
-    const upiId = sanitizeDonationText(input.upiId, 100);
+    if (!input || typeof input !== "object") {
+      return { success: false, error: "Invalid UPI settings payload." };
+    }
+
+    const upiId = normalizeVpa(sanitizeDonationText(input.upiId, 100));
     const payeeName = sanitizeDonationText(input.payeeName, 80);
     const qrCodeUrl = sanitizeDonationText(input.qrCodeUrl || "", 300);
     const isSafeQrCodeUrl = !qrCodeUrl || (qrCodeUrl.startsWith("/") && !qrCodeUrl.startsWith("//")) || (() => { try { return new URL(qrCodeUrl).protocol === "https:"; } catch { return false; } })();
     if (!isSafeQrCodeUrl) return { success: false, error: "QR image must use a same-site path or a secure HTTPS image URL." };
 
-    if (!/^[a-zA-Z0-9._-]{2,100}@[a-zA-Z0-9.-]{2,64}$/.test(upiId)) {
+    if (!upiId) {
       return { success: false, error: "Please enter a valid UPI ID (e.g. name@upi)." };
     }
 
@@ -703,9 +748,10 @@ export async function adminUpdateDonationSettings(input: {
       message: "UPI Donation settings updated successfully.",
     };
   } catch (error: any) {
+    console.error("[adminUpdateDonationSettings] Error:", error);
     return {
       success: false,
-      error: error.message || "Failed to update UPI settings.",
+      error: getSafeAdminError(error, "Failed to update UPI settings."),
     };
   }
 }
@@ -713,10 +759,7 @@ export async function adminUpdateDonationSettings(input: {
 /* Backward-compatible exports retained for existing imports. */
 export async function getDonationInfoAction() {
   await connectToDatabase();
-  let setting = await DonationSetting.findOne().lean();
-  if (!setting) {
-    setting = await DonationSetting.create({ upiId:"", payeeName:"ConceptNichod", qrCodeUrl:"", isEnabled:false });
-  }
+  const setting = await DonationSetting.findOne().lean();
 
   // Keep legacy public metrics bank-verified only; unverified claims never contribute.
   const verifiedDonations = await DonationTransaction.aggregate([
@@ -726,11 +769,11 @@ export async function getDonationInfoAction() {
     { $sort: { totalAmount: -1, lastDonatedAt: -1 } }
   ]);
   // Hall of Patrons publication remains a separate explicit Admin decision.
-  const publishedPatrons = await Donor.find({ isVisible:true, isPublic:true, amount:{ $gt:0 } })
+  const publishedPatrons = await Donor.find({ isVisible: true, isPublic: true, amount: { $gt: 0 } })
     .select("uuid username name amount totalAmount donationCount tier message latestMessage donatedAt lastDonatedAt isAnonymous")
-    .sort({ amount:-1, donatedAt:-1 }).limit(150).lean();
-  const donors = publishedPatrons.map((d:any)=>({
-    uuid: crypto.createHash("sha256").update(String(d.uuid || d._id)).digest("hex").slice(0,16),
+    .sort({ amount: -1, donatedAt: -1 }).limit(150).lean();
+  const donors = publishedPatrons.map((d: any) => ({
+    uuid: crypto.createHash("sha256").update(String(d.uuid || d._id)).digest("hex").slice(0, 16),
     username: d.isAnonymous ? null : d.username || null,
     name: d.isAnonymous ? "Anonymous Patron" : d.name,
     totalAmount: Number(d.amount) || 0,
@@ -742,33 +785,62 @@ export async function getDonationInfoAction() {
     lastDonatedAt: d.donatedAt || d.lastDonatedAt || null,
     donatedAt: d.donatedAt || d.lastDonatedAt || null,
   }));
+
+  // Strict allowlist projection prevents leaking bankReference (UTR), donorEmail, userId, adminNote, or anonymous identities.
   const recentTransactionDocs = await DonationTransaction.find({ isPublic: true, status: "verified" })
-    .select("-utr -transactionId -userUuid -uuid")
+    .select("_id donorName username isAnonymous verifiedAmount amount patronTier message donatedAt verifiedAt createdAt")
     .sort({ donatedAt: -1 }).limit(10).lean();
-  const recentTransactions = recentTransactionDocs.map((tx:any)=>({
-    ...tx,
-    publicId: crypto.createHash("sha256").update(String(tx._id)).digest("hex").slice(0,16),
-    _id: undefined,
+  const recentTransactions = recentTransactionDocs.map((tx: any) => ({
+    publicId: crypto.createHash("sha256").update(String(tx._id)).digest("hex").slice(0, 16),
+    donorName: tx.isAnonymous ? "Anonymous Patron" : tx.donorName,
+    username: tx.isAnonymous ? null : tx.username || null,
+    isAnonymous: Boolean(tx.isAnonymous),
+    amount: Number(tx.verifiedAmount ?? tx.amount) || 0,
+    verifiedAmount: Number(tx.verifiedAmount ?? tx.amount) || 0,
+    patronTier: tx.patronTier || "SUPPORTER",
+    message: tx.message || "",
+    donatedAt: tx.donatedAt ? new Date(tx.donatedAt).toISOString() : new Date(tx.createdAt || Date.now()).toISOString(),
   }));
-  const publicSettings = JSON.parse(JSON.stringify(setting));
-  if (process.env.DONATIONS_ENABLED !== "true") publicSettings.upiId = "";
-  publicSettings.qrCodeUrl = "";
+
+  const configuredVpa = normalizeVpa(setting?.upiId || "");
+  const donationsAvailable =
+    process.env.DONATIONS_ENABLED === "true" &&
+    Boolean(setting?.isEnabled) &&
+    Boolean(configuredVpa);
+
+  const publicSettings = {
+    upiId: donationsAvailable ? configuredVpa || "" : "",
+    payeeName: setting?.payeeName || "ConceptNichod",
+    qrCodeUrl: "",
+    isEnabled: donationsAvailable,
+    headline: setting?.headline || "Support ConceptNichod & Join the Hall of Patrons",
+    subtext: setting?.subtext || "Pay using any UPI app, then submit your 12-digit UTR and Transaction ID for manual Admin verification.",
+    customInstructions: setting?.customInstructions || "Pay using any UPI app, then submit your transaction reference for manual verification.",
+    thankYouNote: setting?.thankYouNote || "Thank you for supporting ConceptNichod.",
+  };
+
   // Evaluated for audit parity; only publishedPatrons are returned publicly.
   void verifiedDonations;
-  return { success:true, settings:publicSettings, donors:JSON.parse(JSON.stringify(donors)), recentTransactions:JSON.parse(JSON.stringify(recentTransactions)) };
+  return { success: true, settings: publicSettings, donors: JSON.parse(JSON.stringify(donors)), recentTransactions };
 }
 
-export async function submitDonationUtrAction(payload: { amount: number; utr: string; message?: string }) {
+export async function submitDonationUtrAction(_payload: { amount: number; utr: string; message?: string }) {
   return { success: false, error: "The donation form has been updated. Submit your donor name, 12-digit UTR and payment-app Transaction ID using /donate." };
 }
+
 export async function reconcileDonationManuallyAction(payload: { utr: string; bankReference: string; receivedAmount: number; recipientVpa: string }) {
   await requireOwnerSession();
+  if (!payload || typeof payload !== "object") return { success: false, error: "Invalid reconciliation payload." };
   const utr = String(payload.utr || "").trim();
-  if (String(payload.bankReference || "").trim() !== utr) return { success:false, error:"Bank reference mismatch." };
+  if (!utr || String(payload.bankReference || "").trim() !== utr) return { success: false, error: "Bank reference mismatch." };
   const tx = await DonationTransaction.findOne({ utr }).select("_id").lean();
-  if (!tx) return { success:false, error:"No donation submission found for this UTR." };
+  if (!tx) return { success: false, error: "No donation submission found for this UTR." };
   const settings = await DonationSetting.findOne().select("upiId").lean();
-  if (String(payload.recipientVpa || "").trim().toLowerCase() !== String((settings as any)?.upiId || "").trim().toLowerCase()) return { success:false, error:"Recipient VPA does not match the configured donation UPI ID." };
+  const configuredVpa = normalizeVpa((settings as any)?.upiId || "");
+  const suppliedVpa = normalizeVpa(String(payload.recipientVpa || ""));
+  if (!configuredVpa || !suppliedVpa || suppliedVpa !== configuredVpa) {
+    return { success: false, error: "Recipient VPA does not match the configured donation UPI ID." };
+  }
   return adminVerifyDonationAndSetAmount({
     transactionDbId: String(tx._id),
     verifiedAmount: payload.receivedAmount,
@@ -777,21 +849,34 @@ export async function reconcileDonationManuallyAction(payload: { utr: string; ba
     publishToHallOfPatrons: false,
   });
 }
+
 export async function getPendingDonationsAdminAction() {
   const res = await getAdminDonationDashboard("pending");
   if (!res.success) throw new Error(res.error || "Unable to load donations.");
-  return (res.transactions || []).map((t:any)=>({ utr:t.utr, transactionId:t.transactionId, username:t.username || "", donorName:t.donorName, claimedAmount:null, message:t.message || "", submittedAt:t.createdAt }));
+  return (res.transactions || []).map((t: any) => ({
+    utr: t.utr,
+    transactionId: t.transactionId,
+    username: t.username || "",
+    donorName: t.donorName,
+    claimedAmount: null,
+    message: t.message || "",
+    submittedAt: t.createdAt,
+  }));
 }
+
 export async function getCurrentUserDonationContextAction() {
   try {
     const sessionUuid = verifySessionCookie((await cookies()).get("user_session")?.value);
-    if (!sessionUuid) return { success:false, username:null };
+    if (!sessionUuid) return { success: false, username: null };
     await connectToDatabase();
-    const user = await User.findOne({ uuid:sessionUuid }).select("username fullName").lean();
-    if (!user) return { success:false, username:null };
-    return { success:true, username:(user as any).username, name:(user as any).fullName || (user as any).username };
-  } catch { return { success:false, username:null }; }
+    const user = await User.findOne({ uuid: sessionUuid }).select("username fullName").lean();
+    if (!user) return { success: false, username: null };
+    return { success: true, username: (user as any).username, name: (user as any).fullName || (user as any).username };
+  } catch {
+    return { success: false, username: null };
+  }
 }
+
 export async function getAdminDonationSettingsAction() {
   await requireOwnerSession();
   const settings = await DonationSetting.findOne().select("upiId qrCodeUrl isEnabled").lean();
@@ -804,58 +889,143 @@ export async function getAdminDonationSettingsAction() {
     },
   };
 }
-export async function updateDonationSettingsAction(payload: { upiId:string; qrCodeUrl?:string; customInstructions?:string; thankYouNote?:string }) {
-  return adminUpdateDonationSettings({ upiId:payload.upiId, payeeName:"ConceptNichod", qrCodeUrl:payload.qrCodeUrl || "", isEnabled:true, customInstructions:payload.customInstructions, thankYouNote:payload.thankYouNote });
+
+export async function updateDonationSettingsAction(payload: { upiId: string; qrCodeUrl?: string; customInstructions?: string; thankYouNote?: string }) {
+  return adminUpdateDonationSettings({
+    upiId: payload?.upiId || "",
+    payeeName: "ConceptNichod",
+    qrCodeUrl: payload?.qrCodeUrl || "",
+    isEnabled: true,
+    customInstructions: payload?.customInstructions,
+    thankYouNote: payload?.thankYouNote,
+  });
 }
-export async function addDonorCardAction(payload: { username:string; amount:number; tier?:"Supporter"|"Patron"|"Benefactor"|"Legend"; message?:string }) {
-  return adminAddManualPatron({ name:payload.username, amount:payload.amount, tier:payload.tier, message:payload.message });
+
+export async function addDonorCardAction(payload: { username: string; amount: number; tier?: "Supporter" | "Patron" | "Benefactor" | "Legend"; message?: string }) {
+  return adminAddManualPatron({
+    name: payload?.username || "",
+    amount: payload?.amount,
+    tier: payload?.tier,
+    message: payload?.message,
+  });
 }
-export async function deleteDonorCardAction(uuid:string) {
-  await requireOwnerSession(); await connectToDatabase();
-  const donor = await Donor.findOne({ uuid });
-  if (donor) { donor.isVisible=false; donor.isPublic=false; await donor.save(); }
-  return { success:true };
-}
-export async function adminUpdatePatron(payload:{ donorId:string; name?:string; amount:number|string; tier?:string; message?:string; isAnonymous?:boolean }) {
-  await requireOwnerSession(); await connectToDatabase();
-  const amount = validateAdminVerifiedAmount(payload.amount);
-  if (!amount.valid || !amount.data) return {success:false,error:amount.error || "Invalid amount."};
-  const donor = await Donor.findById(payload.donorId);
-  if (!donor) return {success:false,error:"Patron not found."};
-  const tier = payload.tier && VALID_TIERS.includes(payload.tier as PatronTier) ? payload.tier as PatronTier : computePatronTier(amount.data);
-  if (donor.transactionRef) {
-    const linkedTransaction = await DonationTransaction.findById(donor.transactionRef).select("status verifiedAmount").lean();
-    if (!linkedTransaction || linkedTransaction.status !== "verified" || Number(linkedTransaction.verifiedAmount) !== amount.data) {
-      return { success:false, error:"The amount of a linked payment record is locked. Reconcile the bank reference and recipient VPA in the transaction queue first." };
-    }
+
+export async function deleteDonorCardAction(uuid: string) {
+  await requireOwnerSession();
+  if (typeof uuid !== "string" || !uuid.trim()) {
+    return { success: false, error: "Invalid donor identifier." };
   }
-  donor.name = sanitizeDonationText(payload.name || donor.name,60);
-  donor.amount = amount.data; donor.totalAmount = amount.data; donor.tier = tier;
-  donor.message = sanitizeDonationText(payload.message || "",250); donor.latestMessage = donor.message;
-  donor.isAnonymous = Boolean(payload.isAnonymous); donor.isVisible = true; donor.isPublic = true;
-  await donor.save();
-  if (donor.transactionRef) await DonationTransaction.findByIdAndUpdate(donor.transactionRef,{verifiedAmount:amount.data,amount:amount.data,patronTier:tier,isPublishedToPatrons:true,isPublic:true});
-  revalidatePath("/donate"); revalidatePath("/dashboard/admin/donations");
-  return {success:true,message:"Hall of Patrons entry updated."};
+  const donor = await Donor.findOne({ uuid: uuid.trim() });
+  if (donor) {
+    donor.isVisible = false;
+    donor.isPublic = false;
+    await donor.save();
+  }
+  return { success: true };
 }
-export async function adminRemovePatron(donorId:string) {
-  await requireOwnerSession(); await connectToDatabase();
-  const donor = await Donor.findById(donorId);
-  if (!donor) return {success:false,error:"Patron not found."};
-  donor.isVisible=false; donor.isPublic=false; await donor.save();
-  if (donor.transactionRef) await DonationTransaction.findByIdAndUpdate(donor.transactionRef,{isPublishedToPatrons:false,isPublic:false});
-  revalidatePath("/donate"); revalidatePath("/dashboard/admin/donations");
-  return {success:true,message:"Patron hidden from the Hall of Patrons."};
+
+export async function adminUpdatePatron(payload: { donorId: string; name?: string; amount: number | string; tier?: string; message?: string; isAnonymous?: boolean }) {
+  try {
+    await requireOwnerSession();
+    if (!payload || typeof payload !== "object" || typeof payload.donorId !== "string" || !mongoose.isValidObjectId(payload.donorId)) {
+      return { success: false, error: "Invalid patron ID." };
+    }
+    const amount = validateAdminVerifiedAmount(payload.amount);
+    if (!amount.valid || !amount.data) return { success: false, error: amount.error || "Invalid amount." };
+    const donor = await Donor.findById(payload.donorId);
+    if (!donor) return { success: false, error: "Patron not found." };
+    const tier = payload.tier && VALID_TIERS.includes(payload.tier as PatronTier) ? payload.tier as PatronTier : computePatronTier(amount.data);
+    if (donor.transactionRef && mongoose.isValidObjectId(donor.transactionRef)) {
+      const linkedTransaction = await DonationTransaction.findById(donor.transactionRef).select("status verifiedAmount").lean();
+      if (!linkedTransaction || linkedTransaction.status !== "verified" || Number(linkedTransaction.verifiedAmount) !== amount.data) {
+        return { success: false, error: "The amount of a linked payment record is locked. Reconcile the bank reference and recipient VPA in the transaction queue first." };
+      }
+    }
+    const candidateName = payload.name !== undefined ? sanitizeDonationText(payload.name, 60) : donor.name;
+    if (!candidateName || candidateName.length < 2) {
+      return { success: false, error: "Patron name must be at least 2 characters." };
+    }
+    donor.name = candidateName;
+    donor.amount = amount.data;
+    donor.totalAmount = amount.data;
+    donor.tier = tier;
+    donor.message = sanitizeDonationText(payload.message || "", 250);
+    donor.latestMessage = donor.message;
+    donor.isAnonymous = Boolean(payload.isAnonymous);
+    donor.isVisible = true;
+    donor.isPublic = true;
+    await donor.save();
+    if (donor.transactionRef && mongoose.isValidObjectId(donor.transactionRef)) {
+      await DonationTransaction.findByIdAndUpdate(donor.transactionRef, {
+        $set: { verifiedAmount: amount.data, amount: amount.data, patronTier: tier, isPublishedToPatrons: true, isPublic: true },
+      });
+    }
+    revalidatePath("/donate");
+    revalidatePath("/dashboard/admin/donations");
+    return { success: true, message: "Hall of Patrons entry updated." };
+  } catch (error: any) {
+    console.error("[adminUpdatePatron] Error:", error);
+    return { success: false, error: getSafeAdminError(error, "Failed to update patron entry.") };
+  }
 }
-export async function adminAddManualPatron(payload:{name:string;amount:number|string;tier?:string;message?:string;isAnonymous?:boolean}) {
-  await requireOwnerSession(); await connectToDatabase();
-  const amount = validateAdminVerifiedAmount(payload.amount);
-  const name = sanitizeDonationText(payload.name,60);
-  if (!amount.valid || !amount.data) return {success:false,error:amount.error || "Invalid amount."};
-  if (name.length < 2) return {success:false,error:"Patron name is required."};
-  const tier = payload.tier && VALID_TIERS.includes(payload.tier as PatronTier) ? payload.tier as PatronTier : computePatronTier(amount.data);
-  const message = sanitizeDonationText(payload.message || "",250);
-  const donor = await Donor.create({uuid:crypto.randomUUID(),name,amount:amount.data,totalAmount:amount.data,donationCount:1,tier,message,latestMessage:message,isAnonymous:Boolean(payload.isAnonymous),isVisible:true,isPublic:true,donatedAt:new Date(),lastDonatedAt:new Date()});
-  revalidatePath("/donate"); revalidatePath("/dashboard/admin/donations");
-  return {success:true,donorId:String(donor._id),message:"Manual patron added."};
+
+export async function adminRemovePatron(donorId: string) {
+  try {
+    await requireOwnerSession();
+    if (typeof donorId !== "string" || !mongoose.isValidObjectId(donorId)) {
+      return { success: false, error: "Invalid patron ID." };
+    }
+    const donor = await Donor.findById(donorId);
+    if (!donor) return { success: false, error: "Patron not found." };
+    donor.isVisible = false;
+    donor.isPublic = false;
+    await donor.save();
+    if (donor.transactionRef && mongoose.isValidObjectId(donor.transactionRef)) {
+      await DonationTransaction.findByIdAndUpdate(donor.transactionRef, {
+        $set: { isPublishedToPatrons: false, isPublic: false },
+      });
+    }
+    revalidatePath("/donate");
+    revalidatePath("/dashboard/admin/donations");
+    return { success: true, message: "Patron hidden from the Hall of Patrons." };
+  } catch (error: any) {
+    console.error("[adminRemovePatron] Error:", error);
+    return { success: false, error: getSafeAdminError(error, "Failed to hide patron.") };
+  }
+}
+
+export async function adminAddManualPatron(payload: { name: string; amount: number | string; tier?: string; message?: string; isAnonymous?: boolean }) {
+  try {
+    await requireOwnerSession();
+    if (!payload || typeof payload !== "object") {
+      return { success: false, error: "Invalid patron payload." };
+    }
+    const amount = validateAdminVerifiedAmount(payload.amount);
+    const name = sanitizeDonationText(payload.name, 60);
+    if (!amount.valid || !amount.data) return { success: false, error: amount.error || "Invalid amount." };
+    if (name.length < 2) return { success: false, error: "Patron name is required." };
+    const tier = payload.tier && VALID_TIERS.includes(payload.tier as PatronTier) ? payload.tier as PatronTier : computePatronTier(amount.data);
+    const message = sanitizeDonationText(payload.message || "", 250);
+    const donor = await Donor.create({
+      uuid: crypto.randomUUID(),
+      name,
+      amount: amount.data,
+      totalAmount: amount.data,
+      donationCount: 1,
+      tier,
+      message,
+      latestMessage: message,
+      isAnonymous: Boolean(payload.isAnonymous),
+      isVisible: true,
+      isPublic: true,
+      donatedAt: new Date(),
+      lastDonatedAt: new Date(),
+    });
+    revalidatePath("/donate");
+    revalidatePath("/dashboard/admin/donations");
+    return { success: true, donorId: String(donor._id), message: "Manual patron added." };
+  } catch (error: any) {
+    console.error("[adminAddManualPatron] Error:", error);
+    return { success: false, error: getSafeAdminError(error, "Failed to add manual patron.") };
+  }
 }

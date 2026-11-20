@@ -7,7 +7,7 @@ import Blacklist from '@/models/Blacklist';
 import nodemailer from 'nodemailer';
 import { getClientIp } from '@/lib/ip';
 import { checkDistributedRateLimit } from '@/lib/distributed-rate-limiter';
-import { normalizeEmail, validateEmail } from '@/lib/email-utils';
+import { normalizeEmail, validateEmailDomain, validateEmail } from '@/lib/email-utils';
 import { PLATFORM_OWNER_EMAIL, PLATFORM_OWNER_USERNAME } from '@/lib/owner-access';
 
 const MAX_VERIFY_ATTEMPTS = 5;
@@ -99,10 +99,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Access denied: Your IP address is banned.' }, { status: 403 });
     }
 
-    const isEmailBanned = await Blacklist.findOne({
-      type: "email",
-      value: { $in: emailCandidates },
-    }).select("_id").lean();
+    const isEmailBanned = await Blacklist.findOne({ type: "email", value: { $in: emailCandidates } }).select("_id").lean();
     if (isEmailBanned) {
       return NextResponse.json({ error: 'Access denied: This email address is banned.' }, { status: 403 });
     }
@@ -131,7 +128,13 @@ export async function POST(req: Request) {
         );
       }
 
-      // Enforce strict email format, domain restriction, and no +tag subaddressing
+      // Enforce strict email domain restriction and no +tag subaddressing
+      if (!validateEmailDomain(email)) {
+        return NextResponse.json(
+          { error: 'Only @gmail.com, @outlook.com, and @outlook.in emails are allowed.' },
+          { status: 400 }
+        );
+      }
       const emailCheck = validateEmail(email);
       if (!emailCheck.valid) {
         return NextResponse.json(
