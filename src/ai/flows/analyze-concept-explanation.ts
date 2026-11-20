@@ -289,6 +289,9 @@ CRITICAL: pie_chart_data values MUST sum to exactly 100.`;
     fluffPercentage,
     detected_mistakes: detectedMistakes,
   };
+  output.feedback_summary = typeof output.feedback_summary === "string"
+    ? output.feedback_summary.slice(0, 10000)
+    : "Feedback could not be generated reliably. Please retry your oral defense analysis.";
 
   // Fallback defaults if LLM omitted additional diverse charts
   if (!output.bar_chart_data || output.bar_chart_data.length === 0) {

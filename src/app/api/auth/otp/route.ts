@@ -100,9 +100,9 @@ export async function POST(req: Request) {
     }
 
     const isEmailBanned = await Blacklist.findOne({
-      type: 'email',
+      type: "email",
       value: { $in: emailCandidates },
-    }).select('_id').lean();
+    }).select("_id").lean();
     if (isEmailBanned) {
       return NextResponse.json({ error: 'Access denied: This email address is banned.' }, { status: 403 });
     }
