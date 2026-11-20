@@ -216,12 +216,17 @@ export async function submitDonationTransaction(formData: {
         const emailVals = Array.from(
           new Set([String(dbUser.email || "").toLowerCase(), normalizeEmail(String(dbUser.email || ""))].filter(Boolean))
         );
-        const userBanned = await Blacklist.findOne({
-          $or: [
-            ...(emailVals.length > 0 ? [{ type: "email", value: { $in: emailVals } }] : []),
-            ...(dbUser.username ? [{ type: "username", value: String(dbUser.username).toLowerCase() }] : []),
-          ],
-        }).select("_id").lean();
+        const userBanClauses: Array<{ type: "email" | "username"; value: string | { $in: string[] } }> = [];
+        if (emailVals.length > 0) {
+          userBanClauses.push({ type: "email", value: { $in: emailVals } });
+        }
+        if (dbUser.username) {
+          userBanClauses.push({ type: "username", value: String(dbUser.username).toLowerCase() });
+        }
+        const userBanned =
+          userBanClauses.length > 0
+            ? await Blacklist.findOne({ $or: userBanClauses }).select("_id").lean()
+            : null;
         if (userBanned) {
           return { success: false, error: "Access denied: Your account has been suspended." };
         }
