@@ -7,6 +7,7 @@
 
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 export const DEFAULT_MODEL = "openrouter/free";
+const MAX_OPENROUTER_RESPONSE_BYTES = 500_000;
 
 export interface OpenRouterMessage {
   role: "system" | "user" | "assistant";
@@ -45,11 +46,34 @@ function getOpenRouterKeys(): string[] {
   return Array.from(new Set(keys));
 }
 
+function extractMessageContent(rawContent: unknown): string {
+  if (typeof rawContent === "string") {
+    return rawContent.trim();
+  }
+  if (Array.isArray(rawContent)) {
+    return rawContent
+      .map((part) => {
+        if (typeof part === "string") return part;
+        if (part && typeof part === "object" && typeof (part as { text?: unknown }).text === "string") {
+          return (part as { text: string }).text;
+        }
+        return "";
+      })
+      .join("")
+      .trim();
+  }
+  return "";
+}
+
 export async function callOpenRouter(
   messages: OpenRouterMessage[],
   model: string = DEFAULT_MODEL,
   jsonMode: boolean = false
 ): Promise<string> {
+  if (!Array.isArray(messages) || messages.length === 0) {
+    throw new Error("At least one message is required to call OpenRouter.");
+  }
+
   const keys = getOpenRouterKeys();
   if (keys.length === 0) {
     throw new Error(
@@ -57,9 +81,10 @@ export async function callOpenRouter(
     );
   }
 
-  const candidateModels = [model, "openrouter/free", "google/gemma-4-26b-a4b-it:free"].filter(
-    (v, i, a) => a.indexOf(v) === i
-  );
+  const preferredModel = typeof model === "string" ? model.trim() : "";
+  const candidateModels = [preferredModel, "openrouter/free", "google/gemma-4-26b-a4b-it:free"]
+    .filter((v): v is string => Boolean(v))
+    .filter((v, i, a) => a.indexOf(v) === i);
 
   let lastError: Error | null = null;
   const startIndex = currentKeyIndex % keys.length;
@@ -74,7 +99,7 @@ export async function callOpenRouter(
       const remainingMs = deadline - Date.now();
       if (remainingMs <= 0) break;
       try {
-        const body: any = {
+        const body: Record<string, unknown> = {
           model: currentModel,
           messages,
         };
@@ -96,37 +121,66 @@ export async function callOpenRouter(
         });
 
         if (!res.ok) {
-          const errorBody = await res.text();
+          const errorBody = (await res.text()).slice(0, 400);
           console.warn(`OpenRouter key #${keyIdx + 1} with model ${currentModel} returned ${res.status}: ${errorBody}`);
-          if (res.status === 429 || res.status === 404 || res.status === 401) {
-            lastError = new Error(`Key #${keyIdx + 1} / Model ${currentModel} error: ${res.status}`);
-            continue; // try next candidate model or key
+          lastError = new Error(`OpenRouter request failed with status ${res.status}.`);
+          if (res.status === 401 || res.status === 402 || res.status === 403) {
+            break; // Key-level failure: move directly to the next API key
           }
-          throw new Error(`OpenRouter API error: ${res.status} - ${errorBody}`);
+          continue; // Model-level or transient failure: try next candidate model
         }
 
-        const data = await res.json();
-        if (data.error) {
-          console.warn(`OpenRouter inner error on ${currentModel}:`, data.error);
+        const contentLength = Number(res.headers.get("content-length") || 0);
+        if (Number.isFinite(contentLength) && contentLength > MAX_OPENROUTER_RESPONSE_BYTES) {
+          lastError = new Error("OpenRouter response exceeded the safety size limit.");
           continue;
         }
 
-        const content = data.choices?.[0]?.message?.content;
+        const rawText = await res.text();
+        if (rawText.length > MAX_OPENROUTER_RESPONSE_BYTES) {
+          lastError = new Error("OpenRouter response exceeded the safety size limit.");
+          continue;
+        }
+
+        const data = JSON.parse(rawText);
+        if (data?.error) {
+          console.warn(`OpenRouter inner error on ${currentModel}:`, data.error);
+          lastError = new Error(`OpenRouter model ${currentModel} returned an inner error.`);
+          continue;
+        }
+
+        const content = extractMessageContent(data?.choices?.[0]?.message?.content);
         if (!content) {
-          throw new Error("OpenRouter returned an empty response.");
+          lastError = new Error("OpenRouter returned an empty response.");
+          continue;
         }
 
         // Success!
         currentKeyIndex = (keyIdx + 1) % keys.length;
         return content;
       } catch (err: any) {
-        lastError = err;
-        console.warn(`Attempt with key #${keyIdx + 1} and model ${currentModel} failed:`, err.message);
+        lastError = err instanceof Error ? err : new Error("OpenRouter request failed.");
+        console.warn(`Attempt with key #${keyIdx + 1} and model ${currentModel} failed:`, lastError.message);
       }
     }
   }
 
   throw lastError || new Error("All configured OpenRouter API keys and models failed.");
+}
+
+function tryParseCandidateJson<T>(candidate: string): { ok: true; value: T } | { ok: false } {
+  try {
+    return { ok: true, value: JSON.parse(candidate) as T };
+  } catch {
+    try {
+      const sanitized = candidate
+        .replace(/,\s*([}\]])/g, "$1")
+        .replace(/[\u0000-\u001F\u007F-\u009F]/g, (c) => (c === "\n" || c === "\r" || c === "\t" ? c : ""));
+      return { ok: true, value: JSON.parse(sanitized) as T };
+    } catch {
+      return { ok: false };
+    }
+  }
 }
 
 /**
@@ -144,29 +198,29 @@ export function parseJsonResponse<T>(raw: string): T {
   // Models sometimes emit LaTeX commands with a single backslash inside a
   // JSON string. Escape known commands before JSON.parse; leave already escaped
   // JSON backslashes and standard JSON escape sequences untouched.
-  let text = raw.trim().replace(
+  const text = raw.trim().replace(
     /(?<!\\)\\(frac|theta|beta|right|left|nabla|sqrt|sum|int|cdot|times|alpha|gamma|delta|lambda|mu|pi|sigma|omega|text|mathrm|mathbf|overline|underline|begin|end|operatorname|infty|partial|approx|neq|leq|geq|rightarrow|mathbb|mathcal)\b/g,
     "\\\\$1"
   );
 
   // 1. Direct parse attempt if clean JSON
-  try {
-    return JSON.parse(text) as T;
-  } catch {
-    // Continue to extractors
+  const direct = tryParseCandidateJson<T>(text);
+  if (direct.ok) return direct.value;
+
+  // 2. Extract from outer markdown code fences (greedy first to preserve inner code blocks)
+  const greedyFenceMatch = text.match(/```(?:json)?\s*([\s\S]*)\s*```/i);
+  if (greedyFenceMatch && greedyFenceMatch[1]) {
+    const parsedFence = tryParseCandidateJson<T>(greedyFenceMatch[1].trim());
+    if (parsedFence.ok) return parsedFence.value;
   }
 
-  // 2. Extract from markdown code fences (```json ... ``` or ``` ... ```)
-  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-  if (fenceMatch && fenceMatch[1]) {
-    try {
-      return JSON.parse(fenceMatch[1].trim()) as T;
-    } catch {
-      text = fenceMatch[1].trim();
-    }
+  const nonGreedyFenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (nonGreedyFenceMatch && nonGreedyFenceMatch[1]) {
+    const parsedFence = tryParseCandidateJson<T>(nonGreedyFenceMatch[1].trim());
+    if (parsedFence.ok) return parsedFence.value;
   }
 
-  // 3. Extract the widest valid JSON structure (object or array)
+  // 3. Extract the widest valid JSON structure (object or array) from intact text
   const firstBrace = text.indexOf("{");
   const firstBracket = text.indexOf("[");
   let startIdx = -1;
@@ -182,16 +236,10 @@ export function parseJsonResponse<T>(raw: string): T {
 
   if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
     const candidate = text.substring(startIdx, endIdx + 1).trim();
-    try {
-      return JSON.parse(candidate) as T;
-    } catch {
-      // Clean up common LLM artifacts like trailing commas before closing braces
-      const sanitized = candidate
-        .replace(/,\s*([}\]])/g, "$1")
-        .replace(/[\u0000-\u001F\u007F-\u009F]/g, (c) => (c === "\n" || c === "\r" || c === "\t" ? c : ""));
-      return JSON.parse(sanitized) as T;
-    }
+    const parsedWide = tryParseCandidateJson<T>(candidate);
+    if (parsedWide.ok) return parsedWide.value;
   }
 
-  throw new Error(`Failed to parse AI JSON response. Raw output was: ${text.slice(0, 200)}...`);
+  console.warn("Failed to parse AI JSON response snippet:", text.slice(0, 200));
+  throw new Error("Failed to parse structured JSON response from AI model.");
 }

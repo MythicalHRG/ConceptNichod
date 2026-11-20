@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { callOpenRouter, parseJsonResponse } from '@/lib/openrouter';
 import { verifySessionCookie } from '@/lib/session';
 import { checkDistributedRateLimit } from '@/lib/distributed-rate-limiter';
+import { assertActiveNonBlacklistedUser } from '@/lib/ai-flow-auth';
 import { escapePromptText } from '@/lib/prompt-safety';
 import dbConnect from '@/lib/mongoose';
 import MistakeEntry from '@/models/MistakeEntry';
@@ -48,6 +49,28 @@ export type AnalyzeAnswersInput = {
   spokenAnswers: { question: string; answer: string }[];
 };
 
+const ALLOWED_VERDICTS = new Set([
+  'natural_human',
+  'suspicious_synthetic',
+  'nonsense_or_filler',
+  'blended',
+]);
+
+const ALLOWED_ERROR_TYPES = new Set([
+  'conceptual',
+  'calculation',
+  'formula',
+  'misread',
+]);
+
+function sanitizeStringArray(value: unknown, maxItems: number, maxLen: number): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    .slice(0, maxItems)
+    .map((item) => item.trim().slice(0, maxLen));
+}
+
 export async function analyzeAnswersFlow(input: AnalyzeAnswersInput): Promise<{ analysis: FinalAnalysisOutput }> {
   // Authentication check to prevent unauthenticated bot AI-scraping and token draining
   const rawSession = (await cookies()).get('user_session')?.value;
@@ -59,16 +82,21 @@ export async function analyzeAnswersFlow(input: AnalyzeAnswersInput): Promise<{ 
   const rateCheck = await checkDistributedRateLimit(`analyze-answers:${sessionUuid}`, 5, 15 * 60 * 1000);
   if (!rateCheck.success) throw new Error('Too many analysis requests. Please wait before trying again.');
 
+  await assertActiveNonBlacklistedUser(sessionUuid);
+
   if (!input || typeof input !== 'object') throw new Error('Invalid analysis request.');
   const { topic, summary, classLevel, writtenAnswers, spokenAnswers } = input;
-  if (typeof topic !== 'string' || topic.length > 200 ||
-      typeof summary !== 'string' || summary.length > 8000 ||
-      typeof classLevel !== 'string' || classLevel.length > 50 ||
+  if (typeof topic !== 'string' || !topic.trim() || topic.length > 200 ||
+      typeof summary !== 'string' || !summary.trim() || summary.length > 8000 ||
+      typeof classLevel !== 'string' || !classLevel.trim() || classLevel.length > 50 ||
       !Array.isArray(writtenAnswers) || writtenAnswers.length > 10 ||
       !Array.isArray(spokenAnswers) || spokenAnswers.length > 11) {
     throw new Error('Analysis inputs exceed the allowed limits.');
   }
   const submittedAnswers = [...writtenAnswers, ...spokenAnswers];
+  if (submittedAnswers.length === 0) {
+    throw new Error('At least one written or spoken answer is required for analysis.');
+  }
   if (submittedAnswers.some((answer) =>
     !answer || typeof answer.question !== 'string' || answer.question.length > 500 ||
     typeof answer.answer !== 'string' || answer.answer.length > 5000
@@ -76,9 +104,11 @@ export async function analyzeAnswersFlow(input: AnalyzeAnswersInput): Promise<{ 
     throw new Error('Each submitted question and answer must be within the allowed character limits.');
   }
 
-  const boundedTopic = (topic || "").slice(0, 200).replace(/[<>{}]/g, "");
-  const boundedClass = (classLevel || "").slice(0, 50).replace(/[<>{}]/g, "");
-  const boundedSummary = (summary || "").slice(0, 8000);
+  const cleanTopic = topic.trim();
+  const boundedTopic = cleanTopic.slice(0, 200).replace(/[<>{}]/g, "");
+  const boundedClass = classLevel.trim().slice(0, 50).replace(/[<>{}]/g, "");
+  const boundedSummary = summary.trim().slice(0, 8000);
+  const safeChapterTemplate = escapePromptText(boundedTopic).replace(/["\\\r\n]/g, " ");
 
   const safeWrittenSection = (writtenAnswers || []).map((a, i) => {
     const q = escapePromptText((a.question || "").slice(0, 500));
@@ -192,7 +222,7 @@ Respond with ONLY a valid JSON object (no markdown fences, no surrounding prose)
       {
         "title": "<Concise concept blunder title e.g. Carnot Engine - Temperature in Celsius>",
         "subject": "Physics",
-        "chapter": "${topic}",
+        "chapter": "${safeChapterTemplate}",
         "errorType": "conceptual",
         "questionOrPrompt": "<specific question text>",
         "myMistake": "<what the user answered wrong or missed, with LaTeX equations>",
@@ -219,7 +249,7 @@ Respond with ONLY a valid JSON object (no markdown fences, no surrounding prose)
         "idealDerivationOrAnswer": "<ideal complete rigorous solution with LaTeX $$...$$ equations>"
       }
     ],
-    "chartsData": "[{\"type\":\"bar\",\"title\":\"Cognitive Competencies\",\"data\":[{\"name\":\"Comprehension\",\"score\":<number>},{\"name\":\"Expression\",\"score\":<number>},{\"name\":\"Critical Thinking\",\"score\":<number>},{\"name\":\"Application\",\"score\":<number>}],\"config\":{\"score\":{\"label\":\"Score\",\"color\":\"hsl(var(--primary))\"}}},{\"type\":\"pie\",\"title\":\"Knowledge Composition\",\"data\":[{\"name\":\"Core Theory\",\"value\":<number>,\"fill\":\"#3b82f6\"},{\"name\":\"Applied Logic\",\"value\":<number>,\"fill\":\"#10b981\"},{\"name\":\"Fluff / Filler\",\"value\":<number>,\"fill\":\"#ef4444\"},{\"name\":\"Analytical Insights\",\"value\":<number>,\"fill\":\"#f59e0b\"}]},{\"type\":\"histo\",\"title\":\"Response Depth Frequency\",\"data\":[{\"name\":\"0-25% Recall\",\"score\":<number>},{\"name\":\"26-50% Foundational\",\"score\":<number>},{\"name\":\"51-75% Analytical\",\"score\":<number>},{\"name\":\"76-100% Comprehensive\",\"score\":<number>}],\"config\":{\"score\":{\"label\":\"Answers Count\",\"color\":\"#10b981\"}}},{\"type\":\"polynomial\",\"title\":\"Adaptive Mastery Progression Curve\",\"data\":[{\"step\":\"Stage 1: Recall\",\"score\":<number>},{\"step\":\"Stage 2: Conceptual\",\"score\":<number>},{\"step\":\"Stage 3: Application\",\"score\":<number>},{\"step\":\"Stage 4: Synthesis\",\"score\":<number>},{\"step\":\"Stage 5: Peak Mastery\",\"score\":<number>}]},{\"type\":\"radar\",\"title\":\"Delivery & Articulation Matrix\",\"data\":[{\"metric\":\"Clarity\",\"score\":<number>},{\"metric\":\"Conciseness\",\"score\":<number>},{\"metric\":\"Confidence\",\"score\":<number>},{\"metric\":\"Technical Precision\",\"score\":<number>},{\"metric\":\"Structure\",\"score\":<number>}]}]"
+    "chartsData": "[{\"type\":\"bar\",\"title\":\"Cognitive Competencies\",\"data\":[{\"name\":\"Comprehension\",\"score\":<number>},{\"name\":\"Expression\",\"score\":<number>},{\"name\":\"Critical Thinking\",\"score\":<number>},{\"name\":\"Application\",\"score\":<number>}],\"config\":{\"score\":{\"label\":\"Score\",\"color\":\"hsl(var(--primary))\"}}},{\"type\":\"pie\",\"title\":\"Knowledge Composition\",\"data\":[{\"name\":\"Core Theory\",\"value\":<number>,\"fill\":\"#3b82f6\"},{\"name\":\"Applied Logic\",\"value\":<number>,\"fill\":\"#10b981\"},{\"name\":\"Fluff / Filler\",\"value\":<number>,\"fill\":\"#ef4444\"},{\"name\":\"Analytical Insights\",\"value\":<number>,\"fill\":\"#f59e0b\"}]},{\"type\":\"histo\",\"title\":\"Response Depth Frequency\",\"data\":[{\"name\":\"0-25% Recall\",\"score\":<number>},{\"name\":\"26-50% Foundational\",\"score\":<number>},{\"name\":\"51-75% Analytical\",\"score\":<number>},{\"name\":\"76-100% Comprehensive\",\"score\":<number>}],\"config\":{\"score\":{\"label\":\"Answers Count\",\"color\":\"#10b981\"}}},{\"type\":\"polynomial\",\"title\":\"Adaptive Mastery Progression Curve\",\"data\":[{\"step\":\"Stage 1: Recall\",\"score\":<number>},{\"step\":\"Stage 2: Conceptual\",\"score\":<number>},{\"step\":\"Stage 3: Application\",\"score\":<number>},{\"step\":\"Stage 4: Synthesis\",\"score\":<number>},{\"step\":\"Stage 5: Peak Mastery\",\"score\":<number>}]},{\"type\":\"radar\",\"title\":\"Delivery & Articulation Matrix\",\"data\":[{\"metric\":\"Clarity\",\"score\":<number>},{\"metric\":\"Conciseness\",\"score\":<number>},{\"metric\":\"Confidence\",\"score\":<number>},{\"metric\":\"Technical Precision\",\"score\":<number>},{\"metric\":\"Structure\",\"score\":<number>]}]"
   }
 }`;
 
@@ -229,29 +259,71 @@ Respond with ONLY a valid JSON object (no markdown fences, no surrounding prose)
     ], undefined, true);
 
     const parsed = parseJsonResponse<any>(raw);
-    const analysis: FinalAnalysisOutput = parsed.analysis || parsed;
+    const rawAnalysis = parsed && typeof parsed === 'object' && parsed.analysis && typeof parsed.analysis === 'object' && !Array.isArray(parsed.analysis)
+      ? parsed.analysis
+      : parsed;
+    if (!rawAnalysis || typeof rawAnalysis !== 'object' || Array.isArray(rawAnalysis)) {
+      throw new Error('Failed to parse structured analysis from AI model.');
+    }
 
-    // Safety normalizations and fallbacks
-    if (typeof analysis.overallScore !== 'number') {
-      analysis.overallScore = 20; // Default conservative score if unparsed
+    const overallScore =
+      typeof rawAnalysis.overallScore === 'number' && Number.isFinite(rawAnalysis.overallScore)
+        ? Math.max(0, Math.min(100, Math.round(rawAnalysis.overallScore)))
+        : 20;
+
+    const performanceSummary =
+      typeof rawAnalysis.performanceSummary === 'string' && rawAnalysis.performanceSummary.trim()
+        ? rawAnalysis.performanceSummary.trim().slice(0, 15000)
+        : 'Your answers have been analyzed across foundational concepts, analytical depth, and mathematical rigor.';
+
+    const areasToFocus = sanitizeStringArray(rawAnalysis.areasToFocus, 10, 1000);
+    const areasToImprove = sanitizeStringArray(rawAnalysis.areasToImprove, 10, 1000);
+    const keyTermsForBonus = sanitizeStringArray(rawAnalysis.keyTermsForBonus, 15, 1000);
+    const extraTips = sanitizeStringArray(rawAnalysis.extraTips, 10, 1000);
+    const aiGeneratedAnswerIndices = Array.isArray(rawAnalysis.aiGeneratedAnswerIndices)
+      ? Array.from(
+          new Set(
+            rawAnalysis.aiGeneratedAnswerIndices
+              .filter((idx: unknown): idx is number => typeof idx === 'number' && Number.isSafeInteger(idx) && idx >= 0 && idx < submittedAnswers.length)
+          )
+        )
+      : [];
+
+    const isLowScore = overallScore < 30;
+    const rawAuth = rawAnalysis.authenticityReport;
+    let authenticityReport: AuthenticityReport;
+    if (rawAuth && typeof rawAuth === 'object' && !Array.isArray(rawAuth)) {
+      const verdictCandidate = typeof rawAuth.verdict === 'string' ? rawAuth.verdict.trim() : '';
+      const verdict = (ALLOWED_VERDICTS.has(verdictCandidate)
+        ? verdictCandidate
+        : isLowScore ? 'nonsense_or_filler' : 'natural_human') as AuthenticityReport['verdict'];
+      const confidence =
+        typeof rawAuth.naturalConfidenceScore === 'number' && Number.isFinite(rawAuth.naturalConfidenceScore)
+          ? Math.max(0, Math.min(100, Math.round(rawAuth.naturalConfidenceScore)))
+          : isLowScore ? 35 : 85;
+      const flaggedAnswers = Array.isArray(rawAuth.flaggedAnswers)
+        ? rawAuth.flaggedAnswers
+            .filter((item: any) => item && typeof item.questionNumber === 'number' && Number.isSafeInteger(item.questionNumber) && item.questionNumber >= 1 && typeof item.reason === 'string' && item.reason.trim())
+            .slice(0, 21)
+            .map((item: any) => ({
+              questionNumber: item.questionNumber,
+              reason: item.reason.trim().slice(0, 500),
+            }))
+        : [];
+      authenticityReport = {
+        isNatural: typeof rawAuth.isNatural === 'boolean' ? rawAuth.isNatural : !isLowScore,
+        naturalConfidenceScore: confidence,
+        verdict,
+        assessmentDetails:
+          typeof rawAuth.assessmentDetails === 'string' && rawAuth.assessmentDetails.trim()
+            ? rawAuth.assessmentDetails.trim().slice(0, 2000)
+            : isLowScore
+              ? 'Responses demonstrate low conceptual engagement or atypical phrasing. Focus on detailed, spontaneous explanations in your own words.'
+              : 'Linguistic cadence indicates authentic, organic student thought with genuine conceptual formulation.',
+        flaggedAnswers,
+      };
     } else {
-      analysis.overallScore = Math.max(0, Math.min(100, Math.round(analysis.overallScore)));
-    }
-
-    if (!analysis.performanceSummary) {
-      analysis.performanceSummary = 'Your answers have been analyzed across foundational concepts, analytical depth, and mathematical rigor.';
-    }
-
-    if (!Array.isArray(analysis.areasToFocus)) analysis.areasToFocus = [];
-    if (!Array.isArray(analysis.areasToImprove)) analysis.areasToImprove = [];
-    if (!Array.isArray(analysis.keyTermsForBonus)) analysis.keyTermsForBonus = [];
-    if (!Array.isArray(analysis.extraTips)) analysis.extraTips = [];
-    if (!Array.isArray(analysis.aiGeneratedAnswerIndices)) analysis.aiGeneratedAnswerIndices = [];
-
-    // Default authenticity report if model omitted it
-    if (!analysis.authenticityReport) {
-      const isLowScore = analysis.overallScore < 30;
-      analysis.authenticityReport = {
+      authenticityReport = {
         isNatural: !isLowScore,
         naturalConfidenceScore: isLowScore ? 35 : 85,
         verdict: isLowScore ? 'nonsense_or_filler' : 'natural_human',
@@ -262,54 +334,130 @@ Respond with ONLY a valid JSON object (no markdown fences, no surrounding prose)
       };
     }
 
+    const questionCritiques: QuestionCritique[] = Array.isArray(rawAnalysis.questionCritiques)
+      ? rawAnalysis.questionCritiques
+          .filter((q: any) => q && typeof q === 'object' && !Array.isArray(q))
+          .slice(0, 21)
+          .map((q: any, idx: number): QuestionCritique => ({
+            questionNumber:
+              typeof q.questionNumber === 'number' && Number.isSafeInteger(q.questionNumber) && q.questionNumber >= 1
+                ? q.questionNumber
+                : idx + 1,
+            questionText: typeof q.questionText === 'string' ? q.questionText.trim().slice(0, 1000) : `Question ${idx + 1}`,
+            userAnswer: typeof q.userAnswer === 'string' ? q.userAnswer.trim().slice(0, 2000) : '',
+            scoreOutOf10:
+              typeof q.scoreOutOf10 === 'number' && Number.isFinite(q.scoreOutOf10)
+                ? Math.max(0, Math.min(10, Math.round(q.scoreOutOf10 * 10) / 10))
+                : 0,
+            conceptualAccuracy:
+              typeof q.conceptualAccuracy === 'string' && q.conceptualAccuracy.trim()
+                ? q.conceptualAccuracy.trim().slice(0, 2000)
+                : 'Needs stronger conceptual precision and step-by-step justification.',
+            missingPoints: sanitizeStringArray(q.missingPoints, 10, 500),
+            idealDerivationOrAnswer:
+              typeof q.idealDerivationOrAnswer === 'string' ? q.idealDerivationOrAnswer.trim().slice(0, 4000) : '',
+          }))
+      : [];
+
+    let chartsData = '[]';
+    if (typeof rawAnalysis.chartsData === 'string' && rawAnalysis.chartsData.trim().length <= 30000) {
+      try {
+        JSON.parse(rawAnalysis.chartsData);
+        chartsData = rawAnalysis.chartsData.trim();
+      } catch {
+        chartsData = '[]';
+      }
+    } else if (Array.isArray(rawAnalysis.chartsData)) {
+      const serialized = JSON.stringify(rawAnalysis.chartsData);
+      if (serialized.length <= 30000) {
+        chartsData = serialized;
+      }
+    }
+
+    const analysis: FinalAnalysisOutput = {
+      overallScore,
+      performanceSummary,
+      areasToFocus,
+      areasToImprove,
+      keyTermsForBonus,
+      extraTips,
+      aiGeneratedAnswerIndices,
+      authenticityReport,
+      questionCritiques,
+      chartsData,
+    };
+
     // Auto-populate student's Mistake Notebook To-Do List with detected mistakes from Nichod
     try {
       await dbConnect();
-      const detected = (analysis as any).detected_mistakes;
+      const detected = rawAnalysis.detected_mistakes;
       if (Array.isArray(detected) && detected.length > 0) {
         for (const m of detected.slice(0, 5)) {
-          if (!m.title || !m.myMistake || !m.correctConcept) continue;
+          if (!m || typeof m !== 'object') continue;
+          const title = typeof m.title === 'string' ? m.title.trim().slice(0, 120) : '';
+          const myMistake = typeof m.myMistake === 'string' ? m.myMistake.trim().slice(0, 2500) : '';
+          const correctConcept = typeof m.correctConcept === 'string' ? m.correctConcept.trim().slice(0, 2500) : '';
+          if (!title || !myMistake || !correctConcept) continue;
+
+          const subject = typeof m.subject === 'string' && m.subject.trim()
+            ? m.subject.trim().slice(0, 60)
+            : 'General';
+          const chapter = typeof m.chapter === 'string' && m.chapter.trim()
+            ? m.chapter.trim().slice(0, 80)
+            : cleanTopic.slice(0, 80);
+          const rawErrType = typeof m.errorType === 'string' ? m.errorType.trim().toLowerCase() : '';
+          const errorType = (ALLOWED_ERROR_TYPES.has(rawErrType) ? rawErrType : 'conceptual') as
+            'conceptual' | 'calculation' | 'formula' | 'misread';
+          const questionOrPrompt = typeof m.questionOrPrompt === 'string' && m.questionOrPrompt.trim()
+            ? m.questionOrPrompt.trim().slice(0, 3000)
+            : `Nichod Topic: ${cleanTopic}`.slice(0, 3000);
+
           await MistakeEntry.create({
             userId: sessionUuid,
-            title: m.title.trim().slice(0, 120),
-            subject: m.subject || "General",
-            chapter: (m.chapter || topic).trim().slice(0, 80),
-            errorType: m.errorType || "conceptual",
-            questionOrPrompt: (m.questionOrPrompt || `Nichod Topic: ${topic}`).trim().slice(0, 3000),
-            myMistake: m.myMistake.trim().slice(0, 2500),
-            correctConcept: m.correctConcept.trim().slice(0, 2500),
-            status: "unresolved",
-            source: "nichod",
+            title,
+            subject,
+            chapter,
+            errorType,
+            questionOrPrompt,
+            myMistake,
+            correctConcept,
+            status: 'unresolved',
+            source: 'nichod',
             createdAt: new Date(),
           });
         }
-      } else if (Array.isArray(analysis.questionCritiques)) {
-        // Fallback: extract mistakes from questions where score <= 6/10
-        for (const q of analysis.questionCritiques) {
-          if (q.scoreOutOf10 <= 6 && q.missingPoints && q.missingPoints.length > 0) {
+      } else if (questionCritiques.length > 0) {
+        // Fallback: extract mistakes from questions where score <= 6/10 (capped at 5)
+        let createdFallbacks = 0;
+        for (const q of questionCritiques) {
+          if (createdFallbacks >= 5) break;
+          if (q.scoreOutOf10 <= 6 && q.missingPoints.length > 0) {
+            const correctConcept = (q.idealDerivationOrAnswer || q.missingPoints.join('; ')).trim().slice(0, 2500);
+            if (!correctConcept) continue;
             await MistakeEntry.create({
               userId: sessionUuid,
-              title: `${topic} - Q${q.questionNumber} Conceptual Gap`.slice(0, 120),
-              subject: "General",
-              chapter: topic.slice(0, 80),
-              errorType: "conceptual",
+              title: `${cleanTopic} - Q${q.questionNumber} Conceptual Gap`.slice(0, 120),
+              subject: 'General',
+              chapter: cleanTopic.slice(0, 80),
+              errorType: 'conceptual',
               questionOrPrompt: (q.questionText || `Question ${q.questionNumber}`).slice(0, 3000),
-              myMistake: (q.userAnswer ? `Your answer: ${q.userAnswer}` : "Incomplete derivation or missing key points.").slice(0, 2500),
-              correctConcept: (q.idealDerivationOrAnswer || q.missingPoints.join("; ")).slice(0, 2500),
-              status: "unresolved",
-              source: "nichod",
+              myMistake: (q.userAnswer ? `Your answer: ${q.userAnswer}` : 'Incomplete derivation or missing key points.').slice(0, 2500),
+              correctConcept,
+              status: 'unresolved',
+              source: 'nichod',
               createdAt: new Date(),
             });
+            createdFallbacks += 1;
           }
         }
       }
     } catch (mErr) {
-      console.warn("Could not auto-populate Mistake Notebook from Nichod:", mErr);
+      console.warn('Could not auto-populate Mistake Notebook from Nichod:', mErr);
     }
 
     return { analysis };
   } catch (error: any) {
     console.error('analyzeAnswersFlow error:', error);
-    throw new Error(error.message || 'Failed to analyze answers. Please try again.');
+    throw new Error('Failed to analyze answers. Please try again.');
   }
 }

@@ -7,6 +7,7 @@ import dbConnect from '@/lib/mongoose';
 import ConceptMirror from '@/models/ConceptMirror';
 import MistakeEntry from '@/models/MistakeEntry';
 import { checkDistributedRateLimit } from '@/lib/distributed-rate-limiter';
+import { assertActiveNonBlacklistedUser } from '@/lib/ai-flow-auth';
 import { escapePromptText } from '@/lib/prompt-safety';
 
 export type DetectedMistake = {
@@ -38,6 +39,25 @@ export type AnalyzeConceptExplanationInput = {
   durationSeconds?: number;
 };
 
+/** Largest-remainder normalization guaranteeing non-negative integer percentages summing to exact 100. */
+function normalizePercentagesTo100(items: { name: string; value: number }[]): { name: string; value: number }[] {
+  const total = items.reduce((sum, item) => sum + item.value, 0);
+  if (!Number.isFinite(total) || total <= 0) {
+    throw new Error("AI returned invalid knowledge-composition values. Please try again.");
+  }
+  const exact = items.map((item, idx) => {
+    const scaled = (item.value / total) * 100;
+    const floored = Math.floor(scaled);
+    return { idx, name: item.name, floored, remainder: scaled - floored };
+  });
+  let remaining = 100 - exact.reduce((sum, item) => sum + item.floored, 0);
+  const byRemainder = [...exact].sort((a, b) => b.remainder - a.remainder);
+  for (let i = 0; i < remaining && i < byRemainder.length; i++) {
+    byRemainder[i].floored += 1;
+  }
+  return exact.map((item) => ({ name: item.name, value: item.floored }));
+}
+
 export async function analyzeConceptExplanation(input: AnalyzeConceptExplanationInput): Promise<MasteryReportOutput> {
   // Authentication check to prevent unauthenticated bot AI-scraping and token draining
   const rawSession = (await cookies()).get('user_session')?.value;
@@ -53,9 +73,11 @@ export async function analyzeConceptExplanation(input: AnalyzeConceptExplanation
     throw new Error('Rate limit reached: Maximum 6 oral defenses per minute. Please take a moment to reflect before submitting your next defense.');
   }
 
+  await assertActiveNonBlacklistedUser(sessionUuid);
+
   if (!input || typeof input !== 'object' ||
-      typeof input.conceptName !== 'string' || input.conceptName.length > 120 ||
-      typeof input.userTranscript !== 'string' || input.userTranscript.length > 4000 ||
+      typeof input.conceptName !== 'string' || !input.conceptName.trim() || input.conceptName.length > 120 ||
+      typeof input.userTranscript !== 'string' || !input.userTranscript.trim() || input.userTranscript.length > 4000 ||
       (input.classLevel !== undefined && (typeof input.classLevel !== 'string' || input.classLevel.length > 50)) ||
       (input.durationSeconds !== undefined && (!Number.isFinite(input.durationSeconds) || input.durationSeconds < 0))) {
     throw new Error('Invalid or oversized oral-defense submission.');
@@ -65,13 +87,14 @@ export async function analyzeConceptExplanation(input: AnalyzeConceptExplanation
   const rawTranscript = input.userTranscript;
   const safeConceptName = rawConceptName.trim();
   const safeTranscript = rawTranscript.trim();
-  const classLevel = (input.classLevel || 'Unknown').trim();
-  const durationSeconds = Math.min(120, Math.max(0, input.durationSeconds ?? 0));
+  const classLevel = (input.classLevel || 'Unknown').trim() || 'Unknown';
+  const durationSeconds = Math.round(Math.min(120, Math.max(0, input.durationSeconds ?? 0)));
 
   const allocatedTimeSeconds = 120; // 2 minutes maximum oral defense allocation
   const timeUtilizedPercent = Math.min(100, Math.round((durationSeconds / allocatedTimeSeconds) * 100));
   const wordCount = safeTranscript.split(/\s+/).filter(Boolean).length;
   const promptConceptName = escapePromptText(safeConceptName);
+  const promptConceptNameForJson = promptConceptName.replace(/["\\\r\n]/g, " ");
   const promptClassLevel = escapePromptText(classLevel);
   const promptTranscript = escapePromptText(safeTranscript);
 
@@ -170,9 +193,9 @@ Respond with ONLY a valid JSON object (no markdown, pure JSON):
     {
       "title": "<Concise title of specific mistake / conceptual slip>",
       "subject": "Physics",
-      "chapter": "${promptConceptName}",
+      "chapter": "${promptConceptNameForJson}",
       "errorType": "conceptual",
-      "questionOrPrompt": "Concept Oral Defense: ${promptConceptName}",
+      "questionOrPrompt": "Concept Oral Defense: ${promptConceptNameForJson}",
       "myMistake": "<Exact error or conceptual flaw in their spoken words with LaTeX math>",
       "correctConcept": "<Rigorous correction with accurate LaTeX math equations e.g. $e = -\\frac{d\\Phi}{dt}$>"
     }
@@ -181,85 +204,83 @@ Respond with ONLY a valid JSON object (no markdown, pure JSON):
 
 CRITICAL: pie_chart_data values MUST sum to exactly 100.`;
 
-  const raw = await callOpenRouter([
-    { role: 'user', content: prompt },
-  ], undefined, true);
+  let rawOutput: MasteryReportOutput;
+  try {
+    const raw = await callOpenRouter([
+      { role: 'user', content: prompt },
+    ], undefined, true);
+    rawOutput = parseJsonResponse<MasteryReportOutput>(raw);
+  } catch (err) {
+    console.error("analyzeConceptExplanation AI error:", err);
+    throw new Error("Failed to generate mastery report. Please try again.");
+  }
 
-  const output = parseJsonResponse<MasteryReportOutput>(raw);
-
-  if (!output || !Array.isArray(output.radar_chart_data) || !Array.isArray(output.pie_chart_data)) {
+  if (!rawOutput || typeof rawOutput !== "object" || !Array.isArray(rawOutput.radar_chart_data) || !Array.isArray(rawOutput.pie_chart_data)) {
     throw new Error("Failed to generate mastery report.");
   }
 
-  output.radar_chart_data = output.radar_chart_data
-    .filter((item) => item && typeof item.metric === "string" && item.metric.length <= 80 && Number.isFinite(item.score))
+  const radarChartData = rawOutput.radar_chart_data
+    .filter((item) => item && typeof item.metric === "string" && item.metric.trim().length > 0 && item.metric.trim().length <= 80 && Number.isFinite(item.score))
     .slice(0, 10)
-    .map((item) => ({ metric: item.metric, score: Math.max(0, Math.min(100, Math.round(item.score))) }));
-  output.pie_chart_data = output.pie_chart_data
-    .filter((item) => item && typeof item.name === "string" && item.name.length <= 80 && Number.isFinite(item.value) && item.value >= 0)
+    .map((item) => ({ metric: item.metric.trim(), score: Math.max(0, Math.min(100, Math.round(item.score))) }));
+
+  const rawPieChartData = rawOutput.pie_chart_data
+    .filter((item) => item && typeof item.name === "string" && item.name.trim().length > 0 && item.name.trim().length <= 80 && Number.isFinite(item.value) && item.value >= 0)
     .slice(0, 5)
-    .map((item) => ({ name: item.name, value: Math.max(0, Math.min(100, item.value)) }));
-  if (output.radar_chart_data.length === 0 || output.pie_chart_data.length === 0) {
+    .map((item) => ({ name: item.name.trim(), value: Math.max(0, Math.min(100, item.value)) }));
+
+  if (radarChartData.length === 0 || rawPieChartData.length === 0) {
     throw new Error("AI returned invalid mastery chart data. Please try again.");
   }
 
-  output.bar_chart_data = (Array.isArray(output.bar_chart_data) ? output.bar_chart_data : [])
-    .filter((item) => item && typeof item.name === "string" && item.name.length <= 80 && Number.isFinite(item.score))
+  const pieChartData = normalizePercentagesTo100(rawPieChartData);
+
+  let barChartData = (Array.isArray(rawOutput.bar_chart_data) ? rawOutput.bar_chart_data : [])
+    .filter((item) => item && typeof item.name === "string" && item.name.trim().length > 0 && item.name.trim().length <= 80 && Number.isFinite(item.score))
     .slice(0, 10)
-    .map((item) => ({ name: item.name, score: Math.max(0, Math.min(100, Math.round(item.score))) }));
-  output.polynomial_chart_data = (Array.isArray(output.polynomial_chart_data) ? output.polynomial_chart_data : [])
-    .filter((item) => item && typeof item.step === "string" && item.step.length <= 80 && Number.isFinite(item.score))
+    .map((item) => ({ name: item.name.trim(), score: Math.max(0, Math.min(100, Math.round(item.score))) }));
+
+  let polynomialChartData = (Array.isArray(rawOutput.polynomial_chart_data) ? rawOutput.polynomial_chart_data : [])
+    .filter((item) => item && typeof item.step === "string" && item.step.trim().length > 0 && item.step.trim().length <= 80 && Number.isFinite(item.score))
     .slice(0, 10)
-    .map((item) => ({ step: item.step, score: Math.max(0, Math.min(100, Math.round(item.score))) }));
-  output.feedback_summary = typeof output.feedback_summary === "string"
-    ? output.feedback_summary.slice(0, 10000)
-    : "Feedback could not be generated reliably. Please retry your oral defense analysis.";
+    .map((item) => ({ step: item.step.trim(), score: Math.max(0, Math.min(100, Math.round(item.score))) }));
+
+  const feedbackSummary =
+    typeof rawOutput.feedback_summary === "string" && rawOutput.feedback_summary.trim()
+      ? rawOutput.feedback_summary.trim().slice(0, 10000)
+      : "Feedback could not be generated reliably. Please retry your oral defense analysis.";
+
   const allowedMistakeTypes = ["conceptual", "calculation", "formula", "misread"] as const;
-  output.detected_mistakes = (Array.isArray(output.detected_mistakes) ? output.detected_mistakes : [])
+  const detectedMistakes: DetectedMistake[] = (Array.isArray(rawOutput.detected_mistakes) ? rawOutput.detected_mistakes : [])
     .filter((item) => item && typeof item.title === "string" && item.title.trim() &&
       typeof item.myMistake === "string" && item.myMistake.trim() &&
       typeof item.correctConcept === "string" && item.correctConcept.trim())
     .slice(0, 5)
-    .map((item) => ({
-      title: item.title.trim().slice(0, 120),
-      subject: typeof item.subject === "string" ? item.subject.trim().slice(0, 60) || "General" : "General",
-      chapter: typeof item.chapter === "string" ? item.chapter.trim().slice(0, 80) : undefined,
-      errorType: allowedMistakeTypes.includes(item.errorType) ? item.errorType : "conceptual",
-      questionOrPrompt: typeof item.questionOrPrompt === "string" ? item.questionOrPrompt.trim().slice(0, 3000) : undefined,
-      myMistake: item.myMistake.trim().slice(0, 2500),
-      correctConcept: item.correctConcept.trim().slice(0, 2500),
-    }));
-
-  // Normalize pie chart to sum 100
-  const pieTotal = output.pie_chart_data.reduce((s, i) => s + i.value, 0);
-  if (!Number.isFinite(pieTotal) || pieTotal <= 0) {
-    throw new Error("AI returned invalid knowledge-composition values. Please try again.");
-  }
-  if (pieTotal > 0 && pieTotal !== 100) {
-    let running = 0;
-    output.pie_chart_data.forEach((item, idx) => {
-      if (idx < output.pie_chart_data.length - 1) {
-        const v = Math.round((item.value / pieTotal) * 100);
-        item.value = v;
-        running += v;
-      } else {
-        item.value = 100 - running;
-      }
+    .map((item) => {
+      const normalizedType = typeof item.errorType === "string" ? item.errorType.trim().toLowerCase() : "";
+      const errorType = (allowedMistakeTypes as readonly string[]).includes(normalizedType)
+        ? (normalizedType as DetectedMistake["errorType"])
+        : "conceptual";
+      return {
+        title: item.title.trim().slice(0, 120),
+        subject: typeof item.subject === "string" ? item.subject.trim().slice(0, 60) || "General" : "General",
+        chapter: typeof item.chapter === "string" && item.chapter.trim() ? item.chapter.trim().slice(0, 80) : undefined,
+        errorType,
+        questionOrPrompt: typeof item.questionOrPrompt === "string" && item.questionOrPrompt.trim() ? item.questionOrPrompt.trim().slice(0, 3000) : undefined,
+        myMistake: item.myMistake.trim().slice(0, 2500),
+        correctConcept: item.correctConcept.trim().slice(0, 2500),
+      };
     });
-  }
 
   const overallScore = Math.round(
-    output.radar_chart_data.reduce((s, r) => s + r.score, 0) /
-      (output.radar_chart_data.length || 1)
+    radarChartData.reduce((s, r) => s + r.score, 0) / radarChartData.length
   );
-  output.overallScore = overallScore;
-  output.durationSeconds = durationSeconds;
-  const fluffItem = output.pie_chart_data.find((p) => p.name.toLowerCase() === 'fluff');
-  output.fluffPercentage = fluffItem ? fluffItem.value : 0;
+  const fluffItem = pieChartData.find((p) => p.name.toLowerCase() === 'fluff');
+  const fluffPercentage = fluffItem ? fluffItem.value : 0;
 
   // Fallback defaults if LLM omitted additional diverse charts
-  if (!output.bar_chart_data || output.bar_chart_data.length === 0) {
-    output.bar_chart_data = [
+  if (barChartData.length === 0) {
+    barChartData = [
       { name: "Definitions", score: Math.min(100, Math.round(overallScore * 1.04)) },
       { name: "Core Principles", score: Math.round(overallScore) },
       { name: "Application", score: Math.max(20, Math.round(overallScore * 0.92)) },
@@ -267,8 +288,8 @@ CRITICAL: pie_chart_data values MUST sum to exactly 100.`;
     ];
   }
 
-  if (!output.polynomial_chart_data || output.polynomial_chart_data.length === 0) {
-    output.polynomial_chart_data = [
+  if (polynomialChartData.length === 0) {
+    polynomialChartData = [
       { step: "Initial Recall", score: Math.max(15, Math.round(overallScore * 0.7)) },
       { step: "Concept Framing", score: Math.max(25, Math.round(overallScore * 0.85)) },
       { step: "Analytical Nuance", score: Math.min(100, Math.round(overallScore * 0.95)) },
@@ -276,6 +297,18 @@ CRITICAL: pie_chart_data values MUST sum to exactly 100.`;
       { step: "Final Mastery", score: Math.min(100, Math.round(overallScore * 1.08)) },
     ];
   }
+
+  const output: MasteryReportOutput = {
+    feedback_summary: feedbackSummary,
+    radar_chart_data: radarChartData,
+    pie_chart_data: pieChartData,
+    bar_chart_data: barChartData,
+    polynomial_chart_data: polynomialChartData,
+    overallScore,
+    durationSeconds,
+    fluffPercentage,
+    detected_mistakes: detectedMistakes,
+  };
 
   // Persist session to MongoDB for public profile analytics and mastery tracking
   try {
@@ -286,24 +319,23 @@ CRITICAL: pie_chart_data values MUST sum to exactly 100.`;
       transcript: safeTranscript,
       durationSeconds: durationSeconds || 0,
       overallScore,
-      feedbackSummary: output.feedback_summary,
-      radarData: output.radar_chart_data,
-      pieData: output.pie_chart_data,
+      feedbackSummary,
+      radarData: radarChartData,
+      pieData: pieChartData,
     });
 
     // Auto-populate student's Mistake Notebook To-Do List with detected mistakes
-    if (Array.isArray(output.detected_mistakes) && output.detected_mistakes.length > 0) {
-      for (const m of output.detected_mistakes.slice(0, 5)) {
-        if (!m.title || !m.myMistake || !m.correctConcept) continue;
+    if (detectedMistakes.length > 0) {
+      for (const m of detectedMistakes) {
         await MistakeEntry.create({
           userId: sessionUuid,
-          title: m.title.trim().slice(0, 120),
-          subject: m.subject || "General",
-          chapter: (m.chapter || safeConceptName).trim().slice(0, 80),
-          errorType: m.errorType || "conceptual",
-          questionOrPrompt: (m.questionOrPrompt || `Concept Oral Defense: ${safeConceptName}`).trim().slice(0, 3000),
-          myMistake: m.myMistake.trim().slice(0, 2500),
-          correctConcept: m.correctConcept.trim().slice(0, 2500),
+          title: m.title,
+          subject: m.subject,
+          chapter: (m.chapter || safeConceptName).slice(0, 80),
+          errorType: m.errorType,
+          questionOrPrompt: (m.questionOrPrompt || `Concept Oral Defense: ${safeConceptName}`).slice(0, 3000),
+          myMistake: m.myMistake,
+          correctConcept: m.correctConcept,
           status: "unresolved",
           source: "concept_mirror",
           createdAt: new Date(),
