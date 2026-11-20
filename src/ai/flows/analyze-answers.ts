@@ -280,10 +280,10 @@ Respond with ONLY a valid JSON object (no markdown fences, no surrounding prose)
     const areasToImprove = sanitizeStringArray(rawAnalysis.areasToImprove, 10, 1000);
     const keyTermsForBonus = sanitizeStringArray(rawAnalysis.keyTermsForBonus, 15, 1000);
     const extraTips = sanitizeStringArray(rawAnalysis.extraTips, 10, 1000);
-    const aiGeneratedAnswerIndices = Array.isArray(rawAnalysis.aiGeneratedAnswerIndices)
+    const aiGeneratedAnswerIndices: number[] = Array.isArray(rawAnalysis.aiGeneratedAnswerIndices)
       ? Array.from(
-          new Set(
-            rawAnalysis.aiGeneratedAnswerIndices
+          new Set<number>(
+            (rawAnalysis.aiGeneratedAnswerIndices as unknown[])
               .filter((idx: unknown): idx is number => typeof idx === 'number' && Number.isSafeInteger(idx) && idx >= 0 && idx < submittedAnswers.length)
           )
         )
