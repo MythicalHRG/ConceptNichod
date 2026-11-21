@@ -44,18 +44,23 @@ export async function getLeaderboardDataAction(
   const rawSession = (await cookies()).get("user_session")?.value;
   const currentUuid = verifySessionCookie(rawSession);
 
+  const safeTimeframe: "all" | "week" | "month" =
+    timeframe === "week" || timeframe === "month" ? timeframe : "all";
+  const safeExamFilter =
+    typeof examFilter === "string" ? examFilter.trim().slice(0, 100) : "All";
+
   const now = new Date();
   let timeCutoff: Date | null = null;
-  if (timeframe === "week") {
+  if (safeTimeframe === "week") {
     timeCutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  } else if (timeframe === "month") {
+  } else if (safeTimeframe === "month") {
     timeCutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   }
 
-  // Base query for users
-  const userQuery: any = {};
-  if (examFilter && examFilter !== "All") {
-    userQuery.examFocus = examFilter;
+  // Base query for users (strict string guard prevents NoSQL operator injection)
+  const userQuery: Record<string, string> = {};
+  if (safeExamFilter && safeExamFilter !== "All") {
+    userQuery.examFocus = safeExamFilter;
   }
 
   const users = await User.find(userQuery)
@@ -157,92 +162,98 @@ export async function getLeaderboardDataAction(
     .allowDiskUse(true)
     .cursor({ batchSize: 250 });
 
-  for await (const event of activityCursor) {
-    if (typeof event.userId !== "string") continue;
-    const createdAt = new Date(event.createdAt);
-    if (!Number.isFinite(createdAt.getTime())) continue;
+  try {
+    for await (const event of activityCursor) {
+      if (typeof event.userId !== "string") continue;
+      const createdAt = new Date(event.createdAt);
+      if (!Number.isFinite(createdAt.getTime())) continue;
 
-    let score = 0;
-    let durationSeconds = 0;
-    if (event.eventType === "mirror") {
-      const rawScore = event.rawScore;
-      const rawDuration = event.rawDuration;
-      if (!Number.isFinite(rawScore)) continue;
-      score = Math.max(0, Math.min(100, rawScore));
-      durationSeconds = Number.isFinite(rawDuration)
-        ? Math.max(0, Math.min(86400, rawDuration))
-        : 0;
-    } else {
-      const topic = { analysis: { overallScore: event.analysisScore } };
-      const hasAnalysisScore = Boolean(topic.analysis && Number.isFinite(topic.analysis.overallScore));
-      const isCompleted = event.practiceStatus === "completed";
-      const isInProgress = event.practiceStatus === "in_progress";
-      const hasAnswers = event.hasAnswers === true;
+      let score = 0;
+      let durationSeconds = 0;
+      if (event.eventType === "mirror") {
+        const rawScore = event.rawScore;
+        const rawDuration = event.rawDuration;
+        if (!Number.isFinite(rawScore)) continue;
+        score = Math.max(0, Math.min(100, rawScore));
+        durationSeconds = Number.isFinite(rawDuration)
+          ? Math.max(0, Math.min(86400, rawDuration))
+          : 0;
+      } else {
+        const topic = { analysis: { overallScore: event.analysisScore } };
+        const hasAnalysisScore = Boolean(topic.analysis && Number.isFinite(topic.analysis.overallScore));
+        const isCompleted = event.practiceStatus === "completed";
+        const isInProgress = event.practiceStatus === "in_progress";
+        const hasAnswers = event.hasAnswers === true;
 
-      if (!hasAnalysisScore && !isCompleted && (!isInProgress || !hasAnswers)) {
-        continue;
+        if (!hasAnalysisScore && !isCompleted && (!isInProgress || !hasAnswers)) {
+          continue;
+        }
+
+        const rawTopicScore = hasAnalysisScore
+          ? event.analysisScore
+          : isCompleted
+            ? 70
+            : isInProgress
+              ? 40
+              : 0;
+        score = Number.isFinite(rawTopicScore)
+          ? Math.max(0, Math.min(100, rawTopicScore))
+          : 0;
+        durationSeconds = isCompleted ? 180 : 60;
       }
 
-      const rawTopicScore = hasAnalysisScore
-        ? event.analysisScore
-        : isCompleted
-          ? 70
-          : isInProgress
-            ? 40
-            : 0;
-      score = Number.isFinite(rawTopicScore)
-        ? Math.max(0, Math.min(100, rawTopicScore))
-        : 0;
-      durationSeconds = isCompleted ? 180 : 60;
+      let summary = activitySummaryByUser.get(event.userId);
+      if (!summary) {
+        summary = {
+          count: 0,
+          totalScore: 0,
+          totalDurationSeconds: 0,
+          sumX: 0,
+          sumY: 0,
+          sumXY: 0,
+          sumX2: 0,
+          qualityWeightedVolume: 0,
+          oralDefenseSeconds: 0,
+          trajectory: [],
+        };
+        activitySummaryByUser.set(event.userId, summary);
+      }
+
+      const x = summary.count + 1;
+      summary.count = x;
+      summary.totalScore += score;
+      summary.totalDurationSeconds += durationSeconds;
+      summary.sumX += x;
+      summary.sumY += score;
+      summary.sumXY += x * score;
+      summary.sumX2 += x * x;
+      if (score >= 80) summary.qualityWeightedVolume += 3.5;
+      else if (score >= 60) summary.qualityWeightedVolume += 2.5;
+      else if (score >= 40) summary.qualityWeightedVolume += 1.5;
+      else summary.qualityWeightedVolume += 0.5;
+
+      if (event.eventType === "mirror") {
+        summary.oralDefenseSeconds += durationSeconds;
+      }
+
+      summary.trajectory.push({
+        conceptIndex: x,
+        score: Math.round(score),
+        cumulativeAvg: Math.round((summary.totalScore / x) * 10) / 10,
+        label: typeof event.title === "string"
+          ? event.title.slice(0, 200)
+          : event.eventType === "mirror" ? "Concept session" : "Study topic",
+        timestamp: createdAt.toISOString(),
+      });
+      if (summary.trajectory.length > 100) summary.trajectory.shift();
     }
-
-    let summary = activitySummaryByUser.get(event.userId);
-    if (!summary) {
-      summary = {
-        count: 0,
-        totalScore: 0,
-        totalDurationSeconds: 0,
-        sumX: 0,
-        sumY: 0,
-        sumXY: 0,
-        sumX2: 0,
-        qualityWeightedVolume: 0,
-        oralDefenseSeconds: 0,
-        trajectory: [],
-      };
-      activitySummaryByUser.set(event.userId, summary);
-    }
-
-    const x = summary.count + 1;
-    summary.count = x;
-    summary.totalScore += score;
-    summary.totalDurationSeconds += durationSeconds;
-    summary.sumX += x;
-    summary.sumY += score;
-    summary.sumXY += x * score;
-    summary.sumX2 += x * x;
-    if (score >= 80) summary.qualityWeightedVolume += 3.5;
-    else if (score >= 60) summary.qualityWeightedVolume += 2.5;
-    else if (score >= 40) summary.qualityWeightedVolume += 1.5;
-    else summary.qualityWeightedVolume += 0.5;
-
-    if (event.eventType === "mirror") {
-      summary.oralDefenseSeconds += durationSeconds;
-    }
-
-    summary.trajectory.push({
-      conceptIndex: x,
-      score: Math.round(score),
-      cumulativeAvg: Math.round((summary.totalScore / x) * 10) / 10,
-      label: typeof event.title === "string"
-        ? event.title.slice(0, 200)
-        : event.eventType === "mirror" ? "Concept session" : "Study topic",
-      timestamp: createdAt.toISOString(),
-    });
-    if (summary.trajectory.length > 100) summary.trajectory.shift();
+  } finally {
+    await activityCursor.close().catch(() => {});
   }
 
-  const streakDocs = await StudyStreak.find({ userId: { $in: userIds } }).lean();
+  const streakDocs = await StudyStreak.find({ userId: { $in: userIds } })
+    .select("userId currentStreak longestStreak lastActiveDate")
+    .lean();
   const streakMap = new Map(streakDocs.map((s) => [s.userId, s]));
   const todayStr = getIstDateString(now);
   const yesterdayStr = getYesterdayIstDateString(now);
@@ -276,7 +287,8 @@ export async function getLeaderboardDataAction(
     const streakDoc = streakMap.get(u.uuid);
     const isStreakActive =
       streakDoc &&
-      (streakDoc.lastActiveDate === todayStr ||
+      typeof streakDoc.lastActiveDate === "string" &&
+      (streakDoc.lastActiveDate >= todayStr ||
         streakDoc.lastActiveDate === yesterdayStr);
     const currentStreakValue = isStreakActive ? streakDoc.currentStreak : 0;
     const longestStreakValue = streakDoc ? streakDoc.longestStreak : 0;
@@ -294,8 +306,8 @@ export async function getLeaderboardDataAction(
     // 3. Timeframe-Bounded Consistency (Streak):
     // Bound streak points to timeframe so historical streaks do not skew weekly/monthly leaderboards
     let maxTimeframeDays = 100;
-    if (timeframe === "week") maxTimeframeDays = 7;
-    else if (timeframe === "month") maxTimeframeDays = 30;
+    if (safeTimeframe === "week") maxTimeframeDays = 7;
+    else if (safeTimeframe === "month") maxTimeframeDays = 30;
     const effectiveStreak = Math.min(currentStreak, maxTimeframeDays);
     const streakWeight = effectiveStreak * 2.0;
 
@@ -373,8 +385,14 @@ export async function getLeaderboardDataAction(
     if (b.totalDurationSeconds !== a.totalDurationSeconds) {
       return b.totalDurationSeconds - a.totalDurationSeconds;
     }
-    const aCreated = userMap.get(a.username.toLowerCase())?.createdAt ? new Date(userMap.get(a.username.toLowerCase())!.createdAt).getTime() : 0;
-    const bCreated = userMap.get(b.username.toLowerCase())?.createdAt ? new Date(userMap.get(b.username.toLowerCase())!.createdAt).getTime() : 0;
+    const aRaw = userMap.get(a.username.toLowerCase())?.createdAt
+      ? new Date(userMap.get(a.username.toLowerCase())!.createdAt).getTime()
+      : 0;
+    const bRaw = userMap.get(b.username.toLowerCase())?.createdAt
+      ? new Date(userMap.get(b.username.toLowerCase())!.createdAt).getTime()
+      : 0;
+    const aCreated = Number.isFinite(aRaw) ? aRaw : 0;
+    const bCreated = Number.isFinite(bRaw) ? bRaw : 0;
     return aCreated - bCreated;
   });
 

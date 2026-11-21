@@ -5,19 +5,27 @@ import Topic from "@/models/Topic";
 import ConceptMirror from "@/models/ConceptMirror";
 import { computeUserBadges } from "@/lib/badges";
 
+const MAX_SKILL_KEYS = 50;
+
 export async function getPublicProfileData(username: string) {
+  if (typeof username !== "string") return null;
+  const cleanUsername = username.trim();
+  if (!cleanUsername || cleanUsername.length > 64) return null;
+
   await dbConnect();
 
   const escapeRegex = (string: string) => string.replace(/[.*+?^$()|[\]\\{}]/g, "\\$&");
-  const safeUsername = escapeRegex(username);
+  const safeUsername = escapeRegex(cleanUsername);
   const usernamePattern = new RegExp("^" + safeUsername + "$", "i");
 
   const user = await User.findOne({ username: usernamePattern })
-    .select("username fullName classLevel examFocus city instagram snapchat bio");
+    .select("username fullName classLevel examFocus city instagram snapchat bio")
+    .lean();
   if (!user) return null;
 
   const userWithId = await User.findOne({ username: usernamePattern })
-    .select("uuid username");
+    .select("uuid username")
+    .lean();
   if (!userWithId) return null;
 
   // Streamed replacement for validMirrorDocs = mirrorDocs.filter(...); only a seven-item recent window is retained.
@@ -43,69 +51,76 @@ export async function getPublicProfileData(username: string) {
   const skillAggregator = new Map<string, { total: number; count: number }>();
   const recentAnalyzedTopics: Array<{ name?: string; score: number }> = [];
 
-  for await (const t of topicCursor) {
-    totalTopics += 1;
-    const subject = t.subject || "Unknown";
-    subjectMap.set(subject, (subjectMap.get(subject) || 0) + 1);
+  try {
+    for await (const t of topicCursor) {
+      totalTopics += 1;
+      const subject = t.subject || "Unknown";
+      subjectMap.set(subject, (subjectMap.get(subject) || 0) + 1);
 
-    if (
-      !t.analysis ||
-      !Number.isFinite(t.analysis.overallScore) ||
-      t.analysis.overallScore < 0 ||
-      t.analysis.overallScore > 100
-    ) {
-      continue;
-    }
-
-    const score = t.analysis.overallScore;
-    totalScore += score;
-    analyzedTopicCount += 1;
-
-    for (const bucket of scoreBuckets) {
-      if (score >= bucket.min && score <= bucket.max) {
-        bucket.count += 1;
-        break;
+      if (
+        !t.analysis ||
+        !Number.isFinite(t.analysis.overallScore) ||
+        t.analysis.overallScore < 0 ||
+        t.analysis.overallScore > 100
+      ) {
+        continue;
       }
-    }
 
-    if (recentAnalyzedTopics.length < 7) {
-      recentAnalyzedTopics.push({
-        name: typeof t.name === "string" ? t.name : undefined,
-        score,
-      });
-    }
+      const score = t.analysis.overallScore;
+      const roundedBucketScore = Math.max(0, Math.min(100, Math.round(score)));
+      totalScore += score;
+      analyzedTopicCount += 1;
 
-    try {
-      if (t.analysis.chartsData) {
-        const charts =
-          typeof t.analysis.chartsData === "string"
-            ? JSON.parse(t.analysis.chartsData)
-            : t.analysis.chartsData;
-        if (Array.isArray(charts)) {
-          charts.forEach((chart: any) => {
-            if (Array.isArray(chart.data)) {
-              chart.data.forEach((d: any) => {
-                if (
-                  typeof d.name === "string" &&
-                  d.name.trim() &&
-                  d.name.length <= 80 &&
-                  Number.isFinite(d.score)
-                ) {
-                  if (!skillAggregator.has(d.name)) {
-                    skillAggregator.set(d.name, { total: 0, count: 0 });
-                  }
-                  const metric = skillAggregator.get(d.name)!;
-                  metric.total += Math.max(0, Math.min(100, d.score));
-                  metric.count += 1;
-                }
-              });
-            }
-          });
+      for (const bucket of scoreBuckets) {
+        if (roundedBucketScore >= bucket.min && roundedBucketScore <= bucket.max) {
+          bucket.count += 1;
+          break;
         }
       }
-    } catch {
-      // Ignore malformed historical chart JSON without failing the public profile.
+
+      if (recentAnalyzedTopics.length < 7) {
+        recentAnalyzedTopics.push({
+          name: typeof t.name === "string" ? t.name : undefined,
+          score,
+        });
+      }
+
+      try {
+        if (t.analysis.chartsData) {
+          const charts =
+            typeof t.analysis.chartsData === "string"
+              ? JSON.parse(t.analysis.chartsData)
+              : t.analysis.chartsData;
+          if (Array.isArray(charts)) {
+            charts.forEach((chart: any) => {
+              if (Array.isArray(chart?.data)) {
+                chart.data.forEach((d: any) => {
+                  if (
+                    typeof d?.name === "string" &&
+                    d.name.trim() &&
+                    d.name.length <= 80 &&
+                    Number.isFinite(d.score)
+                  ) {
+                    const metricName = d.name.trim();
+                    if (!skillAggregator.has(metricName)) {
+                      if (skillAggregator.size >= MAX_SKILL_KEYS) return;
+                      skillAggregator.set(metricName, { total: 0, count: 0 });
+                    }
+                    const metric = skillAggregator.get(metricName)!;
+                    metric.total += Math.max(0, Math.min(100, d.score));
+                    metric.count += 1;
+                  }
+                });
+              }
+            });
+          }
+        }
+      } catch {
+        // Ignore malformed historical chart JSON without failing the public profile.
+      }
     }
+  } finally {
+    await topicCursor.close().catch(() => {});
   }
 
   const averageScore =
@@ -165,41 +180,47 @@ export async function getPublicProfileData(username: string) {
     const mirrorSkillMap = new Map<string, { total: number; count: number }>();
     const recentMirrorDocs: any[] = [];
 
-    for await (const doc of mirrorCursor) {
-      if (
-        !Number.isFinite(doc.overallScore) ||
-        doc.overallScore < 0 ||
-        doc.overallScore > 100
-      ) {
-        continue;
-      }
+    try {
+      for await (const doc of mirrorCursor) {
+        if (
+          !Number.isFinite(doc.overallScore) ||
+          doc.overallScore < 0 ||
+          doc.overallScore > 100
+        ) {
+          continue;
+        }
 
-      validMirrorCount += 1;
-      totalMirrorScore += Math.max(0, Math.min(100, doc.overallScore));
-      const duration = Number.isFinite(doc.durationSeconds)
-        ? Math.max(0, Math.min(86400, doc.durationSeconds))
-        : 0;
-      totalMirrorDuration += duration;
+        validMirrorCount += 1;
+        totalMirrorScore += Math.max(0, Math.min(100, doc.overallScore));
+        const duration = Number.isFinite(doc.durationSeconds)
+          ? Math.max(0, Math.min(86400, doc.durationSeconds))
+          : 0;
+        totalMirrorDuration += duration;
 
-      if (Array.isArray(doc.radarData)) {
-        doc.radarData.forEach((r: any) => {
-          if (
-            typeof r.metric === "string" &&
-            r.metric.trim() &&
-            r.metric.length <= 80 &&
-            Number.isFinite(r.score)
-          ) {
-            if (!mirrorSkillMap.has(r.metric)) {
-              mirrorSkillMap.set(r.metric, { total: 0, count: 0 });
+        if (Array.isArray(doc.radarData)) {
+          doc.radarData.forEach((r: any) => {
+            if (
+              typeof r?.metric === "string" &&
+              r.metric.trim() &&
+              r.metric.length <= 80 &&
+              Number.isFinite(r.score)
+            ) {
+              const metricName = r.metric.trim();
+              if (!mirrorSkillMap.has(metricName)) {
+                if (mirrorSkillMap.size >= MAX_SKILL_KEYS) return;
+                mirrorSkillMap.set(metricName, { total: 0, count: 0 });
+              }
+              const metric = mirrorSkillMap.get(metricName)!;
+              metric.total += Math.max(0, Math.min(100, r.score));
+              metric.count += 1;
             }
-            const metric = mirrorSkillMap.get(r.metric)!;
-            metric.total += Math.max(0, Math.min(100, r.score));
-            metric.count += 1;
-          }
-        });
-      }
+          });
+        }
 
-      if (recentMirrorDocs.length < 7) recentMirrorDocs.push(doc);
+        if (recentMirrorDocs.length < 7) recentMirrorDocs.push(doc);
+      }
+    } finally {
+      await mirrorCursor.close().catch(() => {});
     }
 
     if (validMirrorCount > 0) {
@@ -238,7 +259,7 @@ export async function getPublicProfileData(username: string) {
           ? Math.max(0, Math.min(86400, doc.durationSeconds))
           : 0,
         createdAt: Number.isFinite(new Date(doc.createdAt).getTime())
-          ? doc.createdAt
+          ? new Date(doc.createdAt)
           : new Date(0),
       }));
 
@@ -264,8 +285,19 @@ export async function getPublicProfileData(username: string) {
     console.warn("Could not compute user badges:", err);
   }
 
+  const publicUser = {
+    username: user.username,
+    fullName: user.fullName,
+    classLevel: user.classLevel,
+    examFocus: user.examFocus,
+    city: user.city,
+    instagram: user.instagram,
+    snapchat: user.snapchat,
+    bio: user.bio,
+  };
+
   return {
-    user: user.toObject(),
+    user: publicUser,
     totalTopics,
     averageScore,
     subjectDistribution,

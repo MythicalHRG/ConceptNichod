@@ -1,23 +1,29 @@
 "use server";
 
+import mongoose from "mongoose";
 import { cookies } from "next/headers";
 import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
 import MistakeEntry from "@/models/MistakeEntry";
 import { verifySessionCookie } from "@/lib/session";
 import { checkDistributedRateLimit } from "@/lib/distributed-rate-limiter";
+import { assertActiveNonBlacklistedUser } from "@/lib/ai-flow-auth";
 import { recordUserStudyActivity } from "@/lib/streak";
 import { callOpenRouter, parseJsonResponse } from "@/lib/openrouter";
 import { escapePromptText } from "@/lib/prompt-safety";
 
-function sanitize(str: string): string {
-  return (str || "")
+const ALLOWED_ERROR_TYPES = new Set(["conceptual", "calculation", "formula", "misread"]);
+const ALLOWED_STATUSES = new Set(["unresolved", "mastered"]);
+
+function sanitize(str: string, maxLen?: number): string {
+  const escaped = (typeof str === "string" ? str : "")
     .trim()
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+  return typeof maxLen === "number" ? escaped.slice(0, maxLen) : escaped;
 }
 
 async function getAuthenticatedUser() {
@@ -27,7 +33,10 @@ async function getAuthenticatedUser() {
   if (!sessionUuid) {
     throw new Error("Authentication required.");
   }
-  const user = await User.findOne({ uuid: sessionUuid }).lean();
+  await assertActiveNonBlacklistedUser(sessionUuid);
+  const user = await User.findOne({ uuid: sessionUuid })
+    .select("uuid username email")
+    .lean();
   if (!user) {
     throw new Error("User account not found.");
   }
@@ -56,18 +65,24 @@ export async function getMistakesDataAction(filter?: {
   search?: string;
 }) {
   const user = await getAuthenticatedUser();
-  await dbConnect();
+  const safeFilter = filter && typeof filter === "object" ? filter : {};
 
-  const query: any = { userId: user.uuid };
+  const query: Record<string, any> = { userId: user.uuid };
 
-  if (filter?.status && filter.status !== "all") {
-    query.status = filter.status;
+  if (typeof safeFilter.status === "string" && safeFilter.status !== "all") {
+    const cleanStatus = safeFilter.status.trim();
+    if (ALLOWED_STATUSES.has(cleanStatus)) {
+      query.status = cleanStatus;
+    }
   }
-  if (filter?.subject && filter.subject !== "all") {
-    query.subject = filter.subject;
+  if (typeof safeFilter.subject === "string" && safeFilter.subject !== "all") {
+    const cleanSubject = safeFilter.subject.trim().slice(0, 60);
+    if (cleanSubject) {
+      query.subject = cleanSubject;
+    }
   }
-  if (filter?.search && filter.search.trim()) {
-    const s = filter.search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (typeof safeFilter.search === "string" && safeFilter.search.trim()) {
+    const s = safeFilter.search.trim().slice(0, 100).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     query.$or = [
       { title: { $regex: s, $options: "i" } },
       { questionOrPrompt: { $regex: s, $options: "i" } },
@@ -139,26 +154,34 @@ export async function createMistakeAction(input: {
     throw new Error("You have reached the hourly limit for logging mistakes.");
   }
 
-  const title = (input.title || "").trim().slice(0, 120);
-  const subject = (input.subject || "").trim().slice(0, 60);
-  const chapter = (input.chapter || "").trim().slice(0, 80);
-  const questionOrPrompt = (input.questionOrPrompt || "").trim().slice(0, 3000);
-  const myMistake = (input.myMistake || "").trim().slice(0, 2500);
-  const correctConcept = (input.correctConcept || "").trim().slice(0, 2500);
+  if (!input || typeof input !== "object") {
+    throw new Error("Title, subject, your mistake, and the correct concept are required.");
+  }
+
+  const title = sanitize(typeof input.title === "string" ? input.title : "", 120);
+  const subject = sanitize(typeof input.subject === "string" ? input.subject : "", 60);
+  const chapter = sanitize(typeof input.chapter === "string" ? input.chapter : "", 80);
+  const questionOrPrompt = sanitize(typeof input.questionOrPrompt === "string" ? input.questionOrPrompt : "", 3000);
+  const myMistake = sanitize(typeof input.myMistake === "string" ? input.myMistake : "", 2500);
+  const correctConcept = sanitize(typeof input.correctConcept === "string" ? input.correctConcept : "", 2500);
 
   if (!title || !subject || !myMistake || !correctConcept) {
     throw new Error("Title, subject, your mistake, and the correct concept are required.");
   }
 
+  const rawErrorType = typeof input.errorType === "string" ? input.errorType.trim().toLowerCase() : "";
+  const errorType = (ALLOWED_ERROR_TYPES.has(rawErrorType) ? rawErrorType : "conceptual") as
+    "conceptual" | "calculation" | "formula" | "misread";
+
   const entry = new MistakeEntry({
     userId: user.uuid,
-    title: sanitize(title),
-    subject: sanitize(subject),
-    chapter: sanitize(chapter),
-    errorType: input.errorType || "conceptual",
-    questionOrPrompt: sanitize(questionOrPrompt),
-    myMistake: sanitize(myMistake),
-    correctConcept: sanitize(correctConcept),
+    title,
+    subject,
+    chapter,
+    errorType,
+    questionOrPrompt,
+    myMistake,
+    correctConcept,
     status: "unresolved",
     createdAt: new Date(),
   });
@@ -177,25 +200,45 @@ export async function updateMistakeStatusAction(
   status: "unresolved" | "mastered"
 ) {
   const user = await getAuthenticatedUser();
-  await dbConnect();
+
+  if (typeof mistakeId !== "string" || !mongoose.isValidObjectId(mistakeId)) {
+    throw new Error("Invalid mistake ID.");
+  }
+  if (status !== "unresolved" && status !== "mastered") {
+    throw new Error("Invalid mistake status.");
+  }
+
+  const rateCheck = await checkDistributedRateLimit(`mistake-update:${user.uuid}`, 60, 60 * 1000);
+  if (!rateCheck.success) {
+    throw new Error("Too many status updates. Please wait a moment.");
+  }
 
   const entry = await MistakeEntry.findOne({ _id: mistakeId, userId: user.uuid });
   if (!entry) throw new Error("Mistake entry not found.");
 
-  entry.status = status;
+  const updateOp: Record<string, any> = { $set: { status } };
   if (status === "mastered") {
-    entry.reviewCount = (entry.reviewCount || 0) + 1;
-    entry.lastReviewedAt = new Date();
+    updateOp.$inc = { reviewCount: 1 };
+    updateOp.$set.lastReviewedAt = new Date();
   }
-  await entry.save();
+  const updated = await MistakeEntry.findOneAndUpdate(
+    { _id: mistakeId, userId: user.uuid },
+    updateOp,
+    { new: true }
+  ).select("status").lean();
+  if (!updated) throw new Error("Mistake entry not found.");
+
   await recordUserStudyActivity(user.uuid);
 
-  return { success: true, status: entry.status };
+  return { success: true, status: updated.status };
 }
 
 export async function deleteMistakeAction(mistakeId: string) {
   const user = await getAuthenticatedUser();
-  await dbConnect();
+
+  if (typeof mistakeId !== "string" || !mongoose.isValidObjectId(mistakeId)) {
+    throw new Error("Invalid mistake ID.");
+  }
 
   const res = await MistakeEntry.deleteOne({ _id: mistakeId, userId: user.uuid });
   if (res.deletedCount === 0) throw new Error("Mistake entry not found or already deleted.");
@@ -217,11 +260,11 @@ export async function generateMistakeQuizAction(subject?: string) {
   const rateCheck = await checkDistributedRateLimit(`mistake-quiz:${user.uuid}`, 5, 15 * 60 * 1000);
   if (!rateCheck.success) throw new Error("Too many quiz-generation requests. Please try again in 15 minutes.");
   if (subject !== undefined && (typeof subject !== "string" || subject.length > 60)) throw new Error("Invalid quiz subject.");
-  await dbConnect();
 
-  const query: any = { userId: user.uuid, status: "unresolved" };
-  if (subject && subject !== "all") {
-    query.subject = subject;
+  const query: Record<string, any> = { userId: user.uuid, status: "unresolved" };
+  const cleanSubject = typeof subject === "string" ? subject.trim() : "";
+  if (cleanSubject && cleanSubject !== "all") {
+    query.subject = cleanSubject;
   }
 
   const unresolvedDocs = await MistakeEntry.find(query)
@@ -275,7 +318,7 @@ Respond with ONLY a valid JSON object in this format (no markdown fences, no pre
     if (!Array.isArray(parsed?.questions) || parsed.questions.length !== 3 ||
         parsed.questions.some((question) =>
           !question ||
-          typeof question.id !== "string" || question.id.length > 40 ||
+          typeof question.id !== "string" || !question.id.trim() || question.id.length > 40 ||
           typeof question.question !== "string" || !question.question.trim() || question.question.length > 3000 ||
           !Array.isArray(question.options) || question.options.length !== 4 ||
           question.options.some((option) => typeof option !== "string" || !option.trim() || option.length > 1000) ||
@@ -286,12 +329,24 @@ Respond with ONLY a valid JSON object in this format (no markdown fences, no pre
       throw new Error("The AI model returned an invalid quiz. Please try again.");
     }
 
+    const sanitizedQuestions: MistakeQuizQuestion[] = parsed.questions.map((q) => ({
+      id: q.id.trim(),
+      question: q.question.trim(),
+      options: q.options.map((opt) => opt.trim()),
+      correctIndex: q.correctIndex,
+      explanation: q.explanation.trim(),
+      relatedMistake: q.relatedMistake.trim(),
+    }));
+
     return {
       success: true,
-      questions: parsed.questions,
+      questions: sanitizedQuestions,
     };
   } catch (err: any) {
+    if (err instanceof Error && err.message === "The AI model returned an invalid quiz. Please try again.") {
+      throw err;
+    }
     console.error("Mistake quiz generation error:", err);
-    throw new Error(err.message || "Failed to generate mistake quiz.");
+    throw new Error("Failed to generate mistake quiz. Please try again.");
   }
 }

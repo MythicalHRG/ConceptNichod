@@ -4,6 +4,7 @@ import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
 import { verifySessionCookie } from "@/lib/session";
 import { checkDistributedRateLimit } from "@/lib/distributed-rate-limiter";
+import { assertActiveNonBlacklistedUser } from "@/lib/ai-flow-auth";
 
 export type SearchFilters = {
     searchQuery?: string;
@@ -21,15 +22,18 @@ export async function searchAspirantsAction(filters: SearchFilters) {
     const rateLimit = await checkDistributedRateLimit("aspirant-search:" + sessionUuid, 30, 60_000);
     if (!rateLimit.success) throw new Error("Search limit reached. Please wait a minute before searching again.");
 
-    const query: any = { uuid: { $ne: sessionUuid } }; // don't return the logged-in user
+    await assertActiveNonBlacklistedUser(sessionUuid);
+
+    const safeFilters: SearchFilters = filters && typeof filters === "object" ? filters : {};
+    const query: Record<string, any> = { uuid: { $ne: sessionUuid } }; // don't return the logged-in user
 
     const escapeRegex = (string: any) => {
         if (typeof string !== 'string') return '';
         return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     };
 
-    if (filters.searchQuery && typeof filters.searchQuery === 'string' && filters.searchQuery.trim().length > 0) {
-        const safeQuery = escapeRegex(filters.searchQuery.trim());
+    if (typeof safeFilters.searchQuery === 'string' && safeFilters.searchQuery.trim().length > 0) {
+        const safeQuery = escapeRegex(safeFilters.searchQuery.trim().slice(0, 80));
         query.$or = [
             { fullName: { $regex: safeQuery, $options: "i" } },
             { username: { $regex: safeQuery, $options: "i" } },
@@ -37,19 +41,32 @@ export async function searchAspirantsAction(filters: SearchFilters) {
             { bio: { $regex: safeQuery, $options: "i" } }
         ];
     }
-    if (typeof filters.classLevel === 'string' && filters.classLevel !== "All") {
-        query.classLevel = filters.classLevel.trim();
+    if (typeof safeFilters.classLevel === 'string') {
+        const cleanClass = safeFilters.classLevel.trim().slice(0, 60);
+        if (cleanClass && cleanClass !== "All") {
+            query.classLevel = cleanClass;
+        }
     }
-    if (typeof filters.gender === 'string' && filters.gender !== "All") {
-        query.gender = filters.gender.trim();
+    if (typeof safeFilters.gender === 'string') {
+        const cleanGender = safeFilters.gender.trim().slice(0, 40);
+        if (cleanGender && cleanGender !== "All") {
+            query.gender = cleanGender;
+        }
     }
-    if (typeof filters.city === 'string' && filters.city !== "All" && filters.city.trim().length > 0) {
-        const safeCity = escapeRegex(filters.city.trim());
-        query.city = { $regex: safeCity, $options: "i" };
+    if (typeof safeFilters.city === 'string') {
+        const trimmedCity = safeFilters.city.trim().slice(0, 80);
+        if (trimmedCity && trimmedCity !== "All") {
+            const safeCity = escapeRegex(trimmedCity);
+            query.city = { $regex: safeCity, $options: "i" };
+        }
     }
 
-    const users = await User.find(query).select('-password -email').limit(50).lean();
-    
+    const users = await User.find(query)
+        .select('username fullName gender classLevel examFocus city futureCollege snapchat instagram bio createdAt')
+        .sort({ createdAt: -1 })
+        .limit(50)
+        .lean();
+
     // Ensure we convert _id to string or remove it so it's plain JSON serializable
     return users.map((u: any) => ({
         username: u.username,
