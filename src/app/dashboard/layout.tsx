@@ -10,7 +10,6 @@ import {
   SidebarInset,
   SidebarMenu,
   SidebarProvider,
-  SidebarTrigger,
   SidebarFooter,
 } from "@/components/ui/sidebar";
 import { Logo } from "@/components/ui/logo";
@@ -21,8 +20,10 @@ import { UserProfileButton } from "@/components/auth/user-profile-button";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import User from "@/models/User";
+import Blacklist from "@/models/Blacklist";
 import { isPlatformOwner } from "@/lib/owner-access";
 import { verifySessionCookie } from "@/lib/session";
+import { normalizeEmail } from "@/lib/email-utils";
 
 export default async function DashboardLayout({
   children,
@@ -38,17 +39,47 @@ export default async function DashboardLayout({
   let topicsDocs: any[] = [];
   let isDbWakingUp = false;
   let isAdmin = false;
+  let shouldRedirectToLogin = false;
 
   try {
     await dbConnect();
-    topicsDocs = await Topic.find({ userId: userId }).sort({ createdAt: -1 }).lean();
-    const user = await User.findOne({ uuid: userId }).lean();
-    if (isPlatformOwner(user)) {
-      isAdmin = true;
+    const user = await User.findOne({ uuid: userId })
+      .select("uuid username email role")
+      .lean();
+    if (!user) {
+      shouldRedirectToLogin = true;
+    } else {
+      isAdmin = isPlatformOwner(user);
+      if (!isAdmin) {
+        const emailVals = Array.from(
+          new Set([String(user.email || "").toLowerCase(), normalizeEmail(String(user.email || ""))].filter(Boolean))
+        );
+        const banClauses: Array<{ type: "email" | "username"; value: string | { $in: string[] } }> = [];
+        if (emailVals.length > 0) banClauses.push({ type: "email", value: { $in: emailVals } });
+        if (user.username) banClauses.push({ type: "username", value: String(user.username).toLowerCase() });
+        const banned = banClauses.length > 0
+          ? await Blacklist.findOne({ $or: banClauses }).select("_id").lean()
+          : null;
+        if (banned) {
+          shouldRedirectToLogin = true;
+        }
+      }
+      if (!shouldRedirectToLogin) {
+        // SidebarNav only needs id & name — never serialize multi-MB topic summaries/analyses here.
+        topicsDocs = await Topic.find({ userId })
+          .select("_id name")
+          .sort({ createdAt: -1 })
+          .limit(200)
+          .lean();
+      }
     }
   } catch (error) {
     console.error("Dashboard layout dbConnect error:", error);
     isDbWakingUp = true;
+  }
+
+  if (shouldRedirectToLogin) {
+    redirect("/?login=true");
   }
 
   if (isDbWakingUp) {
@@ -69,10 +100,10 @@ export default async function DashboardLayout({
       </div>
     );
   }
-  
-  const topics = JSON.parse(JSON.stringify(topicsDocs)).map((doc: any) => ({
-    ...doc,
-    id: doc._id,
+
+  const topics = topicsDocs.map((doc: any) => ({
+    id: String(doc._id),
+    name: doc.name || "Untitled Topic",
   }));
 
   return (

@@ -50,14 +50,6 @@ const UserSchema: Schema<IUser> = new Schema({
   createdAt: { type: Date, default: Date.now },
 });
 
-// Defensive hook: retained temporarily until Batch 5 verifies every User.find* caller
-UserSchema.pre(["find", "findOne", "findOneAndUpdate", "deleteOne", "deleteMany"], function (this: any) {
-  const query = this.getQuery();
-  if (query && typeof query.uuid === "string" && query.uuid.includes(".")) {
-    query.uuid = query.uuid.split(".")[0];
-  }
-});
-
 const User: Model<IUser> = mongoose.models.User || mongoose.model<IUser>("User", UserSchema);
 
 export default User;

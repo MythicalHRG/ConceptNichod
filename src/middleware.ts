@@ -23,10 +23,10 @@ function addSecurityHeaders(response: NextResponse): NextResponse {
   return response;
 }
 
+// Public profiles (/profile/[username]) are intentionally public per robots.ts & privacy spec.
 const PROTECTED_PREFIXES = [
   '/dashboard',
   '/aspirants-connect',
-  '/profile',
   '/study-groups',
   '/leaderboard',
 ];
@@ -67,8 +67,6 @@ export const config = {
     '/dashboard/:path*',
     '/aspirants-connect',
     '/aspirants-connect/:path*',
-    '/profile',
-    '/profile/:path*',
     '/study-groups',
     '/study-groups/:path*',
     '/leaderboard',

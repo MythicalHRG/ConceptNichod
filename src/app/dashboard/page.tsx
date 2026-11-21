@@ -1,12 +1,16 @@
 export const dynamic = 'force-dynamic';
+import Link from "next/link";
 import { TopicHistory } from '@/components/dashboard/topic-history';
 import mongoose from "mongoose";
 import dbConnect from "@/lib/mongoose";
 import Topic from "@/models/Topic";
 import User from "@/models/User";
+import Blacklist from "@/models/Blacklist";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { verifySessionCookie } from "@/lib/session";
+import { isPlatformOwner } from "@/lib/owner-access";
+import { normalizeEmail } from "@/lib/email-utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { MapPin, GraduationCap, Target, Instagram, Cake } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -29,15 +33,29 @@ export default async function DashboardPage() {
     redirect("/?login=true");
   }
 
-  let user = null;
+  let user: any = null;
   let isDbConnecting = false;
-  
+  let isBanned = false;
+
   try {
     await dbConnect();
-    user = await User.findOne({ uuid: sessionUuid }).lean();
+    const userFields = "uuid username email role fullName bio classLevel dob city examFocus futureCollege snapchat instagram";
+    user = await User.findOne({ uuid: sessionUuid }).select(userFields).lean();
     if (!user && mongoose.connection.readyState !== 1) {
       await dbConnect();
-      user = await User.findOne({ uuid: sessionUuid }).lean();
+      user = await User.findOne({ uuid: sessionUuid }).select(userFields).lean();
+    }
+    if (user && !isPlatformOwner(user)) {
+      const emailVals = Array.from(
+        new Set([String(user.email || "").toLowerCase(), normalizeEmail(String(user.email || ""))].filter(Boolean))
+      );
+      const banClauses: Array<{ type: "email" | "username"; value: string | { $in: string[] } }> = [];
+      if (emailVals.length > 0) banClauses.push({ type: "email", value: { $in: emailVals } });
+      if (user.username) banClauses.push({ type: "username", value: String(user.username).toLowerCase() });
+      const banHit = banClauses.length > 0
+        ? await Blacklist.findOne({ $or: banClauses }).select("_id").lean()
+        : null;
+      if (banHit) isBanned = true;
     }
   } catch (error) {
     console.error("Database connection error in dashboard:", error);
@@ -62,18 +80,24 @@ export default async function DashboardPage() {
     );
   }
 
-  if (!user) {
-    (await cookies()).delete("user_session");
+  // Never mutate cookies() directly inside a Server Component (throws in Next.js App Router).
+  if (!user || isBanned) {
     redirect("/?login=true");
   }
 
-  // Fetch only the logged-in user's topics
-  const topicsDocs = await Topic.find({ userId: user.uuid }).sort({ createdAt: -1 }).lean();
-  
+  // Fetch only the logged-in user's topics with projected fields (excludes bulky summary/questions/answers)
+  const topicsDocs = await Topic.find({ userId: user.uuid })
+    .select("_id name subject chapter practiceStatus summaryViewed analysis createdAt")
+    .sort({ createdAt: -1 })
+    .limit(200)
+    .lean();
+
   const topics = JSON.parse(JSON.stringify(topicsDocs)).map((doc: any) => ({
     ...doc,
     id: doc._id,
   }));
+
+  const firstName = (user.fullName || user.username || "Learner").trim().split(/\s+/)[0] || "Learner";
 
   return (
     <div className="space-y-10 pb-10">
@@ -85,14 +109,14 @@ export default async function DashboardPage() {
             <div className="space-y-4 w-full md:w-auto min-w-0">
               <div>
                 <h1 className="break-words text-2xl sm:text-3xl md:text-4xl font-headline font-bold text-foreground">
-                  Welcome back, {user.fullName.split(' ')[0]}!
+                  Welcome back, {firstName}!
                 </h1>
                 <p className="text-base sm:text-lg text-primary font-medium mt-1">@{user.username}</p>
               </div>
 
               {user.bio && (
                 <p className="text-muted-foreground italic max-w-2xl text-sm sm:text-base break-words">
-                  "{user.bio}"
+                  &ldquo;{user.bio}&rdquo;
                 </p>
               )}
 
@@ -150,12 +174,12 @@ export default async function DashboardPage() {
           <h2 className="text-2xl font-bold tracking-tight mb-1">Your Topics</h2>
           <p className="text-muted-foreground">Manage and review your generated study materials.</p>
         </div>
-        
+
         {topics.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-12 border border-dashed rounded-xl bg-secondary/10">
             <h3 className="text-xl font-semibold mb-2">No topics yet</h3>
             <p className="text-muted-foreground text-center max-w-md">
-              Head over to the <a href="/dashboard/concept-mirror" className="text-primary hover:underline">Concept Mirror</a> to generate your first AI study guide!
+              Head over to the <Link href="/dashboard/concept-mirror" className="text-primary hover:underline">Concept Mirror</Link> to generate your first AI study guide!
             </p>
           </div>
         ) : (

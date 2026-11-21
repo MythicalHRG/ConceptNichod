@@ -1,7 +1,7 @@
 // src/app/donate/page.tsx
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Rupee } from "@/components/ui/rupee-symbol";
 import {
@@ -69,11 +69,12 @@ export default function DonatePage() {
     isEnabled: false,
     headline: "Support ConceptNichod & Join the Hall of Patrons",
     subtext:
-      "Scan the UPI QR code to contribute any amount, then submit your 12-digit UTR & Transaction ID below. Our Admin will verify it manually, enter the confirmed amount, and feature you in the Hall of Patrons!",
+      "Pay via the official UPI ID below, then submit your 12-digit UTR & Transaction ID. Our Admin will verify it manually, enter the confirmed amount, and feature you in the Hall of Patrons!",
   });
 
   const [patrons, setPatrons] = useState<PatronItem[]>([]);
   const [totalRaised, setTotalRaised] = useState(0);
+  const [totalPatrons, setTotalPatrons] = useState(0);
   const [loadingData, setLoadingData] = useState(true);
 
   // Form Inputs
@@ -91,33 +92,80 @@ export default function DonatePage() {
     type: "success" | "error";
     text: string;
   } | null>(null);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     async function load() {
       setLoadingData(true);
-      const res = await getPublicDonationPageData();
-      if (res.settings) setSettings((prev) => ({ ...prev, ...res.settings, upiId: res.settings.upiId || "" }));
-      if (res.patrons) setPatrons(res.patrons as PatronItem[]);
-      if (typeof res.totalRaised === "number") setTotalRaised(res.totalRaised);
-      setLoadingData(false);
+      try {
+        const res = await getPublicDonationPageData();
+        if (cancelled) return;
+        if (res.settings) {
+          setSettings((prev) => ({
+            ...prev,
+            ...res.settings,
+            upiId: res.settings.upiId || "",
+          }));
+        }
+        if (Array.isArray(res.patrons)) setPatrons(res.patrons as PatronItem[]);
+        if (typeof res.totalRaised === "number") setTotalRaised(res.totalRaised);
+        if (typeof res.totalPatrons === "number") {
+          setTotalPatrons(res.totalPatrons);
+        } else if (Array.isArray(res.patrons)) {
+          setTotalPatrons(res.patrons.length);
+        }
+      } catch (err) {
+        console.error("Failed to load donation data:", err);
+        if (!cancelled) {
+          setStatusBanner({
+            type: "error",
+            text: "Unable to load donation details right now. Please refresh and try again.",
+          });
+        }
+      } finally {
+        if (!cancelled) setLoadingData(false);
+      }
     }
     load();
+    return () => {
+      cancelled = true;
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    };
   }, []);
 
   const receiverUpiId = settings.upiId;
 
   const handleCopyUpi = async () => {
-    await navigator.clipboard.writeText(settings.upiId);
-    setCopiedUpi(true);
-    setTimeout(() => setCopiedUpi(false), 2000);
+    if (!settings.upiId) return;
+    try {
+      await navigator.clipboard.writeText(settings.upiId);
+      setCopiedUpi(true);
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTimeout(() => setCopiedUpi(false), 2000);
+    } catch {
+      setStatusBanner({
+        type: "error",
+        text: "Could not copy UPI ID automatically. Please copy it manually from the box.",
+      });
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatusBanner(null);
 
+    const cleanName = donorName.trim();
     const cleanUtr = utr.replace(/\D/g, "");
     const cleanTxn = transactionId.replace(/\s+/g, "").toUpperCase();
+
+    if (cleanName.length < 2) {
+      setStatusBanner({
+        type: "error",
+        text: "Please enter your name (at least 2 characters).",
+      });
+      return;
+    }
 
     if (cleanUtr.length !== 12) {
       setStatusBanner({
@@ -138,7 +186,7 @@ export default function DonatePage() {
     setSubmitting(true);
     try {
       const result = await submitDonationTransaction({
-        donorName,
+        donorName: cleanName,
         utr: cleanUtr,
         transactionId: cleanTxn,
         message,
@@ -191,7 +239,7 @@ export default function DonatePage() {
             className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-400 hover:text-amber-300"
           >
             <Award className="w-4 h-4" />
-            View Hall of Patrons ({patrons.length})
+            View Hall of Patrons ({totalPatrons})
           </a>
         </div>
 
@@ -209,15 +257,15 @@ export default function DonatePage() {
           </p>
         </div>
 
-        {/* Main 2-Column Section: Step 1 (QR Code) + Step 2 (Submit UTR & Transaction ID) */}
+        {/* Main 2-Column Section: Step 1 (UPI Details) + Step 2 (Submit UTR & Transaction ID) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* Step 1: Direct UPI QR Card */}
+          {/* Step 1: Direct UPI Card */}
           <div className="lg:col-span-5 bg-slate-900/90 border border-slate-800 rounded-2xl p-6 sm:p-8 space-y-6">
             {settings.isEnabled ? (
               <>
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">
-                    Step 1 • Scan & Pay Any Amount
+                    Step 1 • Pay via Official UPI ID
                   </span>
                   <span className="text-[11px] text-slate-400">Direct UPI</span>
                 </div>
@@ -230,7 +278,12 @@ export default function DonatePage() {
                     <p className="text-[11px] text-slate-500 uppercase font-semibold">Official UPI ID</p>
                     <p className="text-sm font-mono font-bold text-slate-200 truncate">{receiverUpiId ? receiverUpiId : "Recipient UPI ID will appear once enabled."}</p>
                   </div>
-                  <button type="button" onClick={handleCopyUpi} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleCopyUpi}
+                    disabled={!receiverUpiId}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white transition shrink-0"
+                  >
                     {copiedUpi ? <><CheckCircle2 className="w-3.5 h-3.5" />Copied</> : <><Copy className="w-3.5 h-3.5" />Copy ID</>}
                   </button>
                 </div>
@@ -407,13 +460,13 @@ export default function DonatePage() {
               <div>
                 <p className="text-[11px] text-slate-400">Total Verified Support</p>
                 <p className="text-xl font-extrabold text-emerald-400">
-                  ₹{totalRaised.toLocaleString("en-IN")}
+                  <Rupee />{totalRaised.toLocaleString("en-IN")}
                 </p>
               </div>
               <div className="h-8 w-px bg-slate-800" />
               <div>
                 <p className="text-[11px] text-slate-400">Verified Patrons</p>
-                <p className="text-xl font-extrabold text-white">{patrons.length}</p>
+                <p className="text-xl font-extrabold text-white">{totalPatrons}</p>
               </div>
             </div>
           </div>
@@ -441,6 +494,10 @@ export default function DonatePage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {patrons.map((patron) => {
                 const cfg = TIER_CONFIG[patron.tier] || TIER_CONFIG.SUPPORTER;
+                const donatedDate = new Date(patron.donatedAt);
+                const formattedDate = Number.isFinite(donatedDate.getTime())
+                  ? donatedDate.toLocaleDateString("en-IN")
+                  : "";
                 return (
                   <div
                     key={patron.id}
@@ -464,7 +521,7 @@ export default function DonatePage() {
                         </h3>
                         {patron.username && (
                           <Link
-                            href={`/profile/${patron.username}`}
+                            href={`/profile/${encodeURIComponent(patron.username)}`}
                             className="text-xs text-indigo-400 hover:underline"
                           >
                             @{patron.username}
@@ -481,7 +538,7 @@ export default function DonatePage() {
 
                     <div className="flex items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-800/70">
                       <span className="text-emerald-400 font-medium">✔ Admin Verified</span>
-                      <span>{new Date(patron.donatedAt).toLocaleDateString("en-IN")}</span>
+                      <span>{formattedDate}</span>
                     </div>
                   </div>
                 );

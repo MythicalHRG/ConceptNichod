@@ -5,7 +5,7 @@ import { searchAspirantsAction, SearchFilters } from "@/app/actions/aspirants";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
-import { Loader2, Search, MapPin, GraduationCap, Target, Instagram, X } from "lucide-react";
+import { Loader2, Search, MapPin, GraduationCap, Target, Instagram, X, AlertCircle } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-context";
 
 export default function AspirantsConnectPage() {
@@ -13,6 +13,7 @@ export default function AspirantsConnectPage() {
     const [users, setUsers] = useState<any[]>([]);
     const [isInitialLoading, setIsInitialLoading] = useState(true);
     const [isLiveSearching, setIsLiveSearching] = useState(false);
+    const [searchError, setSearchError] = useState<string | null>(null);
 
     const [filters, setFilters] = useState<SearchFilters>({
         searchQuery: "",
@@ -23,29 +24,56 @@ export default function AspirantsConnectPage() {
 
     const latestQueryId = useRef(0);
     const hasInitializedRef = useRef(false);
+    const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const clearPendingDebounce = useCallback(() => {
+        if (debounceTimerRef.current) {
+            clearTimeout(debounceTimerRef.current);
+            debounceTimerRef.current = null;
+        }
+    }, []);
 
     const performSearch = useCallback(async (currentFilters: SearchFilters, isInitial = false) => {
+        clearPendingDebounce();
         if (isInitial) {
             setIsInitialLoading(true);
         } else {
             setIsLiveSearching(true);
         }
+        setSearchError(null);
         const queryId = ++latestQueryId.current;
 
         try {
             const results = await searchAspirantsAction(currentFilters);
             if (queryId === latestQueryId.current) {
-                setUsers(results);
+                setUsers(Array.isArray(results) ? results : []);
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error("Failed to fetch users", error);
+            if (queryId === latestQueryId.current) {
+                setSearchError(
+                    typeof error?.message === "string" && error.message.trim()
+                        ? error.message
+                        : "Unable to load aspirants right now. Please try again."
+                );
+            }
         } finally {
             if (queryId === latestQueryId.current) {
                 setIsLiveSearching(false);
                 setIsInitialLoading(false);
             }
         }
-    }, []);
+    }, [clearPendingDebounce]);
+
+    // Reset state if user logs out so stale data is never shown across sessions
+    useEffect(() => {
+        if (!isLoggedIn) {
+            clearPendingDebounce();
+            hasInitializedRef.current = false;
+            setUsers([]);
+            setSearchError(null);
+        }
+    }, [isLoggedIn, clearPendingDebounce]);
 
     // Live search on any filter change with smooth debouncing
     useEffect(() => {
@@ -58,12 +86,14 @@ export default function AspirantsConnectPage() {
         }
 
         setIsLiveSearching(true);
-        const debounceTimer = setTimeout(() => {
+        clearPendingDebounce();
+        debounceTimerRef.current = setTimeout(() => {
+            debounceTimerRef.current = null;
             performSearch(filters, false);
         }, 250);
 
-        return () => clearTimeout(debounceTimer);
-    }, [filters, isAuthReady, isLoggedIn, performSearch]);
+        return () => clearPendingDebounce();
+    }, [filters, isAuthReady, isLoggedIn, performSearch, clearPendingDebounce]);
 
     const clearSearchQuery = () => {
         setFilters((prev) => ({ ...prev, searchQuery: "" }));
@@ -121,11 +151,11 @@ export default function AspirantsConnectPage() {
                                 <Search className={`absolute left-3 top-3 h-4 w-4 transition-colors ${isLiveSearching ? "text-primary" : "text-muted-foreground"}`} />
                                 <Input
                                     placeholder="Search by name, username, or bio..."
+                                    maxLength={80}
                                     className="pl-9 pr-9 h-10 transition-all focus-visible:ring-primary"
                                     value={filters.searchQuery}
                                     onChange={(e) => setFilters((prev) => ({ ...prev, searchQuery: e.target.value }))}
-                                    onKeyDown={(e) => {
-                                        if (e.key === "Enter") {
+                                    onKeyDown={(e) => {                                        if (e.key === "Enter") {
                                             e.preventDefault();
                                             performSearch(filters, false);
                                         }
@@ -158,10 +188,10 @@ export default function AspirantsConnectPage() {
                                 <span>Search</span>
                             </Button>
                         </div>
-                        
+
                         <div>
                             <label className="text-xs font-medium mb-1 block">Class Level</label>
-                            <select 
+                            <select
                                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
                                 value={filters.classLevel}
                                 onChange={(e) => setFilters((prev) => ({ ...prev, classLevel: e.target.value }))}
@@ -175,7 +205,7 @@ export default function AspirantsConnectPage() {
 
                         <div>
                             <label className="text-xs font-medium mb-1 block">Gender</label>
-                            <select 
+                            <select
                                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
                                 value={filters.gender}
                                 onChange={(e) => setFilters((prev) => ({ ...prev, gender: e.target.value }))}
@@ -191,6 +221,7 @@ export default function AspirantsConnectPage() {
                             <label className="text-xs font-medium mb-1 block">City</label>
                             <Input
                                 placeholder="Filter by City"
+                                maxLength={80}
                                 value={filters.city}
                                 onChange={(e) => setFilters((prev) => ({ ...prev, city: e.target.value }))}
                             />
@@ -198,6 +229,18 @@ export default function AspirantsConnectPage() {
                     </div>
                 </CardContent>
             </Card>
+
+            {searchError && (
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive" role="alert">
+                    <div className="flex items-center gap-2 min-w-0">
+                        <AlertCircle className="h-4 w-4 shrink-0" />
+                        <span className="break-words">{searchError}</span>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => performSearch(filters, false)} className="shrink-0">
+                        Retry
+                    </Button>
+                </div>
+            )}
 
             {/* Results status bar */}
             <div className="flex items-center justify-between text-sm px-1">
@@ -250,7 +293,7 @@ export default function AspirantsConnectPage() {
                             </CardHeader>
                             <CardContent className="flex-1 space-y-4">
                                 {user.bio && (
-                                    <p className="text-sm italic text-muted-foreground line-clamp-3">"{user.bio}"</p>
+                                    <p className="text-sm italic text-muted-foreground line-clamp-3">&ldquo;{user.bio}&rdquo;</p>
                                 )}
                                 <div className="space-y-2 text-sm">
                                     <div className="flex items-center gap-2">
@@ -274,21 +317,21 @@ export default function AspirantsConnectPage() {
                                 </div>
                             </CardContent>
                             <CardFooter className="pt-4 border-t flex flex-col gap-2">
-                                <a href={`/profile/${user.username}`} target="_blank" rel="noopener noreferrer" className="w-full">
+                                <a href={`/profile/${encodeURIComponent(user.username)}`} target="_blank" rel="noopener noreferrer" className="w-full">
                                     <Button variant="default" className="w-full">
                                         View Public Profile
                                     </Button>
                                 </a>
                                 <div className="flex w-full gap-2">
                                     {user.snapchat ? (
-                                        <a href={`https://snapchat.com/add/${encodeURIComponent(user.snapchat.replace('@', ''))}`} target="_blank" rel="noopener noreferrer" className="flex-1">
+                                        <a href={`https://snapchat.com/add/${encodeURIComponent(user.snapchat.replace(/^@/, ''))}`} target="_blank" rel="noopener noreferrer" className="flex-1">
                                             <Button variant="outline" className="w-full text-yellow-600 border-yellow-600 hover:bg-yellow-50 hover:text-yellow-700">
                                                 Snapchat
                                             </Button>
                                         </a>
                                     ) : null}
                                     {user.instagram ? (
-                                        <a href={`https://instagram.com/${encodeURIComponent(user.instagram.replace('@', ''))}`} target="_blank" rel="noopener noreferrer" className="flex-1">
+                                        <a href={`https://instagram.com/${encodeURIComponent(user.instagram.replace(/^@/, ''))}`} target="_blank" rel="noopener noreferrer" className="flex-1">
                                             <Button variant="outline" className="w-full text-pink-600 border-pink-600 hover:bg-pink-50 hover:text-pink-700">
                                                 <Instagram className="h-4 w-4 mr-2" /> Insta
                                             </Button>
