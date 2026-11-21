@@ -13,7 +13,7 @@ interface MythicalUserBadgeProps {
 }
 
 /**
- * Clean, Theme-Compatible Glassmorphic Presentation for @mythicalhrg (Founder & CEO)
+ * Clean, Theme-Compatible Glassmorphic Presentation for @mythicalhrg (Platform Owner)
  * Designed for perfect contrast and visual harmony across all 6 light and dark themes.
  */
 export function MythicalUserBadge({
@@ -54,7 +54,7 @@ export function MythicalUserBadge({
         sizeClasses,
         className
       )}
-      title="Founder & CEO"
+      title="Platform Owner"
     >
       <Crown className={cn(iconSizes, "fill-amber-500 text-amber-500 shrink-0")} />
       <span className="font-bold tracking-tight">
@@ -62,7 +62,7 @@ export function MythicalUserBadge({
       </span>
       {showTitle && (
         <span className="ml-1 text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-900 dark:text-amber-200 border border-amber-500/30">
-          FOUNDER & CEO
+          OWNER
         </span>
       )}
     </span>

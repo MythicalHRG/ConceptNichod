@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -17,10 +16,8 @@ import { registerAction, loginAction, resetPasswordAction, validateUsername } fr
 import { Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { loadCaptchaEnginge, LoadCanvasTemplate, validateCaptcha } from 'react-simple-captcha';
-import { useEffect } from "react";
 
 export function LoginDialog() {
-  const router = useRouter();
   const { isAuthModalOpen, setAuthModalOpen, login } = useAuth();
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
@@ -41,14 +38,22 @@ export function LoginDialog() {
   const [otpCode, setOtpCode] = useState("");
   const [activeTab, setActiveTab] = useState("login");
   const [newPassword, setNewPassword] = useState("");
+  const tabCaptchaTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { toast } = useToast();
+
+  const clearTabCaptchaTimer = () => {
+    if (tabCaptchaTimerRef.current) {
+      clearTimeout(tabCaptchaTimerRef.current);
+      tabCaptchaTimerRef.current = null;
+    }
+  };
 
   useEffect(() => {
     if (isAuthModalOpen) {
       const timer1 = setTimeout(() => {
         try {
           loadCaptchaEnginge(6);
-        } catch(e) {
+        } catch (e) {
           console.error("Captcha failed to load", e);
         }
       }, 200);
@@ -56,31 +61,55 @@ export function LoginDialog() {
       const timer2 = setTimeout(() => {
         try {
           loadCaptchaEnginge(6);
-        } catch(e) {}
+        } catch {}
       }, 600);
 
       return () => {
         clearTimeout(timer1);
         clearTimeout(timer2);
+        clearTabCaptchaTimer();
       };
     } else {
-      // Reset states when closed
+      clearTabCaptchaTimer();
+      // Reset sensitive and verification states when closed
       setIsEmailVerified(false);
       setOtpSent(false);
       setOtpCode("");
+      setPassword("");
+      setNewPassword("");
+      setCaptchaValue("");
     }
   }, [isAuthModalOpen]);
 
+  const switchTab = (nextTab: string) => {
+    setActiveTab(nextTab);
+    setCaptchaValue("");
+    setIsEmailVerified(false);
+    setOtpSent(false);
+    setOtpCode("");
+    setNewPassword("");
+    clearTabCaptchaTimer();
+    if (nextTab === "login" || nextTab === "register") {
+      tabCaptchaTimerRef.current = setTimeout(() => {
+        tabCaptchaTimerRef.current = null;
+        try {
+          loadCaptchaEnginge(6);
+        } catch {}
+      }, 200);
+    }
+  };
+
   const handleSendOtp = async () => {
-    if (!email) {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
       toast({ variant: "destructive", title: "Error", description: "Email is required to send OTP." });
       return;
     }
-    if (!email.endsWith("@gmail.com") && !email.endsWith("@outlook.com") && !email.endsWith("@outlook.in")) {
+    if (!cleanEmail.endsWith("@gmail.com") && !cleanEmail.endsWith("@outlook.com") && !cleanEmail.endsWith("@outlook.in")) {
       toast({ variant: "destructive", title: "Error", description: "Only @gmail.com, @outlook.com, or @outlook.in emails are allowed." });
       return;
     }
-    if (email.includes("+")) {
+    if (cleanEmail.includes("+")) {
       toast({ variant: "destructive", title: "Error", description: "Email aliases and subaddressing (+tag) are not permitted." });
       return;
     }
@@ -90,26 +119,29 @@ export function LoginDialog() {
       const res = await fetch("/api/auth/otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          email, 
-          action: "send", 
+        body: JSON.stringify({
+          email: cleanEmail,
+          action: "send",
           isPasswordReset: activeTab === "forgot-password",
-          username: activeTab === "register" ? (username.trim() || undefined) : undefined
-        })
+          username: activeTab === "register" ? (username.trim() || undefined) : undefined,
+        }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Unable to send OTP right now.");
+      setEmail(cleanEmail);
       setOtpSent(true);
       toast({ title: "OTP Sent", description: "Check your email for the verification code." });
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Failed to send OTP", description: err.message });
+      toast({ variant: "destructive", title: "Failed to send OTP", description: err?.message || "Please try again." });
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleVerifyOtp = async () => {
-    if (!otpCode) {
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanOtp = otpCode.trim();
+    if (!cleanOtp) {
       toast({ variant: "destructive", title: "Error", description: "Please enter the OTP." });
       return;
     }
@@ -118,14 +150,17 @@ export function LoginDialog() {
       const res = await fetch("/api/auth/otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, otp: otpCode, action: "verify" })
+        body: JSON.stringify({ email: cleanEmail, otp: cleanOtp, action: "verify" }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Verification failed.");
       setIsEmailVerified(true);
-      toast({ title: "Email Verified!", description: "You can now complete registration." });
+      toast({
+        title: "Email Verified!",
+        description: activeTab === "forgot-password" ? "You can now set a new password." : "You can now complete registration.",
+      });
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Verification Failed", description: err.message });
+      toast({ variant: "destructive", title: "Verification Failed", description: err?.message || "Please try again." });
     } finally {
       setIsLoading(false);
     }
@@ -133,9 +168,10 @@ export function LoginDialog() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) return;
+    const cleanLogin = email.trim();
+    if (!cleanLogin || !password) return;
 
-    if (email.includes("@") && email.includes("+")) {
+    if (cleanLogin.includes("@") && cleanLogin.includes("+")) {
       toast({ variant: "destructive", title: "Login Error", description: "Email aliases (+tag) are not allowed. Please log in with your primary email address." });
       return;
     }
@@ -143,16 +179,16 @@ export function LoginDialog() {
     if (!validateCaptcha(captchaValue)) {
       toast({ variant: "destructive", title: "Captcha Failed", description: "Please enter the correct captcha." });
       setCaptchaValue("");
-      loadCaptchaEnginge(6);
+      try { loadCaptchaEnginge(6); } catch {}
       return;
     }
 
     setIsLoading(true);
     try {
       const formData = new FormData();
-      formData.append("email", email);
+      formData.append("email", cleanLogin);
       formData.append("password", password);
-      
+
       const res = await loginAction(formData);
 
       if (res.error) {
@@ -172,7 +208,7 @@ export function LoginDialog() {
       toast({
         variant: "destructive",
         title: "Login Failed",
-        description: err.message || "Invalid credentials",
+        description: err?.message || "Invalid credentials",
       });
     } finally {
       setIsLoading(false);
@@ -181,27 +217,28 @@ export function LoginDialog() {
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !newPassword) return;
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !newPassword) return;
     if (!isEmailVerified) {
       toast({ variant: "destructive", title: "Verification Required", description: "Please verify your email using the OTP first." });
       return;
     }
-    
+
     setIsLoading(true);
     try {
       const formData = new FormData();
-      formData.append("email", email);
+      formData.append("email", cleanEmail);
       formData.append("newPassword", newPassword);
-      
+
       const res = await resetPasswordAction(formData);
-      if (res.success) {
+      if (res?.success) {
         toast({ title: "Password Reset", description: "Your password has been successfully reset. You can now log in." });
-        setActiveTab("login");
         setPassword("");
         setNewPassword("");
+        switchTab("login");
       }
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Reset Failed", description: err.message || "Could not reset password" });
+      toast({ variant: "destructive", title: "Reset Failed", description: err?.message || "Could not reset password" });
     } finally {
       setIsLoading(false);
     }
@@ -209,19 +246,16 @@ export function LoginDialog() {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !username || !password || !fullName || !gender || !dob || !classLevel || !city) return;
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanUsername = username.trim();
+    if (!cleanEmail || !cleanUsername || !password || !fullName.trim() || !gender || !dob || !classLevel || !city.trim()) return;
 
     const validUsername = /^[a-zA-Z0-9_.]+$/;
-    if (!validUsername.test(username) || username.length < 3 || username.length > 30) {
+    if (!validUsername.test(cleanUsername) || cleanUsername.length < 3 || cleanUsername.length > 30) {
       toast({ variant: 'destructive', title: 'Invalid Username', description: 'Usernames can only include letters, numbers, underscores (_), and periods (.). Spaces and symbols are not allowed.' });
       return;
     }
 
-    const usernameDbErr = await validateUsername(username);
-    if (usernameDbErr) {
-      toast({ variant: 'destructive', title: 'Username Unavailable', description: usernameDbErr });
-      return;
-    }
     if (!isEmailVerified) {
       toast({ variant: "destructive", title: "Verification Required", description: "Please verify your email using the OTP before registering." });
       return;
@@ -230,31 +264,37 @@ export function LoginDialog() {
     if (!validateCaptcha(captchaValue)) {
       toast({ variant: "destructive", title: "Captcha Failed", description: "Please enter the correct captcha." });
       setCaptchaValue("");
-      loadCaptchaEnginge(6);
+      try { loadCaptchaEnginge(6); } catch {}
       return;
     }
 
     setIsLoading(true);
     try {
+      const usernameDbErr = await validateUsername(cleanUsername);
+      if (usernameDbErr) {
+        toast({ variant: 'destructive', title: 'Username Unavailable', description: usernameDbErr });
+        return;
+      }
+
       const formData = new FormData();
-      formData.append("email", email);
-      formData.append("username", username);
+      formData.append("email", cleanEmail);
+      formData.append("username", cleanUsername);
       formData.append("password", password);
-      formData.append("fullName", fullName);
+      formData.append("fullName", fullName.trim());
       formData.append("gender", gender);
       formData.append("dob", dob);
       formData.append("classLevel", classLevel);
       if (examFocus) formData.append("examFocus", examFocus);
-      formData.append("city", city);
-      if (futureCollege) formData.append("futureCollege", futureCollege);
-      if (snapchat) formData.append("snapchat", snapchat);
-      if (instagram) formData.append("instagram", instagram);
-      
+      formData.append("city", city.trim());
+      if (futureCollege.trim()) formData.append("futureCollege", futureCollege.trim());
+      if (snapchat.trim()) formData.append("snapchat", snapchat.trim());
+      if (instagram.trim()) formData.append("instagram", instagram.trim());
+
       const res = await registerAction(formData);
       if (res.error) {
         throw new Error(res.error);
       }
-      
+
       if (res.success && res.user) {
         login(res.user);
         toast({
@@ -268,7 +308,7 @@ export function LoginDialog() {
       toast({
         variant: "destructive",
         title: "Registration Failed",
-        description: err.message || "Could not create account",
+        description: err?.message || "Could not create account",
       });
     } finally {
       setIsLoading(false);
@@ -277,7 +317,7 @@ export function LoginDialog() {
 
   return (
     <Dialog open={isAuthModalOpen} onOpenChange={setAuthModalOpen}>
-      <DialogContent className="sm:max-w-[425px] [&>button]:hidden" onInteractOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
+      <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto [&>button]:hidden" onInteractOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Welcome to ConceptNichod</DialogTitle>
           <DialogDescription>
@@ -285,24 +325,19 @@ export function LoginDialog() {
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs value={activeTab} className="w-full" onValueChange={(val) => {
-            setActiveTab(val);
-            setCaptchaValue("");
-            setTimeout(() => {
-              try { loadCaptchaEnginge(6); } catch(e) {}
-            }, 200);
-          }}>
+        <Tabs value={activeTab} className="w-full" onValueChange={switchTab}>
           <TabsList className="grid w-full grid-cols-2 mb-4">
             <TabsTrigger value="login">Sign In</TabsTrigger>
             <TabsTrigger value="register">Register</TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value="login">
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
                 <Input
-                  type="email"
-                  placeholder="name@gmail.com"
+                  type="text"
+                  autoComplete="username"
+                  placeholder="Email or username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -311,6 +346,7 @@ export function LoginDialog() {
               <div className="space-y-2">
                 <Input
                   type="password"
+                  autoComplete="current-password"
                   placeholder="Password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -321,9 +357,9 @@ export function LoginDialog() {
                 <div className="overflow-x-auto max-w-full flex items-center justify-center rounded-md bg-muted/40 p-1">
                   <LoadCanvasTemplate />
                 </div>
-                <Input 
-                  placeholder="Enter Captcha" 
-                  value={captchaValue} 
+                <Input
+                  placeholder="Enter Captcha"
+                  value={captchaValue}
                   onChange={(e) => setCaptchaValue(e.target.value)}
                   disabled={isLoading}
                   required
@@ -333,11 +369,11 @@ export function LoginDialog() {
                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Sign In"}
               </Button>
               <div className="text-center mt-2">
-                <Button 
-                  type="button" 
-                  variant="link" 
-                  className="text-xs text-muted-foreground" 
-                  onClick={() => setActiveTab("forgot-password")}
+                <Button
+                  type="button"
+                  variant="link"
+                  className="text-xs text-muted-foreground"
+                  onClick={() => switchTab("forgot-password")}
                 >
                   Forgot Password?
                 </Button>
@@ -348,7 +384,7 @@ export function LoginDialog() {
           <TabsContent value="forgot-password">
             <form onSubmit={handleResetPassword} className="space-y-4">
               <div className="space-y-2 text-sm text-muted-foreground text-center mb-4">
-                Enter your email address and we'll send you a verification code to reset your password.
+                Enter your email address and we&apos;ll send you a verification code to reset your password.
               </div>
               <div className="space-y-2">
                 <Input
@@ -360,11 +396,11 @@ export function LoginDialog() {
                   required
                 />
               </div>
-              
+
               {!otpSent ? (
-                <Button 
-                  type="button" 
-                  className="w-full" 
+                <Button
+                  type="button"
+                  className="w-full"
                   onClick={handleSendOtp}
                   disabled={isLoading}
                 >
@@ -373,30 +409,51 @@ export function LoginDialog() {
               ) : (
                 <>
                   {!isEmailVerified ? (
-                    <>
+                    <div className="space-y-2">
                       <div className="flex gap-2">
                         <Input
                           placeholder="Enter 6-digit OTP"
                           value={otpCode}
-                          onChange={(e) => setOtpCode(e.target.value)}
+                          onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                           maxLength={6}
                           required
                         />
-                        <Button 
-                          type="button" 
-                          variant="secondary" 
+                        <Button
+                          type="button"
+                          variant="secondary"
                           onClick={handleVerifyOtp}
                           disabled={isLoading || otpCode.length !== 6}
                         >
                           {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Verify"}
                         </Button>
                       </div>
-                    </>
+                      <div className="flex items-center justify-between text-xs">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOtpSent(false);
+                            setOtpCode("");
+                          }}
+                          className="text-muted-foreground hover:text-foreground underline"
+                        >
+                          Change email
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isLoading}
+                          onClick={handleSendOtp}
+                          className="text-primary hover:underline disabled:opacity-50"
+                        >
+                          Resend OTP
+                        </button>
+                      </div>
+                    </div>
                   ) : (
                     <>
                       <div className="space-y-2">
                         <Input
                           type="password"
+                          autoComplete="new-password"
                           placeholder="New Password"
                           value={newPassword}
                           onChange={(e) => setNewPassword(e.target.value)}
@@ -411,15 +468,11 @@ export function LoginDialog() {
                 </>
               )}
               <div className="text-center mt-4">
-                <Button 
-                  type="button" 
-                  variant="ghost" 
-                  className="text-xs" 
-                  onClick={() => {
-                    setActiveTab("login");
-                    setOtpSent(false);
-                    setIsEmailVerified(false);
-                  }}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="text-xs"
+                  onClick={() => switchTab("login")}
                 >
                   Back to Sign In
                 </Button>
@@ -431,11 +484,11 @@ export function LoginDialog() {
             <form onSubmit={handleRegister} className="space-y-4 px-1 pb-2">
               <div className="space-y-2">
                 <label className="text-xs font-medium">Full Name *</label>
-                <Input type="text" placeholder="John Doe" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+                <Input type="text" placeholder="John Doe" value={fullName} onChange={(e) => setFullName(e.target.value)} maxLength={120} required />
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-medium">Username *</label>
-                <Input type="text" placeholder="johndoe123" value={username} onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-zA-Z0-9_.]/g, ''))} required />
+                <Input type="text" placeholder="johndoe123" maxLength={30} value={username} onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-zA-Z0-9_.]/g, ''))} required />
                 <p className="text-[10px] text-muted-foreground">Only letters, numbers, underscores (_), and periods (.) allowed.</p>
               </div>
               <div className="space-y-2 p-3 bg-secondary/20 rounded-md border border-primary/20">
@@ -454,8 +507,8 @@ export function LoginDialog() {
                 </div>
                 {otpSent && !isEmailVerified && (
                   <div className="flex gap-2 mt-2">
-                    <Input type="text" placeholder="Enter 6-digit OTP" value={otpCode} onChange={(e) => setOtpCode(e.target.value)} />
-                    <Button type="button" onClick={handleVerifyOtp} disabled={isLoading}>Verify</Button>
+                    <Input type="text" inputMode="numeric" maxLength={6} placeholder="Enter 6-digit OTP" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
+                    <Button type="button" onClick={handleVerifyOtp} disabled={isLoading || otpCode.length !== 6}>Verify</Button>
                   </div>
                 )}
                 {isEmailVerified && (
@@ -466,7 +519,7 @@ export function LoginDialog() {
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-medium">Password *</label>
-                <Input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                <Input type="password" autoComplete="new-password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-2">
@@ -493,7 +546,7 @@ export function LoginDialog() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-medium">Residency (City) *</label>
-                  <Input type="text" placeholder="Delhi" value={city} onChange={(e) => setCity(e.target.value)} required />
+                  <Input type="text" placeholder="Delhi" value={city} onChange={(e) => setCity(e.target.value)} maxLength={100} required />
                 </div>
               </div>
               {['Class 11', 'Class 12', '12+', 'Dropper'].includes(classLevel) && (
@@ -509,25 +562,25 @@ export function LoginDialog() {
               )}
               <div className="space-y-2">
                 <label className="text-xs font-medium">Future College / Goal (Optional)</label>
-                <Input type="text" placeholder="IIT Bombay" value={futureCollege} onChange={(e) => setFutureCollege(e.target.value)} />
+                <Input type="text" placeholder="IIT Bombay" value={futureCollege} onChange={(e) => setFutureCollege(e.target.value)} maxLength={160} />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-2">
                   <label className="text-xs font-medium">Snapchat (Optional)</label>
-                  <Input type="text" placeholder="@snap" value={snapchat} onChange={(e) => setSnapchat(e.target.value)} />
+                  <Input type="text" placeholder="@snap" value={snapchat} onChange={(e) => setSnapchat(e.target.value)} maxLength={80} />
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-medium">Instagram (Optional)</label>
-                  <Input type="text" placeholder="@insta" value={instagram} onChange={(e) => setInstagram(e.target.value)} />
+                  <Input type="text" placeholder="@insta" value={instagram} onChange={(e) => setInstagram(e.target.value)} maxLength={80} />
                 </div>
               </div>
               <div className="flex flex-col gap-2 pt-2">
                 <div className="overflow-x-auto max-w-full flex items-center justify-center rounded-md bg-muted/40 p-1">
                   <LoadCanvasTemplate />
                 </div>
-                <Input 
-                  placeholder="Enter Captcha" 
-                  value={captchaValue} 
+                <Input
+                  placeholder="Enter Captcha"
+                  value={captchaValue}
                   onChange={(e) => setCaptchaValue(e.target.value)}
                   disabled={isLoading}
                   required

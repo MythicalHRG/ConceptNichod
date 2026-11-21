@@ -1,7 +1,7 @@
 // src/components/admin/donation-reconciliation.tsx
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import {
   getAdminDonationDashboard,
@@ -47,10 +47,11 @@ export function DonationReconciliation() {
   const { toast } = useToast();
   const [statusFilter, setStatusFilter] = useState<string>("pending");
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<AdminTxItem[]>([]);
   const [patrons, setPatrons] = useState<any[]>([]);
-  const [patronEdits, setPatronEdits] = useState<Record<string, {name:string;amount:string;tier:string;message:string;isAnonymous:boolean}>>({});
+  const [patronEdits, setPatronEdits] = useState<Record<string, { name: string; amount: string; tier: string; message: string; isAnonymous: boolean }>>({});
   const [summary, setSummary] = useState({
     pendingCount: 0,
     verifiedCount: 0,
@@ -67,32 +68,71 @@ export function DonationReconciliation() {
   const [noteMap, setNoteMap] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  // UPI Settings Modal/Collapsible State
+  // UPI Settings Collapsible State
   const [showSettings, setShowSettings] = useState(false);
   const [upiId, setUpiId] = useState("");
   const [payeeName, setPayeeName] = useState("");
-  const [qrCodeUrl, setQrCodeUrl] = useState("/qr.png");
+  const [isEnabled, setIsEnabled] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
 
+  const latestLoadIdRef = useRef(0);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const handleCopyText = async (value: string, label: string) => {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      toast({ title: `${label} copied`, description: value });
+    } catch {
+      toast({ variant: "destructive", title: "Copy failed", description: `Could not copy ${label}. Please copy it manually.` });
+    }
+  };
+
   const loadDashboard = useCallback(async () => {
+    const loadId = ++latestLoadIdRef.current;
     setLoading(true);
     try {
-    const res = await getAdminDonationDashboard(
-      statusFilter === "all" ? undefined : statusFilter,
-      search
-    );
-    if (res.success) {
-      setTransactions((res.transactions as AdminTxItem[]) || []);
+      const res = await getAdminDonationDashboard(
+        statusFilter === "all" ? undefined : statusFilter,
+        debouncedSearch
+      );
+      if (loadId !== latestLoadIdRef.current) return;
+
+      if (!res.success) {
+        toast({
+          variant: "destructive",
+          title: "Could not load donation dashboard",
+          description: res.error || "Please try again.",
+        });
+        return;
+      }
+
+      const txRows = (res.transactions as AdminTxItem[]) || [];
+      setTransactions(txRows);
       const patronRows = (res.patrons as any[]) || [];
       setPatrons(patronRows);
-      const edits: Record<string, {name:string;amount:string;tier:string;message:string;isAnonymous:boolean}> = {};
-      for (const patron of patronRows) edits[patron.id] = { name:patron.name || "", amount:String(patron.amount || ""), tier:patron.tier || "SUPPORTER", message:patron.message || "", isAnonymous:Boolean(patron.isAnonymous) };
+      const edits: Record<string, { name: string; amount: string; tier: string; message: string; isAnonymous: boolean }> = {};
+      for (const patron of patronRows) {
+        edits[patron.id] = {
+          name: patron.name || "",
+          amount: String(patron.amount || ""),
+          tier: patron.tier || "SUPPORTER",
+          message: patron.message || "",
+          isAnonymous: Boolean(patron.isAnonymous),
+        };
+      }
       setPatronEdits(edits);
       if (res.summary) setSummary(res.summary);
       if (res.settings) {
-        setUpiId(res.settings.upiId);
-        setPayeeName(res.settings.payeeName);
-        setQrCodeUrl(res.settings.qrCodeUrl);
+        setUpiId(res.settings.upiId || "");
+        setPayeeName(res.settings.payeeName || "ConceptNichod");
+        setIsEnabled(Boolean(res.settings.isEnabled));
       }
 
       const nextAmounts: Record<string, string> = {};
@@ -100,7 +140,7 @@ export function DonationReconciliation() {
       const nextPublish: Record<string, boolean> = {};
       const nextNotes: Record<string, string> = {};
 
-      for (const tx of (res.transactions as AdminTxItem[]) || []) {
+      for (const tx of txRows) {
         nextAmounts[tx.id] =
           tx.verifiedAmount !== null && tx.verifiedAmount !== undefined
             ? String(tx.verifiedAmount)
@@ -114,38 +154,48 @@ export function DonationReconciliation() {
 
       setAmountMap(nextAmounts);
       // Require fresh confirmation for each verification attempt; do not silently reuse evidence.
-      setBankReferenceMap(Object.fromEntries(((res.transactions as AdminTxItem[]) || []).map((tx) => [tx.id, ""])));
-      setRecipientVpaMap(Object.fromEntries(((res.transactions as AdminTxItem[]) || []).map((tx) => [tx.id, ""])));
+      setBankReferenceMap(Object.fromEntries(txRows.map((tx) => [tx.id, ""])));
+      setRecipientVpaMap(Object.fromEntries(txRows.map((tx) => [tx.id, ""])));
       setTierMap(nextTiers);
       setPublishMap(nextPublish);
       setNoteMap(nextNotes);
-    }
-
     } catch (error) {
+      if (loadId !== latestLoadIdRef.current) return;
       toast({
         variant: "destructive",
         title: "Could not load donation dashboard",
         description: error instanceof Error ? error.message : "Please try again.",
       });
     } finally {
-      setLoading(false);
+      if (loadId === latestLoadIdRef.current) {
+        setLoading(false);
+      }
     }
-  }, [statusFilter, search, toast]);
+  }, [statusFilter, debouncedSearch, toast]);
 
   useEffect(() => {
     loadDashboard();
   }, [loadDashboard]);
 
   const handleVerifyAndSave = async (tx: AdminTxItem) => {
-    const enteredAmount = amountMap[tx.id];
-    if (!enteredAmount || Number(enteredAmount) <= 0) {
-      alert("Please manually enter the ₹ amount received for this UTR before verifying.");
+    const rawAmount = (amountMap[tx.id] || "").trim();
+    const parsedAmount = Number(rawAmount);
+    if (!rawAmount || !Number.isFinite(parsedAmount) || parsedAmount < 1) {
+      toast({
+        variant: "destructive",
+        title: "Amount required",
+        description: "Please manually enter a valid ₹ amount received for this UTR before verifying.",
+      });
       return;
     }
     const bankReference = (bankReferenceMap[tx.id] || "").trim();
     const recipientVpa = (recipientVpaMap[tx.id] || "").trim();
     if (!bankReference || !recipientVpa) {
-      alert("Enter the matching bank-statement UTR and recipient VPA after checking the actual bank record.");
+      toast({
+        variant: "destructive",
+        title: "Bank evidence required",
+        description: "Enter the matching bank-statement UTR and recipient VPA after checking the actual bank record.",
+      });
       return;
     }
 
@@ -153,7 +203,7 @@ export function DonationReconciliation() {
     try {
       const res = await adminVerifyDonationAndSetAmount({
         transactionDbId: tx.id,
-        verifiedAmount: Number(enteredAmount),
+        verifiedAmount: parsedAmount,
         bankReference,
         recipientVpa,
         publishToHallOfPatrons: Boolean(publishMap[tx.id]),
@@ -163,8 +213,13 @@ export function DonationReconciliation() {
       });
 
       if (!res.success) {
-        alert(res.error || "Verification failed.");
+        toast({
+          variant: "destructive",
+          title: "Verification failed",
+          description: res.error || "Verification failed.",
+        });
       } else {
+        toast({ title: "Donation verified", description: res.message });
         await loadDashboard();
       }
     } catch (error) {
@@ -183,8 +238,13 @@ export function DonationReconciliation() {
     try {
       const res = await adminToggleHallOfPatrons(tx.id, !tx.isPublishedToPatrons);
       if (!res.success) {
-        alert(res.error || "Could not update Hall of Patrons status.");
+        toast({
+          variant: "destructive",
+          title: "Update failed",
+          description: res.error || "Could not update Hall of Patrons status.",
+        });
       } else {
+        toast({ title: "Hall of Patrons updated", description: res.message });
         await loadDashboard();
       }
     } catch (error) {
@@ -204,8 +264,13 @@ export function DonationReconciliation() {
     try {
       const res = await adminRejectDonationTransaction(tx.id, noteMap[tx.id]);
       if (!res.success) {
-        alert(res.error || "Failed to reject transaction.");
+        toast({
+          variant: "destructive",
+          title: "Rejection failed",
+          description: res.error || "Failed to reject transaction.",
+        });
       } else {
+        toast({ title: "Transaction rejected", description: res.message });
         await loadDashboard();
       }
     } catch (error) {
@@ -224,16 +289,26 @@ export function DonationReconciliation() {
     if (!edit) return;
     setBusyId(patronId);
     try {
-      const result = await adminUpdatePatron({ donorId:patronId, ...edit });
-      if (!result.success) alert(result.error || "Could not update patron.");
-      else await loadDashboard();
+      const result = await adminUpdatePatron({ donorId: patronId, ...edit });
+      if (!result.success) {
+        toast({
+          variant: "destructive",
+          title: "Patron update failed",
+          description: result.error || "Could not update patron.",
+        });
+      } else {
+        toast({ title: "Patron updated", description: result.message });
+        await loadDashboard();
+      }
     } catch (error) {
       toast({
         variant: "destructive",
         title: "Donation mutation failed",
         description: error instanceof Error ? error.message : "Please try again.",
       });
-    } finally { setBusyId(null); }
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const handleRemovePatron = async (patronId: string) => {
@@ -241,15 +316,25 @@ export function DonationReconciliation() {
     setBusyId(patronId);
     try {
       const result = await adminRemovePatron(patronId);
-      if (!result.success) alert(result.error || "Could not remove patron.");
-      else await loadDashboard();
+      if (!result.success) {
+        toast({
+          variant: "destructive",
+          title: "Could not hide patron",
+          description: result.error || "Could not remove patron.",
+        });
+      } else {
+        toast({ title: "Patron hidden", description: result.message });
+        await loadDashboard();
+      }
     } catch (error) {
       toast({
         variant: "destructive",
         title: "Donation mutation failed",
         description: error instanceof Error ? error.message : "Please try again.",
       });
-    } finally { setBusyId(null); }
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const handleSaveSettings = async (e: React.FormEvent) => {
@@ -259,13 +344,19 @@ export function DonationReconciliation() {
       const res = await adminUpdateDonationSettings({
         upiId,
         payeeName,
-        qrCodeUrl,
-        isEnabled: true,
+        qrCodeUrl: "",
+        isEnabled,
       });
       if (!res.success) {
-        alert(res.error || "Failed to save settings.");
+        toast({
+          variant: "destructive",
+          title: "Failed to save settings",
+          description: res.error || "Failed to save settings.",
+        });
       } else {
+        toast({ title: "UPI settings saved", description: res.message });
         setShowSettings(false);
+        await loadDashboard();
       }
     } catch (error) {
       toast({
@@ -298,7 +389,7 @@ export function DonationReconciliation() {
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200"
           >
             <Settings className="w-4 h-4" />
-            UPI & QR Settings
+            UPI Settings
           </button>
           <button
             type="button"
@@ -326,6 +417,7 @@ export function DonationReconciliation() {
               required
               value={upiId}
               onChange={(e) => setUpiId(e.target.value)}
+              placeholder="yourname@upi"
               className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white"
             />
           </div>
@@ -341,21 +433,19 @@ export function DonationReconciliation() {
               className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white"
             />
           </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
-              QR Image Path / URL
-            </label>
+          <label className="flex items-center gap-2 text-xs text-slate-300 py-2 cursor-pointer">
             <input
-              type="text"
-              value={qrCodeUrl}
-              onChange={(e) => setQrCodeUrl(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white"
+              type="checkbox"
+              checked={isEnabled}
+              onChange={(e) => setIsEnabled(e.target.checked)}
+              className="rounded border-slate-700 bg-slate-950 text-indigo-600"
             />
-          </div>
+            <span>Accepting Donations</span>
+          </label>
           <button
             type="submit"
             disabled={savingSettings}
-            className="py-2 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white"
+            className="py-2 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-xs font-bold text-white"
           >
             {savingSettings ? "Saving..." : "Save UPI Settings"}
           </button>
@@ -414,6 +504,7 @@ export function DonationReconciliation() {
             type="text"
             placeholder="Search UTR, Transaction ID, or Name..."
             value={search}
+            maxLength={100}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-9 pr-3.5 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white"
           />
@@ -433,6 +524,9 @@ export function DonationReconciliation() {
         <div className="space-y-4">
           {transactions.map((tx) => {
             const busy = busyId === tx.id;
+            const needsSyncRecovery = tx.status === "verified" && tx.isPublishedToPatrons && !tx.donorRecordId;
+            const canVerifyNow = tx.status === "pending" || needsSyncRecovery;
+
             return (
               <div
                 key={tx.id}
@@ -484,7 +578,7 @@ export function DonationReconciliation() {
                       </div>
                       <button
                         type="button"
-                        onClick={() => navigator.clipboard.writeText(tx.utr)}
+                        onClick={() => handleCopyText(tx.utr, "UTR")}
                         className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200"
                         title="Copy UTR"
                       >
@@ -503,7 +597,7 @@ export function DonationReconciliation() {
                       </div>
                       <button
                         type="button"
-                        onClick={() => navigator.clipboard.writeText(tx.transactionId)}
+                        onClick={() => handleCopyText(tx.transactionId, "Transaction ID")}
                         className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200"
                         title="Copy Transaction ID"
                       >
@@ -513,7 +607,7 @@ export function DonationReconciliation() {
                   </div>
                 </div>
 
-                {tx.status === "verified" && tx.isPublishedToPatrons && !tx.donorRecordId && (
+                {needsSyncRecovery && (
                   <div role="status" className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
                     Donor synchronization incomplete. Confirm the original bank evidence below, then retry the donor sync.
                   </div>
@@ -527,40 +621,42 @@ export function DonationReconciliation() {
                 )}
 
                 {/* Mandatory bank evidence confirmation before any payment is marked verified */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-xl border border-amber-500/20 bg-amber-950/10 p-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">
-                      Bank Statement UTR / Reference *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      inputMode="numeric"
-                      maxLength={60}
-                      placeholder="Re-enter the UTR shown in bank records"
-                      value={bankReferenceMap[tx.id] ?? ""}
-                      onChange={(e) => setBankReferenceMap((prev) => ({ ...prev, [tx.id]: e.target.value }))}
-                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs font-mono text-white"
-                    />
+                {canVerifyNow && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-xl border border-amber-500/20 bg-amber-950/10 p-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">
+                        Bank Statement UTR / Reference *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        inputMode="numeric"
+                        maxLength={60}
+                        placeholder="Re-enter the UTR shown in bank records"
+                        value={bankReferenceMap[tx.id] ?? ""}
+                        onChange={(e) => setBankReferenceMap((prev) => ({ ...prev, [tx.id]: e.target.value }))}
+                        className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs font-mono text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">
+                        Recipient VPA in Bank Record *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        maxLength={100}
+                        placeholder="Enter the credited recipient UPI ID"
+                        value={recipientVpaMap[tx.id] ?? ""}
+                        onChange={(e) => setRecipientVpaMap((prev) => ({ ...prev, [tx.id]: e.target.value }))}
+                        className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs font-mono text-white"
+                      />
+                    </div>
+                    <p className="sm:col-span-2 text-[11px] text-amber-200/80">
+                      Verify these details in the bank&apos;s own transaction record. UTR format or a donor screenshot alone does not prove payment.
+                    </p>
                   </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">
-                      Recipient VPA in Bank Record *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      maxLength={100}
-                      placeholder="Enter the credited recipient UPI ID"
-                      value={recipientVpaMap[tx.id] ?? ""}
-                      onChange={(e) => setRecipientVpaMap((prev) => ({ ...prev, [tx.id]: e.target.value }))}
-                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs font-mono text-white"
-                    />
-                  </div>
-                  <p className="sm:col-span-2 text-[11px] text-amber-200/80">
-                    Verify these details in the bank&apos;s own transaction record. UTR format or a donor screenshot alone does not prove payment.
-                  </p>
-                </div>
+                )}
 
                 {/* Admin Manual Amount Input & Hall of Patrons Controls */}
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
@@ -574,12 +670,13 @@ export function DonationReconciliation() {
                         type="number"
                         min={1}
                         step="1"
+                        disabled={!canVerifyNow || needsSyncRecovery}
                         placeholder="e.g. 500"
                         value={amountMap[tx.id] ?? ""}
                         onChange={(e) =>
                           setAmountMap((prev) => ({ ...prev, [tx.id]: e.target.value }))
                         }
-                        className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-sm font-bold text-emerald-400 focus:outline-none focus:border-emerald-500"
+                        className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-sm font-bold text-emerald-400 disabled:opacity-60 focus:outline-none focus:border-emerald-500"
                       />
                     </div>
                   </div>
@@ -589,11 +686,12 @@ export function DonationReconciliation() {
                       Patron Tier
                     </label>
                     <select
+                      disabled={!canVerifyNow || needsSyncRecovery}
                       value={tierMap[tx.id] || "AUTO"}
                       onChange={(e) =>
                         setTierMap((prev) => ({ ...prev, [tx.id]: e.target.value }))
                       }
-                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white disabled:opacity-60"
                     >
                       <option value="AUTO">Auto (From ₹ Amount)</option>
                       <option value="LEGEND">👑 Legend (₹5000+)</option>
@@ -620,36 +718,37 @@ export function DonationReconciliation() {
                   </div>
 
                   <div className="md:col-span-4 flex flex-wrap items-center justify-end gap-2">
-                    <label className="flex items-center gap-2 text-xs text-slate-300 mr-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(publishMap[tx.id])}
-                        onChange={(e) =>
-                          setPublishMap((prev) => ({
-                            ...prev,
-                            [tx.id]: e.target.checked,
-                          }))
-                        }
-                        className="rounded border-slate-700 bg-slate-950 text-indigo-600"
-                      />
-                      <span>Add to Hall of Patrons</span>
-                    </label>
+                    {canVerifyNow && (
+                      <>
+                        <label className="flex items-center gap-2 text-xs text-slate-300 mr-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(publishMap[tx.id])}
+                            disabled={needsSyncRecovery}
+                            onChange={(e) =>
+                              setPublishMap((prev) => ({
+                                ...prev,
+                                [tx.id]: e.target.checked,
+                              }))
+                            }
+                            className="rounded border-slate-700 bg-slate-950 text-indigo-600"
+                          />
+                          <span>Add to Hall of Patrons</span>
+                        </label>
 
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => handleVerifyAndSave(tx)}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-xs font-bold text-white transition"
-                    >
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      {tx.status === "verified" && tx.isPublishedToPatrons && !tx.donorRecordId
-                        ? "Retry Donor Sync"
-                        : tx.status === "verified"
-                          ? "Update ₹ & Patron"
-                          : "Verify & Save ₹"}
-                    </button>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => handleVerifyAndSave(tx)}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-xs font-bold text-white transition"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          {needsSyncRecovery ? "Retry Donor Sync" : "Verify & Save ₹"}
+                        </button>
+                      </>
+                    )}
 
-                    {tx.status === "verified" && (
+                    {tx.status === "verified" && !needsSyncRecovery && (
                       <button
                         type="button"
                         disabled={busy}
@@ -693,14 +792,92 @@ export function DonationReconciliation() {
         {patrons.length === 0 ? (
           <p className="rounded-xl border border-slate-800 bg-slate-900/50 p-4 text-sm text-slate-400">No patron entries exist yet.</p>
         ) : patrons.map((patron) => {
-          const edit = patronEdits[patron.id] || {name:patron.name || "",amount:String(patron.amount || ""),tier:patron.tier || "SUPPORTER",message:patron.message || "",isAnonymous:Boolean(patron.isAnonymous)};
-          return <article key={patron.id} className="grid gap-3 rounded-xl border border-slate-800 bg-slate-900 p-4 sm:grid-cols-2 lg:grid-cols-5">
-            <label className="space-y-1 text-xs">Display name<input value={edit.name} onChange={e=>setPatronEdits(p=>({...p,[patron.id]:{...edit,name:e.target.value}}))} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"/></label>
-            <label className="space-y-1 text-xs">Confirmed amount (₹)<input type="number" min="1" step="0.01" value={edit.amount} onChange={e=>setPatronEdits(p=>({...p,[patron.id]:{...edit,amount:e.target.value}}))} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"/></label>
-            <label className="space-y-1 text-xs">Tier<select value={edit.tier} onChange={e=>setPatronEdits(p=>({...p,[patron.id]:{...edit,tier:e.target.value}}))} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"><option value="LEGEND">LEGEND</option><option value="DIAMOND">DIAMOND</option><option value="GOLD">GOLD</option><option value="SILVER">SILVER</option><option value="SUPPORTER">SUPPORTER</option></select></label>
-            <label className="space-y-1 text-xs">Public message<input value={edit.message} onChange={e=>setPatronEdits(p=>({...p,[patron.id]:{...edit,message:e.target.value}}))} maxLength={250} className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"/></label>
-            <div className="flex flex-wrap items-end gap-2"><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={edit.isAnonymous} onChange={e=>setPatronEdits(p=>({...p,[patron.id]:{...edit,isAnonymous:e.target.checked}}))}/>Anonymous</label><button type="button" disabled={busyId===patron.id} onClick={()=>void handleSavePatron(patron.id)} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Save</button><button type="button" disabled={busyId===patron.id} onClick={()=>void handleRemovePatron(patron.id)} className="rounded-lg border border-rose-500/40 px-3 py-2 text-xs font-semibold text-rose-200 disabled:opacity-50">Hide</button></div>
-          </article>;
+          const edit = patronEdits[patron.id] || {
+            name: patron.name || "",
+            amount: String(patron.amount || ""),
+            tier: patron.tier || "SUPPORTER",
+            message: patron.message || "",
+            isAnonymous: Boolean(patron.isAnonymous),
+          };
+          return (
+            <article key={patron.id} className="grid gap-3 rounded-xl border border-slate-800 bg-slate-900 p-4 sm:grid-cols-2 lg:grid-cols-5">
+              <label className="space-y-1 text-xs">
+                <span className="flex items-center gap-2">
+                  Display name
+                  {!patron.isVisible && (
+                    <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-400">
+                      Hidden
+                    </span>
+                  )}
+                </span>
+                <input
+                  value={edit.name}
+                  onChange={(e) => setPatronEdits((p) => ({ ...p, [patron.id]: { ...edit, name: e.target.value } }))}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="space-y-1 text-xs">
+                Confirmed amount (₹)
+                <input
+                  type="number"
+                  min="1"
+                  step="0.01"
+                  value={edit.amount}
+                  onChange={(e) => setPatronEdits((p) => ({ ...p, [patron.id]: { ...edit, amount: e.target.value } }))}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="space-y-1 text-xs">
+                Tier
+                <select
+                  value={edit.tier}
+                  onChange={(e) => setPatronEdits((p) => ({ ...p, [patron.id]: { ...edit, tier: e.target.value } }))}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+                >
+                  <option value="LEGEND">LEGEND</option>
+                  <option value="DIAMOND">DIAMOND</option>
+                  <option value="GOLD">GOLD</option>
+                  <option value="SILVER">SILVER</option>
+                  <option value="SUPPORTER">SUPPORTER</option>
+                </select>
+              </label>
+              <label className="space-y-1 text-xs">
+                Public message
+                <input
+                  value={edit.message}
+                  onChange={(e) => setPatronEdits((p) => ({ ...p, [patron.id]: { ...edit, message: e.target.value } }))}
+                  maxLength={250}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+                />
+              </label>
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="flex items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={edit.isAnonymous}
+                    onChange={(e) => setPatronEdits((p) => ({ ...p, [patron.id]: { ...edit, isAnonymous: e.target.checked } }))}
+                  />
+                  Anonymous
+                </label>
+                <button
+                  type="button"
+                  disabled={busyId === patron.id}
+                  onClick={() => void handleSavePatron(patron.id)}
+                  className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  disabled={busyId === patron.id}
+                  onClick={() => void handleRemovePatron(patron.id)}
+                  className="rounded-lg border border-rose-500/40 px-3 py-2 text-xs font-semibold text-rose-200 disabled:opacity-50"
+                >
+                  Hide
+                </button>
+              </div>
+            </article>
+          );
         })}
       </section>
     </div>

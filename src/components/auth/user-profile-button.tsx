@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "./auth-context";
 import { MythicalUserBadge } from "@/components/ui/mythical-glass";
 import { Button } from "@/components/ui/button";
-import { LogOut, User, Settings, Loader2, Palette, Sparkles, Check, Monitor, Volume2, ShieldAlert, KeyRound, Cake } from "lucide-react";
+import { LogOut, User, Settings, Loader2, Palette, Check, Monitor, ShieldAlert, KeyRound, Cake } from "lucide-react";
 import { useTheme } from "next-themes";
 import { THEME_OPTIONS } from "@/components/theme-toggle";
 import {
@@ -13,7 +13,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
@@ -37,6 +36,13 @@ function formatDob(dobStr?: string | null) {
   } catch {}
   return dobStr;
 }
+
+const CLASS_LEVEL_OPTIONS = [
+  "Class 1", "Class 2", "Class 3", "Class 4", "Class 5", "Class 6", "Class 7", "Class 8",
+  "Class 9", "Class 10", "Class 11", "Class 12", "12+", "Dropper", "Other",
+];
+
+const EXAM_FOCUS_OPTIONS = ["IITJEE", "JEE", "NEET", "UPSC", "CA", "NDA", "CUET", "Other"];
 
 export function UserProfileButton() {
   const { user, isLoggedIn, isAuthReady, logout, login, setAuthModalOpen } = useAuth();
@@ -76,7 +82,7 @@ export function UserProfileButton() {
 
   // Cooldown timers
   useEffect(() => {
-    let timer: NodeJS.Timeout;
+    let timer: ReturnType<typeof setTimeout>;
     if (emailResendCooldown > 0) {
       timer = setTimeout(() => setEmailResendCooldown((c) => c - 1), 1000);
     }
@@ -84,15 +90,18 @@ export function UserProfileButton() {
   }, [emailResendCooldown]);
 
   useEffect(() => {
-    let timer: NodeJS.Timeout;
+    let timer: ReturnType<typeof setTimeout>;
     if (deleteResendCooldown > 0) {
       timer = setTimeout(() => setDeleteResendCooldown((c) => c - 1), 1000);
     }
     return () => clearTimeout(timer);
   }, [deleteResendCooldown]);
 
+  // Clear all sensitive credential & OTP fields when leaving Danger Zone or closing modal
   useEffect(() => {
-    if (activeTab !== "delete") {
+    if (!isSettingsOpen || activeTab !== "delete") {
+      setCurrentPassword("");
+      setNewPassword("");
       setDeleteCurrentPassword("");
       setDeleteOtp("");
       setDeleteConfirmationText("");
@@ -102,7 +111,7 @@ export function UserProfileButton() {
       setEmailChangeOtp("");
       setIsEmailChangeOtpSent(false);
     }
-  }, [activeTab]);
+  }, [activeTab, isSettingsOpen]);
 
   const openSettings = () => {
     if (user) {
@@ -110,11 +119,11 @@ export function UserProfileButton() {
       setUsername(user.username);
       setBio(user.bio || "");
       setClassLevel(user.classLevel || "");
-      setExamFocus((user as any).examFocus || "");
-      setCity((user as any).city || "");
-      setFutureCollege((user as any).futureCollege || "");
-      setSnapchat((user as any).snapchat || "");
-      setInstagram((user as any).instagram || "");
+      setExamFocus(user.examFocus || "");
+      setCity(user.city || "");
+      setFutureCollege(user.futureCollege || "");
+      setSnapchat(user.snapchat || "");
+      setInstagram(user.instagram || "");
     }
     setIsSettingsOpen(true);
     setActiveTab("profile");
@@ -126,11 +135,11 @@ export function UserProfileButton() {
     try {
       const formData = new FormData();
       formData.append("email", email);
-      formData.append("username", username);
+      formData.append("username", username.trim());
       formData.append("bio", bio);
       formData.append("classLevel", classLevel);
       formData.append("examFocus", examFocus);
-      formData.append("city", city);
+      formData.append("city", city.trim());
       formData.append("futureCollege", futureCollege);
       formData.append("snapchat", snapchat);
       formData.append("instagram", instagram);
@@ -145,7 +154,7 @@ export function UserProfileButton() {
       toast({
         variant: "destructive",
         title: "Update Failed",
-        description: err.message,
+        description: err?.message || "Could not update profile.",
       });
     } finally {
       setIsLoading(false);
@@ -154,6 +163,7 @@ export function UserProfileButton() {
 
   const handleDeleteSendOtp = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (isDeleteLoading || deleteResendCooldown > 0) return;
     if (!deleteCurrentPassword) {
       toast({
         variant: "destructive",
@@ -178,7 +188,7 @@ export function UserProfileButton() {
       toast({
         variant: "destructive",
         title: "Failed to Send Code",
-        description: err.message,
+        description: err?.message || "Please try again.",
       });
     } finally {
       setIsDeleteLoading(false);
@@ -187,7 +197,7 @@ export function UserProfileButton() {
 
   const handleDeleteAccount = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isDeleteOtpSent) return;
+    if (!isDeleteOtpSent || isDeleteLoading) return;
     if (!deleteOtp || deleteOtp.length < 6) {
       toast({
         variant: "destructive",
@@ -217,10 +227,10 @@ export function UserProfileButton() {
       if (res?.success) {
         toast({ title: "Account Deleted", description: "Your account and data have been permanently erased." });
         setIsSettingsOpen(false);
-        logout();
+        await logout();
       }
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Deletion Failed", description: err.message });
+      toast({ variant: "destructive", title: "Deletion Failed", description: err?.message || "Please try again." });
     } finally {
       setIsDeleteLoading(false);
     }
@@ -228,7 +238,7 @@ export function UserProfileButton() {
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentPassword || !newPassword) return;
+    if (!currentPassword || !newPassword || isLoading) return;
     setIsLoading(true);
     try {
       const formData = new FormData();
@@ -244,7 +254,7 @@ export function UserProfileButton() {
       toast({
         variant: "destructive",
         title: "Update Failed",
-        description: err.message,
+        description: err?.message || "Please try again.",
       });
     } finally {
       setIsLoading(false);
@@ -253,7 +263,9 @@ export function UserProfileButton() {
 
   const handleRequestEmailChangeOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newEmailToChange) {
+    if (isEmailChangeLoading || emailResendCooldown > 0) return;
+    const cleanNewEmail = newEmailToChange.trim().toLowerCase();
+    if (!cleanNewEmail) {
       toast({ variant: "destructive", title: "Email Required", description: "Please enter your new email address." });
       return;
     }
@@ -263,14 +275,15 @@ export function UserProfileButton() {
     }
     setIsEmailChangeLoading(true);
     try {
-      const res = await requestEmailChangeOtpAction(newEmailToChange, emailChangePassword);
+      const res = await requestEmailChangeOtpAction(cleanNewEmail, emailChangePassword);
       if (res.success) {
+        setNewEmailToChange(cleanNewEmail);
         setIsEmailChangeOtpSent(true);
         setEmailResendCooldown(60);
         toast({ title: "OTP Sent", description: "Verification code sent to your new email." });
       }
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Request Failed", description: err.message });
+      toast({ variant: "destructive", title: "Request Failed", description: err?.message || "Please try again." });
     } finally {
       setIsEmailChangeLoading(false);
     }
@@ -278,15 +291,18 @@ export function UserProfileButton() {
 
   const handleConfirmEmailChange = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newEmailToChange || !emailChangeOtp) {
+    if (isEmailChangeLoading) return;
+    const cleanNewEmail = newEmailToChange.trim().toLowerCase();
+    if (!cleanNewEmail || !emailChangeOtp) {
       toast({ variant: "destructive", title: "Error", description: "Please enter the OTP." });
       return;
     }
     setIsEmailChangeLoading(true);
     try {
-      const res = await confirmEmailChangeAction(newEmailToChange, emailChangeOtp);
+      const res = await confirmEmailChangeAction(cleanNewEmail, emailChangeOtp);
       if (res.success && res.user) {
         login(res.user);
+        setEmail(res.user.email);
         toast({ title: "Email Changed Successfully", description: "Your email has been updated." });
         setNewEmailToChange("");
         setEmailChangePassword("");
@@ -294,7 +310,7 @@ export function UserProfileButton() {
         setIsEmailChangeOtpSent(false);
       }
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Verification Failed", description: err.message });
+      toast({ variant: "destructive", title: "Verification Failed", description: err?.message || "Please try again." });
     } finally {
       setIsEmailChangeLoading(false);
     }
@@ -322,49 +338,49 @@ export function UserProfileButton() {
               <User className="size-4 text-primary" />
             </div>
             <div className="flex flex-col flex-1 overflow-hidden">
-                <div className="flex items-center gap-1.5 flex-1 overflow-hidden">
-                  {isMythical ? (
-                    <MythicalUserBadge username={user.username} size="xs" />
-                  ) : (
-                    <span className="text-xs truncate font-medium">
-                      @{user.username}
-                    </span>
-                  )}
-                </div>
-                <span className="text-[10px] truncate text-muted-foreground flex-1">
+              <div className="flex items-center gap-1.5 flex-1 overflow-hidden">
+                {isMythical ? (
+                  <MythicalUserBadge username={user.username} size="xs" />
+                ) : (
+                  <span className="text-xs truncate font-medium">
+                    @{user.username}
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px] truncate text-muted-foreground flex-1">
                 {user.email}
-                </span>
+              </span>
             </div>
           </div>
           <div className="flex flex-col gap-2">
             <div className="flex gap-2">
-              <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => window.open(`/profile/${user.username}`, '_blank')}
-                  className="w-full h-8 text-xs justify-center flex-1"
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => window.open(`/profile/${encodeURIComponent(user.username)}`, "_blank", "noopener,noreferrer")}
+                className="w-full h-8 text-xs justify-center flex-1"
               >
-                  <User className="size-3 mr-2" />
-                  Profile
+                <User className="size-3 mr-2" />
+                Profile
               </Button>
-              <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={openSettings}
-                  className="w-full h-8 text-xs justify-center flex-1"
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={openSettings}
+                className="w-full h-8 text-xs justify-center flex-1"
               >
-                  <Settings className="size-3 mr-2" />
-                  Settings
+                <Settings className="size-3 mr-2" />
+                Settings
               </Button>
             </div>
-            <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={logout}
-                className="w-full h-8 text-xs justify-center text-destructive hover:text-destructive"
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={logout}
+              className="w-full h-8 text-xs justify-center text-destructive hover:text-destructive"
             >
-                <LogOut className="size-3 mr-2" />
-                Logout
+              <LogOut className="size-3 mr-2" />
+              Logout
             </Button>
           </div>
         </div>
@@ -383,7 +399,7 @@ export function UserProfileButton() {
                 <TabsTrigger value="appearance">Themes</TabsTrigger>
                 <TabsTrigger value="delete" className="text-destructive data-[state=active]:bg-destructive/10 data-[state=active]:text-destructive">Danger <span className="hidden sm:inline">Zone</span></TabsTrigger>
               </TabsList>
-              
+
               <TabsContent value="profile">
                 <form onSubmit={handleUpdate} className="space-y-4 max-h-[60vh] overflow-y-auto px-1 pb-2">
                   <div className="space-y-2">
@@ -392,8 +408,16 @@ export function UserProfileButton() {
                       type="text"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
+                      disabled={isMythical}
+                      maxLength={30}
+                      className={isMythical ? "bg-muted text-muted-foreground cursor-not-allowed" : ""}
                       required
                     />
+                    {isMythical && (
+                      <p className="text-[11px] text-amber-500">
+                        Platform owner username is locked to preserve access.
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-1">
                     <label className="text-sm font-medium">Email Address</label>
@@ -403,9 +427,11 @@ export function UserProfileButton() {
                       disabled
                       className="bg-muted text-muted-foreground cursor-not-allowed"
                     />
-                    <p className="text-[11px] text-muted-foreground">
-                      To change email, open the <span className="text-destructive font-medium cursor-pointer underline" onClick={() => setActiveTab("delete")}>Danger</span> tab (OTP required).
-                    </p>
+                    {!isMythical && (
+                      <p className="text-[11px] text-muted-foreground">
+                        To change email, open the <span className="text-destructive font-medium cursor-pointer underline" onClick={() => setActiveTab("delete")}>Danger</span> tab (OTP required).
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-1">
                     <label className="text-sm font-medium flex items-center gap-1.5">
@@ -421,24 +447,29 @@ export function UserProfileButton() {
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Class / Grade</label>
-                    <select 
+                    <select
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       value={classLevel}
                       onChange={(e) => setClassLevel(e.target.value)}
+                      required
                     >
                       <option value="">Select Class</option>
-                      {["Class 9", "Class 10", "Class 11", "Class 12", "12+", "Dropper", "Other"].map(c => <option key={c} value={c}>{c}</option>)}
+                      {CLASS_LEVEL_OPTIONS.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
                     </select>
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Target Exam (Optional)</label>
-                    <select 
+                    <select
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       value={examFocus}
                       onChange={(e) => setExamFocus(e.target.value)}
                     >
                       <option value="">None</option>
-                      {["JEE", "NEET", "UPSC", "CA", "NDA", "CUET", "Other"].map(ex => <option key={ex} value={ex}>{ex}</option>)}
+                      {EXAM_FOCUS_OPTIONS.map((ex) => (
+                        <option key={ex} value={ex}>{ex === "IITJEE" ? "IIT JEE" : ex}</option>
+                      ))}
                     </select>
                   </div>
                   <div className="space-y-2">
@@ -447,6 +478,7 @@ export function UserProfileButton() {
                       type="text"
                       value={bio}
                       onChange={(e) => setBio(e.target.value)}
+                      maxLength={500}
                       placeholder="Tell us about yourself..."
                     />
                   </div>
@@ -456,6 +488,8 @@ export function UserProfileButton() {
                       type="text"
                       value={city}
                       onChange={(e) => setCity(e.target.value)}
+                      maxLength={100}
+                      required
                     />
                   </div>
                   <div className="space-y-2">
@@ -464,6 +498,7 @@ export function UserProfileButton() {
                       type="text"
                       value={futureCollege}
                       onChange={(e) => setFutureCollege(e.target.value)}
+                      maxLength={160}
                     />
                   </div>
                   <div className="space-y-2">
@@ -472,6 +507,7 @@ export function UserProfileButton() {
                       type="text"
                       value={snapchat}
                       onChange={(e) => setSnapchat(e.target.value)}
+                      maxLength={80}
                     />
                   </div>
                   <div className="space-y-2">
@@ -480,6 +516,7 @@ export function UserProfileButton() {
                       type="text"
                       value={instagram}
                       onChange={(e) => setInstagram(e.target.value)}
+                      maxLength={80}
                     />
                   </div>
                   <Button type="submit" className="w-full" disabled={isLoading}>
@@ -559,7 +596,7 @@ export function UserProfileButton() {
                   </div>
                 </div>
               </TabsContent>
-              
+
               <TabsContent value="delete" className="space-y-6 max-h-[60vh] overflow-y-auto px-1 pb-2">
                 {/* Change Password Section (Danger Zone) */}
                 <div className="border border-border/80 rounded-lg p-4 bg-muted/20 space-y-3">
@@ -576,6 +613,7 @@ export function UserProfileButton() {
                       <label className="text-xs font-medium">Current Password</label>
                       <Input
                         type="password"
+                        autoComplete="current-password"
                         placeholder="Current password"
                         value={currentPassword}
                         onChange={(e) => setCurrentPassword(e.target.value)}
@@ -586,6 +624,7 @@ export function UserProfileButton() {
                       <label className="text-xs font-medium">New Password</label>
                       <Input
                         type="password"
+                        autoComplete="new-password"
                         placeholder="New password (8+ chars, upper, lower, number, symbol)"
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
@@ -599,106 +638,130 @@ export function UserProfileButton() {
                 </div>
 
                 {/* Change Email Section */}
-                <div className="border border-destructive/30 rounded-lg p-4 bg-destructive/5 space-y-3">
-                  <div className="space-y-1">
-                    <h4 className="text-sm font-semibold text-destructive flex items-center gap-2">
-                      Change Email Address
-                    </h4>
-                    <p className="text-xs text-muted-foreground">
-                      To protect your account, enter your current password and new email address to receive a verification OTP.
+                {isMythical ? (
+                  <div className="border border-amber-500/40 rounded-xl p-4 bg-amber-500/10 space-y-2">
+                    <div className="flex items-center gap-2 font-semibold text-sm text-amber-300">
+                      <ShieldAlert className="w-4 h-4 text-amber-400" /> Platform Owner Email Protected
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      The root platform owner email for <strong>@{user.username}</strong> cannot be changed via self-service.
                     </p>
                   </div>
-                  
-                  <div className="space-y-3">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">Current Email</label>
-                      <Input
-                        type="email"
-                        value={user?.email || ""}
-                        disabled
-                        className="h-8 text-xs bg-muted/60 text-muted-foreground cursor-not-allowed"
-                      />
+                ) : (
+                  <div className="border border-destructive/30 rounded-lg p-4 bg-destructive/5 space-y-3">
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-semibold text-destructive flex items-center gap-2">
+                        Change Email Address
+                      </h4>
+                      <p className="text-xs text-muted-foreground">
+                        To protect your account, enter your current password and new email address to receive a verification OTP.
+                      </p>
                     </div>
 
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium">Verify Current Password</label>
-                      <Input
-                        type="password"
-                        placeholder="Current password"
-                        value={emailChangePassword}
-                        onChange={(e) => setEmailChangePassword(e.target.value)}
-                        disabled={isEmailChangeOtpSent || isEmailChangeLoading}
-                        className="h-9 text-xs"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium">New Email (@gmail.com, @outlook.com/in)</label>
-                      <div className="flex gap-2">
+                    <div className="space-y-3">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-muted-foreground">Current Email</label>
                         <Input
                           type="email"
-                          placeholder="newemail@gmail.com"
-                          value={newEmailToChange}
-                          onChange={(e) => setNewEmailToChange(e.target.value)}
+                          value={user?.email || ""}
+                          disabled
+                          className="h-8 text-xs bg-muted/60 text-muted-foreground cursor-not-allowed"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium">Verify Current Password</label>
+                        <Input
+                          type="password"
+                          autoComplete="current-password"
+                          placeholder="Current password"
+                          value={emailChangePassword}
+                          onChange={(e) => setEmailChangePassword(e.target.value)}
                           disabled={isEmailChangeOtpSent || isEmailChangeLoading}
                           className="h-9 text-xs"
                         />
-                        <Button 
-                          type="button" 
-                          size="sm"
-                          onClick={handleRequestEmailChangeOtp} 
-                          disabled={isEmailChangeLoading || !newEmailToChange || !emailChangePassword || emailResendCooldown > 0}
-                          className="h-9 text-xs shrink-0"
-                          variant={isEmailChangeOtpSent ? "outline" : "default"}
-                        >
-                          {isEmailChangeLoading ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : emailResendCooldown > 0 ? (
-                            `Wait ${emailResendCooldown}s`
-                          ) : isEmailChangeOtpSent ? (
-                            "Resend"
-                          ) : (
-                            "Send OTP"
-                          )}
-                        </Button>
                       </div>
-                    </div>
 
-                    {isEmailChangeOtpSent && (
-                      <div className="space-y-2 pt-2 border-t border-border/50">
-                        <label className="text-xs font-medium text-primary">Enter 6-digit OTP Code sent to {newEmailToChange}</label>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium">New Email (@gmail.com, @outlook.com/in)</label>
                         <div className="flex gap-2">
                           <Input
-                            placeholder="6-digit OTP"
-                            maxLength={6}
-                            value={emailChangeOtp}
-                            onChange={(e) => setEmailChangeOtp(e.target.value.replace(/\D/g, ""))}
-                            className="h-9 text-xs font-mono tracking-widest text-center"
+                            type="email"
+                            placeholder="newemail@gmail.com"
+                            value={newEmailToChange}
+                            onChange={(e) => setNewEmailToChange(e.target.value)}
+                            disabled={isEmailChangeOtpSent || isEmailChangeLoading}
+                            className="h-9 text-xs"
                           />
                           <Button
                             type="button"
                             size="sm"
-                            variant="destructive"
-                            onClick={handleConfirmEmailChange}
-                            disabled={isEmailChangeLoading || emailChangeOtp.length < 6}
+                            onClick={handleRequestEmailChangeOtp}
+                            disabled={isEmailChangeLoading || !newEmailToChange || !emailChangePassword || emailResendCooldown > 0}
                             className="h-9 text-xs shrink-0"
+                            variant={isEmailChangeOtpSent ? "outline" : "default"}
                           >
-                            {isEmailChangeLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Confirm Change"}
+                            {isEmailChangeLoading ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : emailResendCooldown > 0 ? (
+                              `Wait ${emailResendCooldown}s`
+                            ) : isEmailChangeOtpSent ? (
+                              "Resend"
+                            ) : (
+                              "Send OTP"
+                            )}
                           </Button>
                         </div>
                       </div>
-                    )}
+
+                      {isEmailChangeOtpSent && (
+                        <div className="space-y-2 pt-2 border-t border-border/50">
+                          <div className="flex items-center justify-between gap-2">
+                            <label className="text-xs font-medium text-primary">Enter 6-digit OTP Code sent to {newEmailToChange}</label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsEmailChangeOtpSent(false);
+                                setEmailChangeOtp("");
+                              }}
+                              className="text-[11px] text-muted-foreground hover:text-foreground underline shrink-0"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                          <div className="flex gap-2">
+                            <Input
+                              placeholder="6-digit OTP"
+                              maxLength={6}
+                              value={emailChangeOtp}
+                              onChange={(e) => setEmailChangeOtp(e.target.value.replace(/\D/g, ""))}
+                              className="h-9 text-xs font-mono tracking-widest text-center"
+                            />
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="destructive"
+                              onClick={handleConfirmEmailChange}
+                              disabled={isEmailChangeLoading || emailChangeOtp.length < 6}
+                              className="h-9 text-xs shrink-0"
+                            >
+                              {isEmailChangeLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Confirm Change"}
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Account Deletion Section */}
-                {user?.username?.toLowerCase() === "mythicalhrg" ? (
+                {isMythical ? (
                   <div className="border border-amber-500/40 rounded-xl p-4 bg-amber-500/10 space-y-2">
                     <div className="flex items-center gap-2 font-semibold text-sm text-amber-300">
                       <ShieldAlert className="w-4 h-4 text-amber-400" /> Platform Owner Account Protected
                     </div>
                     <p className="text-xs text-muted-foreground leading-relaxed">
-                      The root platform administrator account <strong>@{user.username}</strong> is permanently protected and cannot be deleted.
+                      The root platform owner account <strong>@{user.username}</strong> is permanently protected and cannot be deleted.
                     </p>
                   </div>
                 ) : (
@@ -718,6 +781,7 @@ export function UserProfileButton() {
                           <label className="text-xs font-medium">Verify Current Password</label>
                           <Input
                             type="password"
+                            autoComplete="current-password"
                             placeholder="Enter current password to authorize deletion request"
                             value={deleteCurrentPassword}
                             onChange={(e) => setDeleteCurrentPassword(e.target.value)}
@@ -835,8 +899,8 @@ export function UserProfileButton() {
   }
 
   return (
-    <Button 
-      variant="default" 
+    <Button
+      variant="default"
       className="w-full"
       onClick={() => setAuthModalOpen(true)}
     >

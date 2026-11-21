@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   getAllUsersAction,
   deleteUserAction,
@@ -67,7 +67,6 @@ import {
   Send,
   Sparkles,
   Paperclip,
-  CheckCircle2,
   Clock,
   Radio,
   Heart,
@@ -83,6 +82,20 @@ import { UploadButton } from "@/utils/uploadthing";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { DonationReconciliation } from "@/components/admin/donation-reconciliation";
+
+function isSafeHttpsUrl(raw?: string | null): boolean {
+  if (typeof raw !== "string" || !raw.trim()) return false;
+  try {
+    const parsed = new URL(raw.trim());
+    return parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function isMythicalUsername(username?: string | null): boolean {
+  return typeof username === "string" && username.trim().toLowerCase() === "mythicalhrg";
+}
 
 function parseSemver(v: string) {
   if (!v) return null;
@@ -124,17 +137,20 @@ function calculateNextVersion(majorDigit: number | string, category: string, log
 }
 
 export function AdminPanel() {
+  const [activeTab, setActiveTab] = useState("users");
   const [users, setUsers] = useState<any[]>([]);
   const [bans, setBans] = useState<any[]>([]);
   const [activeBroadcasts, setActiveBroadcasts] = useState<any[]>([]);
   const [emailBroadcasts, setEmailBroadcasts] = useState<any[]>([]);
   const [changelogs, setChangelogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [busyActionId, setBusyActionId] = useState<string | null>(null);
 
   // Bans state
   const [banType, setBanType] = useState<"ip" | "email" | "username">("email");
   const [banValue, setBanValue] = useState("");
   const [banReason, setBanReason] = useState("");
+  const [banSubmitting, setBanSubmitting] = useState(false);
 
   // Edit Credentials Dialog state (Platform Owner only)
   const [editingUser, setEditingUser] = useState<{ uuid: string; username: string; email: string; fullName: string } | null>(null);
@@ -182,39 +198,43 @@ export function AdminPanel() {
 
   const { toast } = useToast();
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = useCallback(async (showFullLoader = false) => {
+    if (showFullLoader) setLoading(true);
     try {
-      const [usersRes, bansRes, broadcastsRes, emailRes, changelogsRes, studyGroupsRes] =
+      const [usersRes, bansRes, broadcastsRes, emailRes, changelogsRes, studyGroupsRes, donationRes] =
         await Promise.all([
           getAllUsersAction(),
           getBansAction(),
           getActiveBroadcastsAction(),
-          getEmailBroadcastHistoryAction().catch(() => ({ success: true, broadcasts: [] })),
+          getEmailBroadcastHistoryAction().catch(() => []),
           getChangelogsAction().catch(() => ({ success: true, changelogs: [] })),
           getAllStudyGroupsAdminAction().catch(() => ({ success: true, groups: [] })),
+          getAdminDonationSettingsAction().catch(() => ({ success: false, settings: null })),
         ]);
 
       if (usersRes.success) setUsers(usersRes.users);
       if (bansRes.success) setBans(bansRes.bans);
       if (broadcastsRes.success) setActiveBroadcasts(broadcastsRes.broadcasts);
-      if (emailRes?.success) setEmailBroadcasts(emailRes.broadcasts || []);
+      if (Array.isArray(emailRes)) {
+        setEmailBroadcasts(emailRes);
+      } else if (emailRes?.success) {
+        setEmailBroadcasts(emailRes.broadcasts || []);
+      }
       if (changelogsRes?.success) setChangelogs(changelogsRes.changelogs || []);
       if (studyGroupsRes?.success) setStudyGroups(studyGroupsRes.groups || []);
-      const donationRes = await getAdminDonationSettingsAction().catch(() => ({ success: false, settings: null }));
       if (donationRes?.success && donationRes.settings) {
         setDonationSettings({ upiId: donationRes.settings.upiId || "" });
       }
     } catch (e: any) {
       toast({ title: "Error", description: e?.message || "Please try again.", variant: "destructive" });
     } finally {
-      setLoading(false);
+      if (showFullLoader) setLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    fetchData(true);
+  }, [fetchData]);
 
   // Auto-assign version tag based on 1st digit (major) and category (type)
   useEffect(() => {
@@ -253,13 +273,17 @@ export function AdminPanel() {
   });
 
   const handleDeleteUser = async (uuid: string) => {
+    if (busyActionId) return;
     if (!confirm("Are you sure you want to permanently delete this user?")) return;
+    setBusyActionId(uuid);
     try {
       await deleteUserAction(uuid);
       toast({ title: "User deleted successfully" });
-      setUsers(users.filter((u) => u.uuid !== uuid));
+      setUsers((prev) => prev.filter((u) => u.uuid !== uuid));
     } catch (e: any) {
       toast({ title: "Error", description: e?.message || "Please try again.", variant: "destructive" });
+    } finally {
+      setBusyActionId(null);
     }
   };
 
@@ -271,7 +295,7 @@ export function AdminPanel() {
 
   const handleSaveCredentials = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingUser) return;
+    if (!editingUser || isSavingCredentials) return;
 
     if (!editUsername.trim() || !editEmail.trim()) {
       toast({ variant: "destructive", title: "Error", description: "Username and email cannot be empty." });
@@ -306,7 +330,7 @@ export function AdminPanel() {
       toast({
         variant: "destructive",
         title: "Update Failed",
-        description: err.message || "Could not update credentials",
+        description: err?.message || "Could not update credentials",
       });
     } finally {
       setIsSavingCredentials(false);
@@ -315,31 +339,39 @@ export function AdminPanel() {
 
   const handleBan = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!banValue) return;
+    if (!banValue.trim() || banSubmitting) return;
+    setBanSubmitting(true);
     try {
-      await banEntityAction(banType, banValue, banReason);
+      await banEntityAction(banType, banValue.trim(), banReason.trim());
       toast({ title: "Ban added successfully" });
       setBanValue("");
       setBanReason("");
-      fetchData();
+      await fetchData(false);
     } catch (e: any) {
       toast({ title: "Error", description: e?.message || "Please try again.", variant: "destructive" });
+    } finally {
+      setBanSubmitting(false);
     }
   };
 
   const handleUnban = async (id: string) => {
+    if (busyActionId) return;
+    setBusyActionId(id);
     try {
       await unbanEntityAction(id);
       toast({ title: "Unbanned successfully" });
-      setBans(bans.filter((b) => b._id !== id));
+      setBans((prev) => prev.filter((b) => b._id !== id));
     } catch (e: any) {
       toast({ title: "Error", description: e?.message || "Please try again.", variant: "destructive" });
+    } finally {
+      setBusyActionId(null);
     }
   };
 
   // Create In-App Broadcast
   const handleCreateBroadcast = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (broadcastLoading) return;
     setBroadcastLoading(true);
     const form = e.currentTarget;
     const formData = new FormData(form);
@@ -356,7 +388,7 @@ export function AdminPanel() {
       });
       form.reset();
       setUploadedFileUrl(null);
-      fetchData();
+      await fetchData(false);
     } catch (e: any) {
       toast({ title: "Error", description: e?.message || "Please try again.", variant: "destructive" });
     } finally {
@@ -365,19 +397,24 @@ export function AdminPanel() {
   };
 
   const handleDeleteBroadcast = async (id: string) => {
+    if (busyActionId) return;
     if (!confirm("Are you sure you want to delete this broadcast?")) return;
+    setBusyActionId(id);
     try {
       await deleteBroadcastAction(id);
       toast({ title: "Broadcast deleted successfully" });
-      setActiveBroadcasts(activeBroadcasts.filter((b) => b._id !== id));
+      setActiveBroadcasts((prev) => prev.filter((b) => b._id !== id));
     } catch (e: any) {
       toast({ title: "Error", description: e?.message || "Please try again.", variant: "destructive" });
+    } finally {
+      setBusyActionId(null);
     }
   };
 
   // Send Email Broadcast
   const handleSendEmailBroadcast = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (emailSending) return;
     if (!emailSubject.trim() || !emailBody.trim()) {
       toast({ variant: "destructive", title: "Error", description: "Subject and Body are required." });
       return;
@@ -412,9 +449,9 @@ export function AdminPanel() {
       setEmailBcc("");
       setEmailAttachmentUrl(null);
       setEmailAttachmentName("");
-      fetchData();
+      await fetchData(false);
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Email Broadcast Failed", description: e.message });
+      toast({ variant: "destructive", title: "Email Broadcast Failed", description: e?.message || "Please try again." });
     } finally {
       setEmailSending(false);
     }
@@ -423,6 +460,7 @@ export function AdminPanel() {
   // Create or Update Changelog
   const handleCreateChangelog = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (changelogLoading) return;
     if (!changelogVersion.trim() || !changelogTitle.trim() || !changelogContent.trim()) {
       toast({ variant: "destructive", title: "Error", description: "All fields are required." });
       return;
@@ -442,18 +480,18 @@ export function AdminPanel() {
         setEditingChangelogId(null);
       } else {
         const res = await createChangelogAction(formData);
-        toast({ 
-          title: (res as any)?.updated ? "Changelog Updated!" : "Changelog Published!", 
-          description: `${changelogVersion} is live on /changelog` 
+        toast({
+          title: (res as any)?.updated ? "Changelog Updated!" : "Changelog Published!",
+          description: `${changelogVersion} is live on /changelog`,
         });
       }
 
       setChangelogTitle("");
       setChangelogContent("");
       setIsAutoVersion(true);
-      fetchData();
+      await fetchData(false);
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Error", description: e.message });
+      toast({ variant: "destructive", title: "Error", description: e?.message || "Please try again." });
     } finally {
       setChangelogLoading(false);
     }
@@ -461,12 +499,12 @@ export function AdminPanel() {
 
   const handleEditChangelog = (log: any) => {
     setEditingChangelogId(log._id);
-    setChangelogVersion(log.version);
-    setChangelogCategory(log.category);
-    setChangelogTitle(log.title);
-    setChangelogContent(log.content);
+    setChangelogVersion(log.version || "");
+    setChangelogCategory(log.category || "Feature");
+    setChangelogTitle(log.title || "");
+    setChangelogContent(log.content || "");
     setIsAutoVersion(false);
-    const parsed = parseSemver(log.version);
+    const parsed = parseSemver(log.version || "");
     if (parsed) {
       setMajorDigit(String(parsed.major));
     }
@@ -487,6 +525,7 @@ export function AdminPanel() {
 
   const handleSaveDonationSettings = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSavingDonation) return;
     if (!donationSettings.upiId.trim()) {
       toast({ variant: "destructive", title: "Error", description: "Official UPI ID cannot be empty." });
       return;
@@ -496,24 +535,34 @@ export function AdminPanel() {
       const res = await updateDonationSettingsAction({
         upiId: donationSettings.upiId.trim(),
       });
-      if (res.success) {
+      if (!res?.success) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: res?.error || "Could not save Official UPI ID. Please try again.",
+        });
+      } else {
         toast({ title: "UPI ID Saved", description: "Official UPI ID updated successfully." });
       }
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Error", description: e.message });
+      toast({ variant: "destructive", title: "Error", description: e?.message || "Please try again." });
     } finally {
       setIsSavingDonation(false);
     }
   };
 
   const handleDeleteChangelog = async (id: string) => {
+    if (busyActionId) return;
     if (!confirm("Are you sure you want to delete this changelog entry?")) return;
+    setBusyActionId(id);
     try {
       await deleteChangelogAction(id);
       toast({ title: "Changelog entry removed" });
-      setChangelogs(changelogs.filter((c) => c._id !== id));
+      setChangelogs((prev) => prev.filter((c) => c._id !== id));
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Error", description: e.message });
+      toast({ variant: "destructive", title: "Error", description: e?.message || "Please try again." });
+    } finally {
+      setBusyActionId(null);
     }
   };
 
@@ -525,9 +574,11 @@ export function AdminPanel() {
     );
   }
 
+  const editingIsOwner = isMythicalUsername(editingUser?.username);
+
   return (
     <div className="space-y-6">
-      <Tabs defaultValue="users">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="mb-4 flex flex-wrap gap-1">
           <TabsTrigger value="users">Manage Users</TabsTrigger>
           <TabsTrigger value="bans">Manage Bans</TabsTrigger>
@@ -571,7 +622,7 @@ export function AdminPanel() {
                   </thead>
                   <tbody>
                     {users.map((u) => {
-                      const isMythical = u.username.toLowerCase() === "mythicalhrg";
+                      const isMythical = isMythicalUsername(u.username);
                       return (
                         <tr key={u.uuid} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
                           <td className="px-4 py-3 font-medium">
@@ -630,9 +681,9 @@ export function AdminPanel() {
                                 variant="outline"
                                 size="sm"
                                 onClick={() => handleOpenEditUser(u)}
-                                disabled={u.username === "mythicalhrg"}
+                                disabled={isMythical}
                                 className="h-8 px-2.5 text-xs flex items-center gap-1.5 border-primary/30 hover:bg-primary/10"
-                                title={u.username === "mythicalhrg" ? "Root platform owner credentials are protected from modification" : "Edit user credentials"}
+                                title={isMythical ? "Root platform owner credentials are protected from modification" : "Edit user credentials"}
                               >
                                 <Pencil className="w-3.5 h-3.5 text-primary" /> Edit
                               </Button>
@@ -640,7 +691,7 @@ export function AdminPanel() {
                                 variant="destructive"
                                 size="sm"
                                 onClick={() => handleDeleteUser(u.uuid)}
-                                disabled={u.username === "mythicalhrg"}
+                                disabled={isMythical || busyActionId === u.uuid}
                                 className="h-8 px-2.5 text-xs flex items-center gap-1.5"
                               >
                                 <Trash2 className="w-3.5 h-3.5" /> Delete
@@ -684,8 +735,8 @@ export function AdminPanel() {
                   <label className="text-sm font-medium">Reason (Optional)</label>
                   <Input placeholder="Why is this banned?" value={banReason} onChange={(e) => setBanReason(e.target.value)} />
                 </div>
-                <Button type="submit" variant="destructive">
-                  <Ban className="w-4 h-4 mr-2" /> Ban
+                <Button type="submit" variant="destructive" disabled={banSubmitting}>
+                  {banSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Ban className="w-4 h-4 mr-2" />} Ban
                 </Button>
               </form>
             </CardContent>
@@ -718,7 +769,7 @@ export function AdminPanel() {
                           <td className="px-4 py-3 text-muted-foreground">{b.reason || "None"}</td>
                           <td className="px-4 py-3">{new Date(b.createdAt).toLocaleDateString()}</td>
                           <td className="px-4 py-3 text-right">
-                            <Button variant="outline" size="sm" onClick={() => handleUnban(b._id)}>
+                            <Button variant="outline" size="sm" disabled={busyActionId === b._id} onClick={() => handleUnban(b._id)}>
                               Unban
                             </Button>
                           </td>
@@ -777,7 +828,8 @@ export function AdminPanel() {
                     <UploadButton
                       endpoint="broadcastAttachment"
                       onClientUploadComplete={(res) => {
-                        setUploadedFileUrl(res?.[0]?.url || null);
+                        const first = res?.[0] as { ufsUrl?: string; url?: string } | undefined;
+                        setUploadedFileUrl(first?.ufsUrl || first?.url || null);
                         toast({ title: "Upload Success", description: "File uploaded and attached." });
                       }}
                       onUploadError={(error: Error) => {
@@ -792,7 +844,7 @@ export function AdminPanel() {
                   )}
                   {uploadedFileUrl && <input type="hidden" name="fileUrl" value={uploadedFileUrl} />}
                 </div>
-                
+
                 <Button type="submit" disabled={broadcastLoading}>
                   {broadcastLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
                   Send In-App Broadcast
@@ -827,15 +879,15 @@ export function AdminPanel() {
                             <td className="px-4 py-3 font-medium max-w-[200px] truncate">{b.subject}</td>
                             <td className="px-4 py-3 max-w-[300px] truncate">
                               {b.message}
-                              {b.fileUrl && (
-                                <a href={b.fileUrl} target="_blank" rel="noopener noreferrer" className="block mt-1 text-xs text-primary hover:underline flex items-center">
+                              {isSafeHttpsUrl(b.fileUrl) && (
+                                <a href={b.fileUrl} target="_blank" rel="noopener noreferrer" className="mt-1 text-xs text-primary hover:underline inline-flex items-center">
                                   <Upload className="w-3 h-3 mr-1" /> Attachment
                                 </a>
                               )}
                             </td>
                             <td className="px-4 py-3">{hoursLeft} hours</td>
                             <td className="px-4 py-3 text-right">
-                              <Button variant="destructive" size="sm" onClick={() => handleDeleteBroadcast(b._id)}>
+                              <Button variant="destructive" size="sm" disabled={busyActionId === b._id} onClick={() => handleDeleteBroadcast(b._id)}>
                                 <Trash2 className="w-4 h-4" />
                               </Button>
                             </td>
@@ -959,9 +1011,10 @@ export function AdminPanel() {
                     <UploadButton
                       endpoint="broadcastAttachment"
                       onClientUploadComplete={(res) => {
-                        setEmailAttachmentUrl(res?.[0]?.url || null);
-                        setEmailAttachmentName(res?.[0]?.name || "Attached_Document");
-                        toast({ title: "Attachment Uploaded", description: res?.[0]?.name });
+                        const first = res?.[0] as { ufsUrl?: string; url?: string; name?: string } | undefined;
+                        setEmailAttachmentUrl(first?.ufsUrl || first?.url || null);
+                        setEmailAttachmentName(first?.name || "Attached_Document");
+                        toast({ title: "Attachment Uploaded", description: first?.name });
                       }}
                       onUploadError={(error: Error) => {
                         toast({ title: "Upload Failed", description: error.message, variant: "destructive" });
@@ -1034,15 +1087,15 @@ export function AdminPanel() {
                         <tr key={e._id} className="border-b last:border-0 hover:bg-muted/50">
                           <td className="px-4 py-3 font-medium max-w-xs truncate">{e.subject}</td>
                           <td className="px-4 py-3 text-xs">
-                            {e.to?.length || 0} recipient(s)
+                            {e.sentCount || e.to?.length || 0} recipient(s)
                             {e.cc?.length > 0 && ` (+${e.cc.length} CC)`}
                           </td>
                           <td className="px-4 py-3 text-xs text-muted-foreground">
                             {new Date(e.sentAt || e.createdAt).toLocaleString()}
                           </td>
                           <td className="px-4 py-3 text-xs">
-                            {e.attachmentUrl ? (
-                              <a href={e.attachmentUrl} target="_blank" rel="noreferrer" className="text-primary underline flex items-center gap-1">
+                            {isSafeHttpsUrl(e.attachmentUrl) ? (
+                              <a href={e.attachmentUrl} target="_blank" rel="noopener noreferrer" className="text-primary underline flex items-center gap-1">
                                 <Paperclip className="w-3 h-3" /> View
                               </a>
                             ) : (
@@ -1114,8 +1167,8 @@ export function AdminPanel() {
                     <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       Category (Type)
                     </label>
-                    <Select 
-                      value={changelogCategory} 
+                    <Select
+                      value={changelogCategory}
                       onValueChange={(val) => {
                         setChangelogCategory(val);
                         if (!editingChangelogId) setIsAutoVersion(true);
@@ -1175,7 +1228,7 @@ export function AdminPanel() {
                 </div>
 
                 {/* Existing version notice */}
-                {changelogs.some((c) => c.version.toLowerCase().trim() === changelogVersion.toLowerCase().trim() && c._id !== editingChangelogId) && (
+                {changelogs.some((c) => String(c.version || "").toLowerCase().trim() === changelogVersion.toLowerCase().trim() && c._id !== editingChangelogId) && (
                   <div className="p-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs flex items-center justify-between">
                     <span className="flex items-center gap-1.5">
                       <AlertCircle className="w-4 h-4 shrink-0" />
@@ -1187,7 +1240,7 @@ export function AdminPanel() {
                       variant="outline"
                       className="h-6 text-[10px] shrink-0"
                       onClick={() => {
-                        const existing = changelogs.find((c) => c.version.toLowerCase().trim() === changelogVersion.toLowerCase().trim());
+                        const existing = changelogs.find((c) => String(c.version || "").toLowerCase().trim() === changelogVersion.toLowerCase().trim());
                         if (existing) handleEditChangelog(existing);
                       }}
                     >
@@ -1282,6 +1335,7 @@ export function AdminPanel() {
                                 variant="destructive"
                                 size="sm"
                                 className="h-8 px-2"
+                                disabled={busyActionId === c._id}
                                 onClick={() => handleDeleteChangelog(c._id)}
                                 title="Delete changelog"
                               >
@@ -1297,7 +1351,6 @@ export function AdminPanel() {
               </div>
             </CardContent>
           </Card>
-        
         </TabsContent>
 
         {/* DONATIONS & UPI CONFIG TAB */}
@@ -1307,7 +1360,7 @@ export function AdminPanel() {
             <Card className="border-border/80 shadow-md">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Heart className="w-5 h-5 text-rose-500 fill-rose-500" /> UPI Configuration
+                  <Heart className="w-5 h-5 text-rose-500 fill-rose-500" /> Official UPI Configuration
                 </CardTitle>
                 <CardDescription>
                   Configure your official UPI ID (VPA). All student contributions made in <Rupee /> on the donation page (<code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">/donate</code>) will be directed to this UPI ID.
@@ -1322,7 +1375,7 @@ export function AdminPanel() {
                     <Input
                       value={donationSettings.upiId}
                       onChange={(e) => setDonationSettings({ upiId: e.target.value })}
-                      placeholder="e.g. harsh.2525@ptaxis"
+                      placeholder="e.g. yourname@upi"
                       required
                       className="font-mono text-sm"
                     />
@@ -1391,11 +1444,7 @@ export function AdminPanel() {
               </div>
 
               {/* Study Groups List */}
-              {loading ? (
-                <div className="py-12 flex justify-center items-center">
-                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                </div>
-              ) : filteredStudyGroups.length === 0 ? (
+              {filteredStudyGroups.length === 0 ? (
                 <div className="text-center py-12 border border-dashed rounded-lg">
                   <p className="text-muted-foreground text-sm">
                     {studyGroupSearch ? "No study groups match your search filter." : "No study groups have been created yet."}
@@ -1433,7 +1482,7 @@ export function AdminPanel() {
                           <span>
                             Owner:{" "}
                             <strong className="text-foreground">
-                              {group.ownerUsername === "mythicalhrg" ? (
+                              {isMythicalUsername(group.ownerUsername) ? (
                                 <MythicalUserBadge username={group.ownerUsername} />
                               ) : (
                                 `@${group.ownerUsername}`
@@ -1479,7 +1528,7 @@ export function AdminPanel() {
         </TabsContent>
       </Tabs>
 
-      {/* Delete Study Group Confirmation Dialog (Admin @mythicalhrg Only) */}
+      {/* Delete Study Group Confirmation Dialog (Platform Owner @mythicalhrg Only) */}
       <Dialog open={!!groupToDelete} onOpenChange={(open) => !open && setGroupToDelete(null)}>
         <DialogContent className="sm:max-w-[460px]">
           <DialogHeader>
@@ -1554,12 +1603,12 @@ export function AdminPanel() {
                     className="pl-7 h-9 text-xs font-mono"
                     placeholder="new_username"
                     maxLength={30}
-                    disabled={isSavingCredentials || editingUser?.username === "mythicalhrg"}
+                    disabled={isSavingCredentials || editingIsOwner}
                   />
                 </div>
-                {editingUser?.username === "mythicalhrg" ? (
+                {editingIsOwner ? (
                   <p className="text-[11px] text-amber-500 font-semibold">
-                    🔒 Root platform owner username is permanently locked to preserve administrative access.
+                    🔒 Root platform owner username is permanently locked to preserve access.
                   </p>
                 ) : (
                   <p className="text-[11px] text-muted-foreground">
@@ -1575,6 +1624,7 @@ export function AdminPanel() {
                   type="email"
                   value={editEmail}
                   onChange={(e) => setEditEmail(e.target.value)}
+                  disabled={isSavingCredentials || editingIsOwner}
                   className="h-9 text-xs"
                   placeholder="user@gmail.com"
                 />
@@ -1598,7 +1648,7 @@ export function AdminPanel() {
               >
                 Cancel
               </Button>
-              <Button type="submit" size="sm" disabled={isSavingCredentials}>
+              <Button type="submit" size="sm" disabled={isSavingCredentials || editingIsOwner}>
                 {isSavingCredentials ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : null}
                 Save Credentials
               </Button>

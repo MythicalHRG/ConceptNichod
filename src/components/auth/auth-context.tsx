@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useRef, useState, Suspense } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState, Suspense } from "react";
 import { meAction, logoutAction } from "@/app/actions/auth";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 
@@ -25,7 +25,7 @@ interface AuthContextType {
   isLoggedIn: boolean;
   isAuthReady: boolean;
   login: (user: AuthUser) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
   isAuthModalOpen: boolean;
   setAuthModalOpen: (open: boolean) => void;
 }
@@ -54,7 +54,7 @@ function AuthParamsHandler({
       if (!user) {
         setAuthModalOpen(true);
       }
-      
+
       // Clean up the URL parameter
       const params = new URLSearchParams(searchParams.toString());
       params.delete("login");
@@ -72,6 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const userRef = useRef<AuthUser | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const hasLocalAuthChange = useRef(false);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isAuthModalOpen, setAuthModalOpen] = useState(false);
 
   useEffect(() => {
@@ -80,6 +81,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let active = true;
+
+    const scheduleRetry = (nextAttempt: number) => {
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = setTimeout(() => {
+        retryTimerRef.current = null;
+        if (active && !hasLocalAuthChange.current) {
+          restoreSession(nextAttempt);
+        }
+      }, 600);
+    };
 
     const restoreSession = async (attempt = 1) => {
       try {
@@ -95,11 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // Transient DB wake-up or connection delay: retry before finalizing
         if (res?.error && attempt < 2) {
-          setTimeout(() => {
-            if (active && !hasLocalAuthChange.current) {
-              restoreSession(attempt + 1);
-            }
-          }, 600);
+          scheduleRetry(attempt + 1);
           return;
         }
 
@@ -109,11 +116,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (error) {
         console.error("Unable to restore the current session:", error);
         if (attempt < 2) {
-          setTimeout(() => {
-            if (active && !hasLocalAuthChange.current) {
-              restoreSession(attempt + 1);
-            }
-          }, 600);
+          scheduleRetry(attempt + 1);
           return;
         }
         if (active && !hasLocalAuthChange.current) {
@@ -128,29 +131,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       active = false;
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
     };
   }, []);
 
-  const login = (newUser: AuthUser) => {
+  const login = useCallback((newUser: AuthUser) => {
     hasLocalAuthChange.current = true;
     userRef.current = newUser;
     setUser(newUser);
     setIsAuthReady(true);
     setAuthModalOpen(false);
-  };
+  }, []);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     hasLocalAuthChange.current = true;
     userRef.current = null;
-    await logoutAction();
-    setUser(null);
-    setIsAuthReady(true);
-    setAuthModalOpen(true);
-  };
+    try {
+      await logoutAction();
+    } catch (error) {
+      console.error("Logout action error:", error);
+    } finally {
+      setUser(null);
+      setIsAuthReady(true);
+      setAuthModalOpen(true);
+    }
+  }, []);
 
-  const safeSetAuthModalOpen = (open: boolean) => {
+  const safeSetAuthModalOpen = useCallback((open: boolean) => {
     setAuthModalOpen(open);
-  };
+  }, []);
 
   return (
     <AuthContext.Provider

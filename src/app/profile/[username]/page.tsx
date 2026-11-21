@@ -59,7 +59,7 @@ export default async function PublicProfilePage({
                 <Avatar className="w-28 h-28 sm:w-36 sm:h-36 border-4 border-background shadow-xl relative ring-2 ring-amber-500/30">
                   <AvatarImage src={`https://api.dicebear.com/7.x/micah/svg?seed=${encodedUsername}`} alt={user.username} />
                   <AvatarFallback className="text-4xl bg-gradient-to-br from-amber-500 to-primary text-white font-black">{initials}</AvatarFallback>
-                  <div className="absolute -top-2.5 -right-2.5 bg-amber-500 text-amber-950 p-2 rounded-full shadow-md ring-2 ring-background" title="Founder & CEO">
+                  <div className="absolute -top-2.5 -right-2.5 bg-amber-500 text-amber-950 p-2 rounded-full shadow-md ring-2 ring-background" title="Platform Owner">
                     <Crown className="w-4 h-4 fill-amber-100 text-amber-950" />
                   </div>
                 </Avatar>

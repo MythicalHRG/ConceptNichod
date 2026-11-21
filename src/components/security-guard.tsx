@@ -3,8 +3,15 @@
 import { useEffect } from "react";
 
 function isEditableTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  return Boolean(target.closest("input, textarea, [contenteditable='true']"));
+  const element =
+    target instanceof HTMLElement
+      ? target
+      : target instanceof Node
+        ? target.parentElement
+        : null;
+  if (!element) return false;
+  if (element.isContentEditable) return true;
+  return Boolean(element.closest("input, textarea, [contenteditable='true'], [contenteditable='']"));
 }
 
 export function SecurityGuard() {
