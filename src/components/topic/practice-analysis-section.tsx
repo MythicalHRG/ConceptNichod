@@ -99,6 +99,7 @@ export function PracticeAndAnalysisSection({
   useEffect(() => {
     if (isSubmitted && !isAnalyzing && !finalAnalysis) {
       setIsSubmitted(false);
+      autoSubmittedRef.current = false;
     }
   }, [isSubmitted, isAnalyzing, finalAnalysis]);
 
@@ -194,10 +195,12 @@ export function PracticeAndAnalysisSection({
       } catch {}
     }
 
-    // Push a guard history state so pressing the browser Back button is intercepted
-    try {
-      window.history.pushState({ cnProctorGuard: true }, "", window.location.href);
-    } catch {}
+    // Push a guard history state only for an active, incomplete practice session.
+    if (!stateRef.current.finalAnalysis) {
+      try {
+        window.history.pushState({ cnProctorGuard: true }, "", window.location.href);
+      } catch {}
+    }
 
     const handleVisibilityChange = () => {
       const state = stateRef.current;

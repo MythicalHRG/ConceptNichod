@@ -172,7 +172,7 @@ export function AddTopicButton() {
                 <FormItem>
                   <FormLabel>Chapter</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., Light - Reflection and Refraction" disabled={isLoading} {...field} />
+                    <Input placeholder="e.g., Light - Reflection and Refraction" maxLength={100} disabled={isLoading} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -185,7 +185,7 @@ export function AddTopicButton() {
                 <FormItem>
                   <FormLabel>Topic</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., Spherical Mirrors" disabled={isLoading} {...field} />
+                    <Input placeholder="e.g., Spherical Mirrors" maxLength={100} disabled={isLoading} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

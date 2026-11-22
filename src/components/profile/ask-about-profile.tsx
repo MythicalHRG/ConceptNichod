@@ -29,7 +29,7 @@ const STARTER_PROMPTS = [
 ];
 
 export function AskAboutProfile({ username, displayName }: AskAboutProfileProps) {
-  const { user, isLoggedIn, setAuthModalOpen } = useAuth();
+  const { user, isLoggedIn, isAuthReady, setAuthModalOpen } = useAuth();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ProfileAiTurn[]>([]);
@@ -101,7 +101,12 @@ export function AskAboutProfile({ username, displayName }: AskAboutProfileProps)
           </DialogDescription>
         </DialogHeader>
 
-        {!isLoggedIn ? (
+        {!isAuthReady ? (
+          <div className="py-8 px-4 flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed bg-muted/20" role="status" aria-live="polite">
+            <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">Checking session...</p>
+          </div>
+        ) : !isLoggedIn ? (
           <div className="py-8 px-4 text-center space-y-4 rounded-xl border border-dashed bg-muted/20">
             <Sparkles className="w-8 h-8 text-primary mx-auto opacity-80" />
             <div className="space-y-1">

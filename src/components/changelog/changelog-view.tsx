@@ -369,6 +369,7 @@ export function ChangelogView({ initialChangelogs, isAdmin }: ChangelogViewProps
                   <label className="text-xs font-medium">Version Tag</label>
                   <Input
                     placeholder="e.g. v2.3.0"
+                    maxLength={50}
                     value={version}
                     onChange={(e) => setVersion(e.target.value)}
                     required
@@ -395,6 +396,7 @@ export function ChangelogView({ initialChangelogs, isAdmin }: ChangelogViewProps
                 <label className="text-xs font-medium">Title</label>
                 <Input
                   placeholder="e.g. Live Editable Changelog & Speech Enhancements"
+                  maxLength={200}
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   required
@@ -405,6 +407,7 @@ export function ChangelogView({ initialChangelogs, isAdmin }: ChangelogViewProps
                 <label className="text-xs font-medium">Content / Release Notes</label>
                 <Textarea
                   placeholder="Describe key features, bullet points, and improvements..."
+                  maxLength={20000}
                   rows={7}
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
@@ -443,6 +446,7 @@ export function ChangelogView({ initialChangelogs, isAdmin }: ChangelogViewProps
                   <label className="text-xs font-medium">Version Tag</label>
                   <Input
                     value={editVersion}
+                    maxLength={50}
                     onChange={(e) => setEditVersion(e.target.value)}
                     required
                   />
@@ -468,6 +472,7 @@ export function ChangelogView({ initialChangelogs, isAdmin }: ChangelogViewProps
                 <label className="text-xs font-medium">Title</label>
                 <Input
                   value={editTitle}
+                  maxLength={200}
                   onChange={(e) => setEditTitle(e.target.value)}
                   required
                 />
@@ -478,6 +483,7 @@ export function ChangelogView({ initialChangelogs, isAdmin }: ChangelogViewProps
                 <Textarea
                   rows={7}
                   value={editContent}
+                  maxLength={20000}
                   onChange={(e) => setEditContent(e.target.value)}
                   required
                 />
