@@ -455,23 +455,23 @@ export function MistakeNotebook() {
                   )}
 
                   {/* Side-by-Side Diagnostic Breakdown */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs pt-1">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs pt-1 min-w-0">
                     {/* The Mistake / Blunder */}
-                    <div className="bg-rose-500/10 border border-rose-500/30 p-3 rounded-lg space-y-1">
+                    <div className="bg-rose-500/10 border border-rose-500/30 p-3 rounded-lg space-y-1 min-w-0 overflow-hidden">
                       <span className="text-[11px] font-bold text-rose-400 flex items-center gap-1">
                         <span>❌ What Went Wrong (Your Mistake)</span>
                       </span>
-                      <div className="text-foreground/90 leading-relaxed">
+                      <div className="text-foreground/90 leading-relaxed min-w-0 max-w-full overflow-hidden break-words">
                         <LatexRenderer content={item.myMistake} />
                       </div>
                     </div>
 
                     {/* The Corrected Concept with LaTeX */}
-                    <div className="bg-emerald-500/10 border border-emerald-500/30 p-3 rounded-lg space-y-1">
+                    <div className="bg-emerald-500/10 border border-emerald-500/30 p-3 rounded-lg space-y-1 min-w-0 overflow-hidden">
                       <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1">
                         <span>✅ Correct Concept / Formula (Rectification)</span>
                       </span>
-                      <div className="text-foreground/90 leading-relaxed">
+                      <div className="text-foreground/90 leading-relaxed min-w-0 max-w-full overflow-hidden break-words">
                         <LatexRenderer content={item.correctConcept} />
                       </div>
                     </div>
@@ -596,11 +596,13 @@ export function MistakeNotebook() {
                       onClick={() => handleSelectOption(idx)}
                       className={`w-full text-left p-3 rounded-lg border text-xs transition-colors flex items-center justify-between ${optClass}`}
                     >
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-muted-foreground font-bold">
+                      <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
+                        <span className="font-mono text-muted-foreground font-bold shrink-0">
                           {String.fromCharCode(65 + idx)}.
                         </span>
-                        <LatexRenderer content={opt} />
+                        <div className="min-w-0 flex-1 overflow-hidden break-words">
+                          <LatexRenderer content={opt} />
+                        </div>
                       </div>
                       {hasAnswered && isCorrect && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
                     </button>

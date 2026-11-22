@@ -12,17 +12,22 @@ export function NotificationBell() {
   const [broadcasts, setBroadcasts] = useState<any[]>([]);
   const [isOpen, setIsOpen] = useState(false);
 
-  // Fetch count on mount and every 60 seconds
+  // Fetch count on mount and every 60 seconds (only when tab is visible)
   useEffect(() => {
+    let isMounted = true;
     const fetchCount = async () => {
+      if (typeof document !== "undefined" && document.hidden) return;
       try {
         const res = await getUnreadCountAction();
-        if (res.success) setUnreadCount(res.count);
-      } catch (e) {}
+        if (isMounted && res.success) setUnreadCount(res.count);
+      } catch {}
     };
     fetchCount();
     const interval = setInterval(fetchCount, 60000);
-    return () => clearInterval(interval);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, []);
 
   // When popover opens, fetch broadcasts and mark as read
@@ -32,44 +37,44 @@ export function NotificationBell() {
       try {
         const res = await getActiveBroadcastsAction();
         if (res.success) setBroadcasts(res.broadcasts);
-        
+
         // Mark as read in background
         if (unreadCount > 0) {
           await markBroadcastsAsReadAction();
           setUnreadCount(0);
         }
-      } catch (e) {}
+      } catch {}
     }
   };
 
   return (
     <Popover open={isOpen} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative">
+        <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
           <Bell className="w-5 h-5" />
           {unreadCount > 0 && (
             <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]" />
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-80 p-0" align="end">
+      <PopoverContent className="w-80 max-w-[calc(100vw-1.5rem)] p-0 overflow-hidden" align="end">
         <div className="p-4 font-semibold border-b bg-muted/30">
           Global Notifications
         </div>
-        <div className="max-h-[400px] overflow-y-auto">
+        <div className="max-h-[400px] overflow-y-auto touch-scrollbar">
           {broadcasts.length === 0 ? (
             <div className="p-8 text-center text-sm text-muted-foreground flex flex-col items-center gap-2">
               <Bell className="w-8 h-8 opacity-20" />
-              <p>You're all caught up!</p>
+              <p>You&apos;re all caught up!</p>
             </div>
           ) : (
             <div className="flex flex-col">
               {broadcasts.map((b) => {
                 const hoursLeft = Math.max(0, Math.floor((new Date(b.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60)));
                 return (
-                  <div key={b._id} className="p-4 border-b last:border-0 hover:bg-muted/10 transition-colors">
-                    <h4 className="font-semibold text-sm mb-1">{b.subject}</h4>
-                    <div className="text-sm text-muted-foreground">
+                  <div key={b._id} className="p-4 border-b last:border-0 hover:bg-muted/10 transition-colors min-w-0 overflow-hidden">
+                    <h4 className="font-semibold text-sm mb-1 break-words">{b.subject}</h4>
+                    <div className="text-sm text-muted-foreground min-w-0 max-w-full overflow-hidden break-words">
                       <LatexRenderer content={b.message} />
                     </div>
                     {b.fileUrl && (

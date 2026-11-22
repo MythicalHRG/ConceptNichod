@@ -63,9 +63,10 @@ function normalizeMirrorPentagon(
 }
 
 const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOutput; conceptName: string }) => {
-  const fallbackScore = Number.isFinite(report.overallScore)
-    ? Math.max(0, Math.min(100, Math.round(report.overallScore)))
-    : 75;
+  const fallbackScore =
+    typeof report.overallScore === 'number' && Number.isFinite(report.overallScore)
+      ? Math.max(0, Math.min(100, Math.round(report.overallScore)))
+      : 75;
 
   const safeRadarData = normalizeMirrorPentagon(report.radar_chart_data, fallbackScore);
 

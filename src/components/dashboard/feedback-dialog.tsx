@@ -16,21 +16,34 @@ export function FeedbackDialog() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (loading) return;
+
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    const message = String(formData.get("message") || "").trim();
+    if (!message) {
+      toast({
+        title: "Message Required",
+        description: "Please enter your feedback before sending.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
-    const formData = new FormData(e.currentTarget);
-    
     try {
       await submitFeedbackAction(formData);
       toast({
         title: "Feedback Sent!",
         description: "Thank you! Your message has been sent directly to the developer.",
       });
+      form.reset();
       setOpen(false);
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.message || "Failed to send feedback",
-        variant: "destructive"
+        description: error?.message || "Failed to send feedback",
+        variant: "destructive",
       });
     } finally {
       setLoading(false);
@@ -63,13 +76,14 @@ export function FeedbackDialog() {
               </SelectContent>
             </Select>
           </div>
-          
+
           <div className="space-y-2">
             <label className="text-sm font-medium">Message</label>
-            <Textarea 
-              name="message" 
-              placeholder="Tell us what's on your mind..." 
-              required 
+            <Textarea
+              name="message"
+              placeholder="Tell us what's on your mind..."
+              required
+              maxLength={5000}
               rows={5}
               className="resize-none"
             />
