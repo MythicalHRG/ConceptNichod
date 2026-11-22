@@ -29,20 +29,18 @@ export function FollowUpChat({ topicName, topicSummary, classLevel, subject }: F
   const [isOpen, setIsOpen] = useState(false);
   const [isGrillMode, setIsGrillMode] = useState(false);
   const { toast } = useToast();
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => {
-      if (scrollRef.current) {
-        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-      }
-    }, 50);
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }, 60);
   }, []);
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
-    const userMessage = input.trim();
+    const userMessage = input.trim().slice(0, 5000);
     setInput('');
 
     const newMessages: Message[] = [...messages, { role: 'user', content: userMessage }];
@@ -56,13 +54,13 @@ export function FollowUpChat({ topicName, topicSummary, classLevel, subject }: F
         topicSummary,
         classLevel,
         subject,
-        conversationHistory: newMessages,
+        conversationHistory: newMessages.slice(-50),
         mode: isGrillMode ? 'grill' : 'standard',
       });
 
-      setMessages([...newMessages, { role: 'assistant', content: res.answer }]);
+      setMessages((prev) => [...prev, { role: 'assistant', content: res.answer }]);
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Error', description: err.message || 'Could not get a response.' });
+      toast({ variant: 'destructive', title: 'Error', description: err?.message || 'Could not get a response.' });
     } finally {
       setIsLoading(false);
       scrollToBottom();
@@ -85,12 +83,12 @@ export function FollowUpChat({ topicName, topicSummary, classLevel, subject }: F
   }
 
   return (
-    <Card className="mt-4 border-primary/20 shadow-md">
+    <Card className="mt-4 border-primary/20 shadow-md overflow-hidden">
       <CardHeader className="pb-2 border-b border-border">
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <CardTitle className="text-base flex items-center gap-2 text-primary">
-            <MessageSquare className="h-4 w-4" />
-            Ask Follow-up Questions about "{topicName}"
+          <CardTitle className="text-base flex items-center gap-2 text-primary min-w-0 break-words">
+            <MessageSquare className="h-4 w-4 shrink-0" />
+            <span className="break-words">Ask Follow-up Questions about &ldquo;{topicName}&rdquo;</span>
           </CardTitle>
           <Button
             type="button"
@@ -115,9 +113,9 @@ export function FollowUpChat({ topicName, topicSummary, classLevel, subject }: F
       </CardHeader>
 
       <CardContent className="p-0">
-        <ScrollArea className="h-80 p-4" ref={scrollRef as any}>
+        <ScrollArea className="h-80 p-4">
           {messages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center gap-2 text-muted-foreground text-sm">
+            <div className="h-full flex flex-col items-center justify-center gap-2 text-muted-foreground text-sm text-center py-12">
               <MessageSquare className="h-8 w-8 opacity-30" />
               <p>Ask anything about this topic. The AI knows your summary!</p>
             </div>
@@ -126,11 +124,11 @@ export function FollowUpChat({ topicName, topicSummary, classLevel, subject }: F
               {messages.map((msg, i) => (
                 <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   {msg.role === 'user' ? (
-                    <div className="max-w-[80%] rounded-2xl rounded-tr-sm bg-primary text-primary-foreground px-4 py-2 text-sm">
+                    <div className="max-w-[85%] min-w-0 overflow-hidden rounded-2xl rounded-tr-sm bg-primary text-primary-foreground px-4 py-2 text-sm break-words">
                       <LatexRenderer content={msg.content} />
                     </div>
                   ) : (
-                    <div className="max-w-[90%] rounded-2xl rounded-tl-sm bg-muted px-4 py-2 text-sm">
+                    <div className="max-w-[92%] min-w-0 overflow-hidden rounded-2xl rounded-tl-sm bg-muted px-4 py-2 text-sm break-words">
                       <LatexRenderer content={msg.content} />
                     </div>
                   )}
@@ -143,6 +141,7 @@ export function FollowUpChat({ topicName, topicSummary, classLevel, subject }: F
                   </div>
                 </div>
               )}
+              <div ref={messagesEndRef} />
             </div>
           )}
         </ScrollArea>
@@ -153,6 +152,7 @@ export function FollowUpChat({ topicName, topicSummary, classLevel, subject }: F
           <Input
             placeholder="e.g. Can you explain this with another example?"
             value={input}
+            maxLength={5000}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
             disabled={isLoading}

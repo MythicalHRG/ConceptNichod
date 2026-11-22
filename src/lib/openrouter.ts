@@ -196,10 +196,11 @@ export function parseJsonResponse<T>(raw: string): T {
   }
 
   // Models sometimes emit LaTeX commands with a single backslash inside a
-  // JSON string. Escape known commands before JSON.parse; leave already escaped
-  // JSON backslashes and standard JSON escape sequences untouched.
+  // JSON string (including compound commands like \textemptyset or \neq that
+  // collide with JSON escapes \t, \n, \f, \r, \b). Escape known commands before
+  // JSON.parse; leave already escaped JSON backslashes and standard escapes untouched.
   const text = raw.trim().replace(
-    /(?<!\\)\\(frac|theta|beta|right|left|nabla|sqrt|sum|int|cdot|times|alpha|gamma|delta|lambda|mu|pi|sigma|omega|text|mathrm|mathbf|overline|underline|begin|end|operatorname|infty|partial|approx|neq|leq|geq|rightarrow|mathbb|mathcal)\b/g,
+    /(?<!\\)\\(text[a-zA-Z]*|frac|forall|theta|tau|tan|times|to|top|triangle|beta|bar|begin|binom|big[a-zA-Z]*|right[a-zA-Z]*|rho|left[a-zA-Z]*|nabla|neq|notin|nu|sqrt|sum|int|cdot|alpha|gamma|delta|lambda|mu|pi|sigma|omega|phi|varphi|varepsilon|emptyset|varnothing|mathrm|mathbf|overline|underline|end|operatorname|infty|partial|approx|leq|geq|mathbb|mathcal)\b/g,
     "\\\\$1"
   );
 

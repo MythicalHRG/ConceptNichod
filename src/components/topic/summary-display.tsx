@@ -23,7 +23,7 @@ export function SummaryDisplay({ summary, topic }: SummaryDisplayProps) {
 
   // Calculate estimated reading time and word count
   const wordCount = useMemo(() => {
-    return summary.trim().split(/\s+/).filter(Boolean).length;
+    return (summary || '').trim().split(/\s+/).filter(Boolean).length;
   }, [summary]);
 
   const estimatedMinutes = Math.max(1, Math.round(wordCount / 160));
@@ -68,8 +68,11 @@ export function SummaryDisplay({ summary, topic }: SummaryDisplayProps) {
       return;
     }
 
+    // Clear any stale Android Chrome speech queue before speaking
+    window.speechSynthesis.cancel();
+
     // Strip markdown formatting and formulas for natural vocal delivery
-    const textToRead = summary
+    const textToRead = (summary || '')
       .replace(/#{1,4}\s/g, '')
       .replace(/\*\*/g, '')
       .replace(/\*/g, '')
@@ -121,7 +124,7 @@ export function SummaryDisplay({ summary, topic }: SummaryDisplayProps) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0 max-w-full overflow-x-hidden">
       {/* Dynamic Reading Progress Bar pinned to top on mobile & desktop */}
       <div
         className="fixed top-0 left-0 right-0 h-1 bg-primary/20 z-50 pointer-events-none"
@@ -201,32 +204,32 @@ export function SummaryDisplay({ summary, topic }: SummaryDisplayProps) {
       <Card className="border border-border/80 shadow-sm overflow-hidden bg-gradient-to-b from-card via-card to-background">
         <CardHeader className="p-4 sm:p-6 border-b border-border/60 bg-muted/20">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div className="space-y-1">
+            <div className="space-y-1 min-w-0">
               <span className="text-[11px] font-mono uppercase tracking-wider text-primary font-bold">
                 Synthesized Learning Note
               </span>
-              <CardTitle className="font-headline text-xl sm:text-2xl md:text-3xl text-foreground">
+              <CardTitle className="font-headline text-xl sm:text-2xl md:text-3xl text-foreground break-words">
                 {topic?.name || "Concept Summary"}
               </CardTitle>
             </div>
 
-            <div className="flex items-center gap-1.5 self-start sm:self-auto text-xs text-muted-foreground bg-muted/60 px-3 py-1 rounded-full">
+            <div className="flex items-center gap-1.5 self-start sm:self-auto text-xs text-muted-foreground bg-muted/60 px-3 py-1 rounded-full shrink-0">
               <Sparkles className="w-3.5 h-3.5 text-amber-500" />
               <span>AI-Structured Nichod</span>
             </div>
           </div>
         </CardHeader>
 
-        <CardContent className="p-4 sm:p-7 md:p-9">
+        <CardContent className="p-4 sm:p-7 md:p-9 min-w-0 overflow-x-hidden">
           {/* Typographic Book Content */}
-          <article className={`prose dark:prose-invert max-w-none break-words ${fontSizeClasses[fontSize]}`}>
+          <article className={`prose dark:prose-invert max-w-none min-w-0 overflow-x-hidden break-words ${fontSizeClasses[fontSize]}`}>
             <LatexRenderer content={summary} />
           </article>
         </CardContent>
       </Card>
 
       {/* Interactive Doubt-Clearing AI Assistant */}
-      <FollowUpChat 
+      <FollowUpChat
         topicName={topic?.name || "Concept"}
         topicSummary={summary}
         classLevel={topic?.classLevel || "General"}

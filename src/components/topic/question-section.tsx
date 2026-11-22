@@ -31,10 +31,10 @@ export function QuestionDisplay({
   }, [localAnswer]);
 
   return (
-    <div className="space-y-4 sm:space-y-5">
+    <div className="space-y-4 sm:space-y-5 min-w-0">
       {/* Question Prompt Card */}
-      <div className="p-4 sm:p-5 rounded-xl border border-primary/20 bg-primary/5 space-y-2">
-        <div className="flex items-center justify-between">
+      <div className="p-4 sm:p-5 rounded-xl border border-primary/20 bg-primary/5 space-y-2 min-w-0 overflow-hidden">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
           <Badge
             variant="outline"
             className="border-primary/30 bg-primary/10 text-primary font-bold text-[11px] gap-1 px-2.5 py-0.5"
@@ -47,7 +47,7 @@ export function QuestionDisplay({
           </span>
         </div>
 
-        <div className="text-base sm:text-lg md:text-xl font-semibold leading-relaxed break-words text-foreground pt-1">
+        <div className="text-base sm:text-lg md:text-xl font-semibold leading-relaxed break-words text-foreground pt-1 min-w-0 overflow-hidden">
           <LatexRenderer content={question.question} />
         </div>
       </div>
@@ -57,6 +57,7 @@ export function QuestionDisplay({
         <Textarea
           placeholder="Explain your conceptual reasoning here in detail. Cite formulas, definitions, and logical steps..."
           value={localAnswer}
+          maxLength={5000}
           disabled={disabled}
           onChange={(e) => {
             if (disabled) return;
@@ -64,7 +65,9 @@ export function QuestionDisplay({
             setLocalAnswer(val);
             onAnswerChange(val);
           }}
-          onBlur={() => onAnswerChange(localAnswer)}
+          onBlur={() => {
+            if (!disabled) onAnswerChange(localAnswer);
+          }}
           rows={6}
           className={`text-base leading-relaxed p-3.5 sm:p-4 rounded-xl border-border/80 focus-visible:ring-primary/40 min-h-[140px] sm:min-h-[160px] resize-y ${
             disabled ? "opacity-60 cursor-not-allowed bg-muted" : "bg-card"

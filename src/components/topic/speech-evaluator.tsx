@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
@@ -30,6 +30,7 @@ export function SpeechRecorder({
 }: SpeechRecorderProps) {
   const [timeLeft, setTimeLeft] = useState(timeLimitSeconds || 0);
   const [elapsedTime, setElapsedTime] = useState(0);
+  const hasRecordedRef = useRef(false);
   const { toast } = useToast();
 
   const {
@@ -52,40 +53,45 @@ export function SpeechRecorder({
     }
   }, [isLocked, lockAndAbort]);
 
-  // Sync live transcribed speech directly to parent state when not locked
+  // Sync live transcribed speech directly to parent state only after recording starts
+  // so previously hydrated/saved transcripts are never wiped to "" on mount.
   useEffect(() => {
-    if (!isLocked && !recorderIsLocked && liveTranscript !== undefined) {
+    if (isRecording) {
+      hasRecordedRef.current = true;
+    }
+    if (!isLocked && !recorderIsLocked && (hasRecordedRef.current || liveTranscript.length > 0)) {
       setTranscript(liveTranscript);
     }
-  }, [liveTranscript, setTranscript, isLocked, recorderIsLocked]);
+  }, [liveTranscript, isRecording, setTranscript, isLocked, recorderIsLocked]);
 
   // Timer: Countdown when timeLimitSeconds is provided, or stopwatch counting up
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isRecording) {
-      interval = setInterval(() => {
-        if (timeLimitSeconds) {
-          setTimeLeft((prev) => {
-            if (prev <= 1) {
-              clearInterval(interval);
-              stopRecording();
-              toast({
-                title: "Time's up!",
-                description: "Recording has been automatically completed.",
-              });
-              return 0;
-            }
-            return prev - 1;
-          });
-        } else {
-          setElapsedTime((prev) => prev + 1);
-        }
-      }, 1000);
-    } else if (!isRecording && timeLimitSeconds) {
-      setTimeLeft(timeLimitSeconds);
+    if (!isRecording) {
+      if (timeLimitSeconds) setTimeLeft(timeLimitSeconds);
+      return;
     }
+
+    const interval = setInterval(() => {
+      if (timeLimitSeconds) {
+        setTimeLeft((prev) => Math.max(0, prev - 1));
+      } else {
+        setElapsedTime((prev) => prev + 1);
+      }
+    }, 1000);
+
     return () => clearInterval(interval);
-  }, [isRecording, timeLimitSeconds, stopRecording, toast]);
+  }, [isRecording, timeLimitSeconds]);
+
+  // Side-effect handler when countdown reaches 0 (never call stopRecording/toast inside setState updater)
+  useEffect(() => {
+    if (isRecording && timeLimitSeconds && timeLeft === 0) {
+      stopRecording();
+      toast({
+        title: "Time's up!",
+        description: "Recording has been automatically completed.",
+      });
+    }
+  }, [isRecording, timeLimitSeconds, timeLeft, stopRecording, toast]);
 
   const toggleRecording = () => {
     if (isRecording) {
@@ -99,6 +105,7 @@ export function SpeechRecorder({
         });
         return;
       }
+      hasRecordedRef.current = true;
       if (timeLimitSeconds) {
         setTimeLeft(timeLimitSeconds);
       } else {
@@ -109,6 +116,7 @@ export function SpeechRecorder({
   };
 
   const handleReset = () => {
+    hasRecordedRef.current = false;
     resetTranscript();
     setTranscript("");
     if (timeLimitSeconds) {
@@ -156,8 +164,8 @@ export function SpeechRecorder({
           onClick={toggleRecording}
           size="lg"
           className={`w-full h-12 text-sm sm:text-base font-bold transition-all shadow-md ${
-            isRecording 
-              ? "bg-rose-600 hover:bg-rose-700 text-white animate-pulse" 
+            isRecording
+              ? "bg-rose-600 hover:bg-rose-700 text-white animate-pulse"
               : "bg-gradient-to-r from-amber-500 to-primary text-primary-foreground hover:opacity-95"
           }`}
           disabled={isConnecting || isLocked || recorderIsLocked}
@@ -208,8 +216,8 @@ export function SpeechRecorder({
             readOnly={true}
             rows={5}
             className={`p-3.5 sm:p-4 rounded-xl text-base leading-relaxed cursor-default select-text resize-none focus-visible:ring-0 transition-colors ${
-              isRecording 
-                ? "border-emerald-500/40 bg-emerald-500/5" 
+              isRecording
+                ? "border-emerald-500/40 bg-emerald-500/5"
                 : "bg-muted/40 border-border/70"
             }`}
           />

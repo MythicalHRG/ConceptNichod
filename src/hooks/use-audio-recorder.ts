@@ -7,13 +7,21 @@ import { useState, useRef, useEffect, useCallback } from 'react';
  * Browser-native Web Speech API with Pause/Resume, Reset, Chime, and Lock/Abort defense
  */
 
-// Subtle mic chime when recording begins
+let sharedChimeCtx: AudioContext | null = null;
+
+// Subtle mic chime when recording begins (reuses a single AudioContext to prevent browser context-cap leaks)
 function playMicReadyChime() {
   try {
     if (typeof window === 'undefined') return;
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioContextClass) return;
-    const ctx = new AudioContextClass();
+    if (!sharedChimeCtx || sharedChimeCtx.state === 'closed') {
+      sharedChimeCtx = new AudioContextClass();
+    }
+    const ctx = sharedChimeCtx;
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
 
@@ -136,6 +144,9 @@ export function useAudioRecorder(): AudioRecorderState {
         return;
       }
 
+      // Preserve everything spoken before the browser ended/restarted the recognition session
+      baseTranscriptRef.current = fullTranscriptRef.current;
+
       restartCountRef.current += 1;
       if (restartCountRef.current > 5) {
         isIntentActiveRef.current = false;
@@ -235,7 +246,7 @@ export function useAudioRecorder(): AudioRecorderState {
   }, [isSupported, initRecognition]);
 
   const pauseRecording = useCallback(() => {
-    if (isLockedRef.current || !isRecording || isPaused) return;
+    if (isLockedRef.current || !isIntentActiveRef.current || isPausedRef.current) return;
     if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
     retryTimeoutRef.current = null;
     isPausedRef.current = true;
@@ -246,10 +257,10 @@ export function useAudioRecorder(): AudioRecorderState {
         recognitionRef.current.stop();
       } catch {}
     }
-  }, [isRecording, isPaused]);
+  }, []);
 
   const resumeRecording = useCallback(() => {
-    if (isLockedRef.current || !isRecording || !isPaused) return;
+    if (isLockedRef.current || !isIntentActiveRef.current || !isPausedRef.current) return;
     isPausedRef.current = false;
     setIsPaused(false);
     setIsConnecting(true);
@@ -257,6 +268,20 @@ export function useAudioRecorder(): AudioRecorderState {
     if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
     retryTimeoutRef.current = null;
     restartCountRef.current = 0;
+
+    if (recognitionRef.current) {
+      const prevRec = recognitionRef.current;
+      recognitionRef.current = null;
+      prevRec.onstart = null;
+      prevRec.onresult = null;
+      prevRec.onerror = null;
+      prevRec.onend = null;
+      try {
+        if (typeof prevRec.abort === 'function') prevRec.abort();
+        else prevRec.stop();
+      } catch {}
+    }
+
     let recognition: any = null;
     try {
       recognition = initRecognition();
@@ -279,7 +304,7 @@ export function useAudioRecorder(): AudioRecorderState {
       console.error('Failed to resume recognition:', e);
       setIsConnecting(false);
     }
-  }, [isRecording, isPaused, initRecognition]);
+  }, [initRecognition]);
 
   const stopRecording = useCallback(() => {
     if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);

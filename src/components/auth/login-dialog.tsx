@@ -317,7 +317,11 @@ export function LoginDialog() {
 
   return (
     <Dialog open={isAuthModalOpen} onOpenChange={setAuthModalOpen}>
-      <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto [&>button]:hidden" onInteractOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
+      <DialogContent
+        className="w-[calc(100%-1.5rem)] sm:max-w-[425px] max-h-[90vh] overflow-y-auto rounded-2xl sm:rounded-2xl [&>button]:hidden"
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>Welcome to ConceptNichod</DialogTitle>
           <DialogDescription>
@@ -326,9 +330,9 @@ export function LoginDialog() {
         </DialogHeader>
 
         <Tabs value={activeTab} className="w-full" onValueChange={switchTab}>
-          <TabsList className="grid w-full grid-cols-2 mb-4">
-            <TabsTrigger value="login">Sign In</TabsTrigger>
-            <TabsTrigger value="register">Register</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-2 mb-4 rounded-xl">
+            <TabsTrigger value="login" className="rounded-lg">Sign In</TabsTrigger>
+            <TabsTrigger value="register" className="rounded-lg">Register</TabsTrigger>
           </TabsList>
 
           <TabsContent value="login">
@@ -340,6 +344,7 @@ export function LoginDialog() {
                   placeholder="Email or username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  className="rounded-xl"
                   required
                 />
               </div>
@@ -350,11 +355,12 @@ export function LoginDialog() {
                   placeholder="Password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  className="rounded-xl"
                   required
                 />
               </div>
               <div className="flex flex-col gap-2 pt-2">
-                <div className="overflow-x-auto max-w-full flex items-center justify-center rounded-md bg-muted/40 p-1">
+                <div className="overflow-x-auto max-w-full flex items-center justify-center rounded-xl bg-muted/40 p-1.5">
                   <LoadCanvasTemplate />
                 </div>
                 <Input
@@ -362,10 +368,11 @@ export function LoginDialog() {
                   value={captchaValue}
                   onChange={(e) => setCaptchaValue(e.target.value)}
                   disabled={isLoading}
+                  className="rounded-xl"
                   required
                 />
               </div>
-              <Button type="submit" className="w-full mt-2" disabled={isLoading}>
+              <Button type="submit" className="w-full mt-2 rounded-xl" disabled={isLoading}>
                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Sign In"}
               </Button>
               <div className="text-center mt-2">
@@ -393,6 +400,7 @@ export function LoginDialog() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   disabled={otpSent}
+                  className="rounded-xl"
                   required
                 />
               </div>
@@ -400,7 +408,7 @@ export function LoginDialog() {
               {!otpSent ? (
                 <Button
                   type="button"
-                  className="w-full"
+                  className="w-full rounded-xl"
                   onClick={handleSendOtp}
                   disabled={isLoading}
                 >
@@ -416,11 +424,13 @@ export function LoginDialog() {
                           value={otpCode}
                           onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                           maxLength={6}
+                          className="rounded-xl"
                           required
                         />
                         <Button
                           type="button"
                           variant="secondary"
+                          className="rounded-xl"
                           onClick={handleVerifyOtp}
                           disabled={isLoading || otpCode.length !== 6}
                         >
@@ -457,10 +467,11 @@ export function LoginDialog() {
                           placeholder="New Password"
                           value={newPassword}
                           onChange={(e) => setNewPassword(e.target.value)}
+                          className="rounded-xl"
                           required
                         />
                       </div>
-                      <Button type="submit" className="w-full" disabled={isLoading}>
+                      <Button type="submit" className="w-full rounded-xl" disabled={isLoading}>
                         {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Reset Password"}
                       </Button>
                     </>
@@ -471,7 +482,7 @@ export function LoginDialog() {
                 <Button
                   type="button"
                   variant="ghost"
-                  className="text-xs"
+                  className="text-xs rounded-xl"
                   onClick={() => switchTab("login")}
                 >
                   Back to Sign In
@@ -484,31 +495,31 @@ export function LoginDialog() {
             <form onSubmit={handleRegister} className="space-y-4 px-1 pb-2">
               <div className="space-y-2">
                 <label className="text-xs font-medium">Full Name *</label>
-                <Input type="text" placeholder="John Doe" value={fullName} onChange={(e) => setFullName(e.target.value)} maxLength={120} required />
+                <Input type="text" placeholder="John Doe" value={fullName} onChange={(e) => setFullName(e.target.value)} maxLength={120} className="rounded-xl" required />
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-medium">Username *</label>
-                <Input type="text" placeholder="johndoe123" maxLength={30} value={username} onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-zA-Z0-9_.]/g, ''))} required />
+                <Input type="text" placeholder="johndoe123" maxLength={30} value={username} onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-zA-Z0-9_.]/g, ''))} className="rounded-xl" required />
                 <p className="text-[10px] text-muted-foreground">Only letters, numbers, underscores (_), and periods (.) allowed.</p>
               </div>
-              <div className="space-y-2 p-3 bg-secondary/20 rounded-md border border-primary/20">
+              <div className="space-y-2 p-3 bg-secondary/20 rounded-xl border border-primary/20">
                 <label className="text-xs font-medium">Email Verification (@gmail.com, @outlook.com/in) *</label>
                 <div className="flex gap-2">
                   <Input type="email" placeholder="name@gmail.com" value={email} onChange={(e) => {
                       setEmail(e.target.value);
                       setIsEmailVerified(false);
                       setOtpSent(false);
-                  }} disabled={isEmailVerified} required />
+                  }} disabled={isEmailVerified} className="rounded-xl" required />
                   {!isEmailVerified && (
-                    <Button type="button" onClick={handleSendOtp} disabled={isLoading || isEmailVerified} variant={otpSent ? "outline" : "default"}>
+                    <Button type="button" onClick={handleSendOtp} disabled={isLoading || isEmailVerified} variant={otpSent ? "outline" : "default"} className="rounded-xl">
                       {otpSent ? "Resend" : "Send OTP"}
                     </Button>
                   )}
                 </div>
                 {otpSent && !isEmailVerified && (
                   <div className="flex gap-2 mt-2">
-                    <Input type="text" inputMode="numeric" maxLength={6} placeholder="Enter 6-digit OTP" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
-                    <Button type="button" onClick={handleVerifyOtp} disabled={isLoading || otpCode.length !== 6}>Verify</Button>
+                    <Input type="text" inputMode="numeric" maxLength={6} placeholder="Enter 6-digit OTP" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))} className="rounded-xl" />
+                    <Button type="button" onClick={handleVerifyOtp} disabled={isLoading || otpCode.length !== 6} className="rounded-xl">Verify</Button>
                   </div>
                 )}
                 {isEmailVerified && (
@@ -519,12 +530,12 @@ export function LoginDialog() {
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-medium">Password *</label>
-                <Input type="password" autoComplete="new-password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                <Input type="password" autoComplete="new-password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} className="rounded-xl" required />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-2">
                   <label className="text-xs font-medium">Gender *</label>
-                  <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background" value={gender} onChange={(e) => setGender(e.target.value)} required>
+                  <select className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background" value={gender} onChange={(e) => setGender(e.target.value)} required>
                     <option value="">Select</option>
                     <option value="Male">Male</option>
                     <option value="Female">Female</option>
@@ -533,26 +544,26 @@ export function LoginDialog() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-medium">Date of Birth *</label>
-                  <Input type="date" value={dob} onChange={(e) => setDob(e.target.value)} required />
+                  <Input type="date" value={dob} onChange={(e) => setDob(e.target.value)} className="rounded-xl" required />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-2">
                   <label className="text-xs font-medium">Class *</label>
-                  <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background" value={classLevel} onChange={(e) => setClassLevel(e.target.value)} required>
+                  <select className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background" value={classLevel} onChange={(e) => setClassLevel(e.target.value)} required>
                     <option value="">Select Class</option>
                     {["Class 1", "Class 2", "Class 3", "Class 4", "Class 5", "Class 6", "Class 7", "Class 8", "Class 9", "Class 10", "Class 11", "Class 12", "12+", "Dropper"].map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-medium">Residency (City) *</label>
-                  <Input type="text" placeholder="Delhi" value={city} onChange={(e) => setCity(e.target.value)} maxLength={100} required />
+                  <Input type="text" placeholder="Delhi" value={city} onChange={(e) => setCity(e.target.value)} maxLength={100} className="rounded-xl" required />
                 </div>
               </div>
               {['Class 11', 'Class 12', '12+', 'Dropper'].includes(classLevel) && (
                 <div className="space-y-2">
                   <label className="text-xs font-medium">Competitive Exam (Optional)</label>
-                  <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background" value={examFocus} onChange={(e) => setExamFocus(e.target.value)}>
+                  <select className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background" value={examFocus} onChange={(e) => setExamFocus(e.target.value)}>
                     <option value="">None</option>
                     <option value="IITJEE">IIT JEE</option>
                     <option value="NEET">NEET</option>
@@ -562,20 +573,20 @@ export function LoginDialog() {
               )}
               <div className="space-y-2">
                 <label className="text-xs font-medium">Future College / Goal (Optional)</label>
-                <Input type="text" placeholder="IIT Bombay" value={futureCollege} onChange={(e) => setFutureCollege(e.target.value)} maxLength={160} />
+                <Input type="text" placeholder="IIT Bombay" value={futureCollege} onChange={(e) => setFutureCollege(e.target.value)} maxLength={160} className="rounded-xl" />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-2">
                   <label className="text-xs font-medium">Snapchat (Optional)</label>
-                  <Input type="text" placeholder="@snap" value={snapchat} onChange={(e) => setSnapchat(e.target.value)} maxLength={80} />
+                  <Input type="text" placeholder="@snap" value={snapchat} onChange={(e) => setSnapchat(e.target.value)} maxLength={80} className="rounded-xl" />
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-medium">Instagram (Optional)</label>
-                  <Input type="text" placeholder="@insta" value={instagram} onChange={(e) => setInstagram(e.target.value)} maxLength={80} />
+                  <Input type="text" placeholder="@insta" value={instagram} onChange={(e) => setInstagram(e.target.value)} maxLength={80} className="rounded-xl" />
                 </div>
               </div>
               <div className="flex flex-col gap-2 pt-2">
-                <div className="overflow-x-auto max-w-full flex items-center justify-center rounded-md bg-muted/40 p-1">
+                <div className="overflow-x-auto max-w-full flex items-center justify-center rounded-xl bg-muted/40 p-1.5">
                   <LoadCanvasTemplate />
                 </div>
                 <Input
@@ -583,10 +594,11 @@ export function LoginDialog() {
                   value={captchaValue}
                   onChange={(e) => setCaptchaValue(e.target.value)}
                   disabled={isLoading}
+                  className="rounded-xl"
                   required
                 />
               </div>
-              <Button type="submit" className="w-full mt-4" disabled={isLoading || !isEmailVerified}>
+              <Button type="submit" className="w-full mt-4 rounded-xl" disabled={isLoading || !isEmailVerified}>
                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Create Account"}
               </Button>
             </form>

@@ -27,7 +27,9 @@ export function Rupee({ className = "w-3.5 h-3.5", amount }: RupeeProps) {
       {amount !== undefined && (
         <span className="tabular-nums">
           {typeof amount === "number"
-            ? amount.toLocaleString("en-IN")
+            ? Number.isFinite(amount)
+              ? amount.toLocaleString("en-IN")
+              : "0"
             : amount}
         </span>
       )}
@@ -37,6 +39,6 @@ export function Rupee({ className = "w-3.5 h-3.5", amount }: RupeeProps) {
 
 export function formatINR(amount: number | string): string {
   const num = typeof amount === "string" ? parseFloat(amount) : amount;
-  if (isNaN(num)) return "0";
+  if (!Number.isFinite(num)) return "0";
   return num.toLocaleString("en-IN");
 }
