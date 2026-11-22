@@ -121,7 +121,7 @@ async function decryptAesGcm(key: Buffer, ciphertextWithTag: Buffer, iv: Buffer)
     }
     const ciphertext = ciphertextWithTag.subarray(0, -16);
     const authTag = ciphertextWithTag.subarray(-16);
-    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv, { authTagLength: 16 });
     decipher.setAuthTag(authTag);
     let decrypted = decipher.update(ciphertext);
     decrypted = Buffer.concat([decrypted, decipher.final()]);
