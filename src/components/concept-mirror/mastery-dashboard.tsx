@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2, Mic, MicOff, Wand2, RefreshCw, Lock, AlertCircle, TrendingUp, BarChart2, Compass, PieChart as PieIcon, Timer, RotateCcw } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend as PieLegend, Tooltip as PieTooltip } from 'recharts';
-import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Legend as RadarLegend, Tooltip as RadarTooltip } from 'recharts';
+import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Tooltip as RadarTooltip } from 'recharts';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as GeneralTooltip } from 'recharts';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -19,40 +19,87 @@ import { LatexRenderer } from '@/components/ui/latex-renderer';
 
 const PIE_CHART_COLORS = ['#0088FE', '#FFBB28', '#00C49F'];
 
+const DEFAULT_MIRROR_PENTAGON = [
+  { metric: "Clarity", score: 80 },
+  { metric: "Examples", score: 75 },
+  { metric: "Confidence", score: 85 },
+  { metric: "Terminology", score: 70 },
+  { metric: "Conciseness", score: 78 },
+];
+
+function normalizeMirrorPentagon(
+  raw: Array<{ metric: string; score: number }> | undefined,
+  fallbackBase: number
+): Array<{ metric: string; score: number }> {
+  const unique: Array<{ metric: string; score: number }> = [];
+  const seen = new Set<string>();
+
+  for (const item of Array.isArray(raw) ? raw : []) {
+    if (!item || typeof item.metric !== 'string') continue;
+    const clean = item.metric.trim();
+    const key = clean.toLowerCase();
+    if (!clean || seen.has(key)) continue;
+    seen.add(key);
+    const num = Number(item.score);
+    unique.push({
+      metric: clean.length > 16 ? clean.slice(0, 14) + "…" : clean,
+      score: Number.isFinite(num) ? Math.max(0, Math.min(100, Math.round(num))) : fallbackBase,
+    });
+    if (unique.length === 5) break;
+  }
+
+  for (const axis of DEFAULT_MIRROR_PENTAGON) {
+    if (unique.length >= 5) break;
+    if (!seen.has(axis.metric.toLowerCase())) {
+      seen.add(axis.metric.toLowerCase());
+      unique.push({
+        metric: axis.metric,
+        score: Math.max(0, Math.min(100, Math.round(fallbackBase || axis.score))),
+      });
+    }
+  }
+
+  return unique;
+}
+
 const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOutput; conceptName: string }) => {
-  const safeRadarData = report.radar_chart_data?.length > 0 ? report.radar_chart_data : [
-    { metric: "Conceptual Clarity", score: 80 },
-    { metric: "Examples Used", score: 75 },
-    { metric: "Confidence", score: 85 },
-    { metric: "Technical Terminology", score: 70 },
-    { metric: "Conciseness", score: 78 }
-  ];
+  const fallbackScore = Number.isFinite(report.overallScore)
+    ? Math.max(0, Math.min(100, Math.round(report.overallScore)))
+    : 75;
 
-  const safeBarData = report.bar_chart_data?.length ? report.bar_chart_data : [
-    { name: "Definitions", score: 82 },
-    { name: "Core Principles", score: 78 },
-    { name: "Application", score: 72 },
-    { name: "Edge Cases", score: 68 }
-  ];
+  const safeRadarData = normalizeMirrorPentagon(report.radar_chart_data, fallbackScore);
 
-  const safePolyData = report.polynomial_chart_data?.length ? report.polynomial_chart_data : [
-    { step: "Initial Recall", score: 65 },
-    { step: "Concept Framing", score: 74 },
-    { step: "Analytical Nuance", score: 80 },
-    { step: "Synthesis & Proof", score: 84 },
-    { step: "Final Mastery", score: 88 }
-  ];
+  const safeBarData = Array.isArray(report.bar_chart_data) && report.bar_chart_data.length > 0
+    ? report.bar_chart_data
+    : [
+        { name: "Definitions", score: 82 },
+        { name: "Core Principles", score: 78 },
+        { name: "Application", score: 72 },
+        { name: "Edge Cases", score: 68 }
+      ];
+
+  const safePolyData = Array.isArray(report.polynomial_chart_data) && report.polynomial_chart_data.length > 0
+    ? report.polynomial_chart_data
+    : [
+        { step: "Initial Recall", score: 65 },
+        { step: "Concept Framing", score: 74 },
+        { step: "Analytical Nuance", score: 80 },
+        { step: "Synthesis & Proof", score: 84 },
+        { step: "Final Mastery", score: 88 }
+      ];
+
+  const safePieData = Array.isArray(report.pie_chart_data) ? report.pie_chart_data : [];
 
   const avgClarity = Math.round(
     safeRadarData.reduce((acc, curr) => acc + curr.score, 0) / safeRadarData.length
   );
 
-  const fluffItem = report.pie_chart_data?.find(item => item.name.toLowerCase() === 'fluff');
+  const fluffItem = safePieData.find(item => item.name?.toLowerCase() === 'fluff');
   const fluffPercent = report.fluffPercentage ?? (fluffItem ? fluffItem.value : 0);
   const timeUtilized = report.durationSeconds ?? 0;
 
   return (
-    <Card className="w-full">
+    <Card className="w-full overflow-hidden min-w-0">
       <CardHeader>
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="min-w-0">
@@ -76,10 +123,10 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
             <div className="p-3 rounded-xl border bg-card/60 flex flex-col justify-center text-center sm:text-right shadow-xs">
               <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground block">Fluff Content</span>
               <span className={`text-xl sm:text-2xl font-extrabold ${
-                fluffPercent > 35 
-                  ? "text-destructive" 
-                  : fluffPercent > 15 
-                  ? "text-amber-500" 
+                fluffPercent > 35
+                  ? "text-destructive"
+                  : fluffPercent > 15
+                  ? "text-amber-500"
                   : "text-emerald-500"
               }`}>
                 {fluffPercent}%
@@ -94,37 +141,59 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-8">
+      <CardContent className="space-y-8 min-w-0">
         {/* Professor Feedback Section with LaTeX support */}
-        <div className="p-5 rounded-xl border bg-muted/30">
+        <div className="p-5 rounded-xl border bg-muted/30 min-w-0 overflow-hidden">
           <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
             <span>Feedback & Conceptual Evaluation</span>
           </h3>
-          <div className="text-sm md:text-base leading-relaxed text-foreground/90 space-y-2">
+          <div className="text-sm md:text-base leading-relaxed text-foreground/90 space-y-2 min-w-0 overflow-hidden break-words">
             <LatexRenderer content={report.feedback_summary} />
           </div>
         </div>
 
         {/* 4 Distinct Non-Repeating Visual Models */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Chart 1: Spider / Radar Chart (Dimensions) */}
-          <div className="rounded-xl border p-4 bg-background shadow-sm flex flex-col justify-between">
-            <div className="flex items-center justify-between mb-2">
+          {/* Chart 1: BGMI-Style 5-Axis Pentagon Spider / Radar Chart */}
+          <div className="rounded-xl border p-4 bg-background shadow-sm flex flex-col justify-between overflow-hidden min-w-0">
+            <div className="flex items-center justify-between mb-2 gap-2">
               <h4 className="font-medium text-sm flex items-center gap-2">
-                <Compass className="w-4 h-4 text-primary" /> Delivery & Rigor Dimensions
+                <Compass className="w-4 h-4 text-amber-500" /> Delivery & Rigor Dimensions
               </h4>
-              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-muted text-muted-foreground">Spider / Radar</span>
+              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30">Pentagon Web</span>
             </div>
-            <p className="text-xs text-muted-foreground mb-4">Multi-axial evaluation of verbal concept explanation.</p>
+            <p className="text-xs text-muted-foreground mb-4">5-axis pentagon spider web of verbal concept explanation.</p>
             <div className="h-[280px] w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <RadarChart cx="50%" cy="50%" outerRadius="75%" data={safeRadarData}>
-                  <PolarGrid stroke="hsl(var(--border) / 0.5)" />
-                  <PolarAngleAxis dataKey="metric" tick={{ fill: 'currentColor', fontSize: 11 }} />
-                  <PolarRadiusAxis angle={30} domain={[0, 100]} stroke="hsl(var(--muted-foreground))" />
-                  <Radar name="Student Clarity" dataKey="score" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.4} />
-                  <RadarLegend verticalAlign="bottom" wrapperStyle={{ fontSize: 12 }} />
-                  <RadarTooltip 
+                <RadarChart cx="50%" cy="50%" outerRadius="68%" margin={{ top: 14, right: 28, bottom: 14, left: 28 }} data={safeRadarData}>
+                  <defs>
+                    <linearGradient id="cmBgmiPentagon" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.62} />
+                      <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.22} />
+                    </linearGradient>
+                  </defs>
+                  <PolarGrid gridType="polygon" stroke="hsl(var(--border))" strokeOpacity={0.8} />
+                  <PolarAngleAxis dataKey="metric" tick={{ fill: 'currentColor', fontSize: 11, fontWeight: 600 }} />
+                  <PolarRadiusAxis
+                    angle={90}
+                    domain={[0, 100]}
+                    tickCount={6}
+                    stroke="hsl(var(--muted-foreground))"
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 9 }}
+                    axisLine={false}
+                  />
+                  <Radar
+                    name="Student Clarity"
+                    dataKey="score"
+                    stroke="#f59e0b"
+                    strokeWidth={2.5}
+                    fill="url(#cmBgmiPentagon)"
+                    fillOpacity={1}
+                    dot={{ r: 4, fill: "#f59e0b", stroke: "hsl(var(--background))", strokeWidth: 1.5 }}
+                    activeDot={{ r: 5.5, fill: "hsl(var(--primary))" }}
+                  />
+                  <RadarTooltip
+                    formatter={(val: number) => [`${val}/100`, 'Mastery']}
                     contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))', backgroundColor: 'hsl(var(--background))', color: 'hsl(var(--foreground))' }}
                   />
                 </RadarChart>
@@ -133,17 +202,17 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
           </div>
 
           {/* Chart 2: Pie / Donut Chart (Content Composition & Fluff Ratio) */}
-          <div className="rounded-xl border p-4 bg-background shadow-sm flex flex-col justify-between">
-            <div className="flex items-center justify-between mb-2">
+          <div className="rounded-xl border p-4 bg-background shadow-sm flex flex-col justify-between overflow-hidden min-w-0">
+            <div className="flex items-center justify-between mb-2 gap-2">
               <h4 className="font-medium text-sm flex items-center gap-2">
                 <PieIcon className="w-4 h-4 text-emerald-500" /> Content Composition
               </h4>
               <div className="flex items-center gap-1.5">
                 <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${
-                  fluffPercent > 35 
-                    ? "bg-destructive/10 text-destructive border-destructive/30" 
-                    : fluffPercent > 15 
-                    ? "bg-amber-500/10 text-amber-500 border-amber-500/30" 
+                  fluffPercent > 35
+                    ? "bg-destructive/10 text-destructive border-destructive/30"
+                    : fluffPercent > 15
+                    ? "bg-amber-500/10 text-amber-500 border-amber-500/30"
                     : "bg-emerald-500/10 text-emerald-500 border-emerald-500/30"
                 }`}>
                   Fluff: {fluffPercent}%
@@ -156,7 +225,7 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={report.pie_chart_data}
+                    data={safePieData}
                     cx="50%"
                     cy="45%"
                     innerRadius={55}
@@ -169,11 +238,11 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
                       return `${name} ${(percent * 100).toFixed(0)}%`;
                     }}
                   >
-                    {report.pie_chart_data.map((entry, index) => (
+                    {safePieData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={PIE_CHART_COLORS[index % PIE_CHART_COLORS.length]} />
                     ))}
                   </Pie>
-                  <PieTooltip 
+                  <PieTooltip
                     formatter={(val: number) => [`${val}%`, 'Proportion']}
                     contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))', backgroundColor: 'hsl(var(--background))', color: 'hsl(var(--foreground))' }}
                   />
@@ -184,8 +253,8 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
           </div>
 
           {/* Chart 3: Bar Chart (Structural Pillars) */}
-          <div className="rounded-xl border p-4 bg-background shadow-sm flex flex-col justify-between">
-            <div className="flex items-center justify-between mb-2">
+          <div className="rounded-xl border p-4 bg-background shadow-sm flex flex-col justify-between overflow-hidden min-w-0">
+            <div className="flex items-center justify-between mb-2 gap-2">
               <h4 className="font-medium text-sm flex items-center gap-2">
                 <BarChart2 className="w-4 h-4 text-amber-500" /> Structural Knowledge Pillars
               </h4>
@@ -196,20 +265,20 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={safeBarData} margin={{ top: 20, right: 20, left: -10, bottom: 25 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border) / 0.5)" />
-                  <XAxis 
-                    dataKey="name" 
-                    tick={{ fontSize: 11, fill: 'currentColor' }} 
-                    tickLine={false} 
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fontSize: 11, fill: 'currentColor' }}
+                    tickLine={false}
                     axisLine={false}
                   />
-                  <YAxis 
-                    domain={[0, 100]} 
-                    tick={{ fontSize: 11, fill: 'currentColor' }} 
-                    tickLine={false} 
+                  <YAxis
+                    domain={[0, 100]}
+                    tick={{ fontSize: 11, fill: 'currentColor' }}
+                    tickLine={false}
                     axisLine={false}
                     tickFormatter={(v) => `${v}%`}
                   />
-                  <GeneralTooltip 
+                  <GeneralTooltip
                     cursor={{ fill: 'transparent' }}
                     formatter={(val: number) => [`${val}%`, 'Score']}
                     contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))', backgroundColor: 'hsl(var(--background))', color: 'hsl(var(--foreground))' }}
@@ -221,8 +290,8 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
           </div>
 
           {/* Chart 4: Polynomial Spline Area Chart (Explanation Mastery Curve) */}
-          <div className="rounded-xl border p-4 bg-background shadow-sm flex flex-col justify-between">
-            <div className="flex items-center justify-between mb-2">
+          <div className="rounded-xl border p-4 bg-background shadow-sm flex flex-col justify-between overflow-hidden min-w-0">
+            <div className="flex items-center justify-between mb-2 gap-2">
               <h4 className="font-medium text-sm flex items-center gap-2">
                 <TrendingUp className="w-4 h-4 text-indigo-500" /> Mastery Explanation Curve
               </h4>
@@ -239,20 +308,20 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border) / 0.5)" />
-                  <XAxis 
-                    dataKey="step" 
-                    tick={{ fontSize: 11, fill: 'currentColor' }} 
-                    tickLine={false} 
+                  <XAxis
+                    dataKey="step"
+                    tick={{ fontSize: 11, fill: 'currentColor' }}
+                    tickLine={false}
                     axisLine={false}
                   />
-                  <YAxis 
-                    domain={[0, 100]} 
-                    tick={{ fontSize: 11, fill: 'currentColor' }} 
-                    tickLine={false} 
+                  <YAxis
+                    domain={[0, 100]}
+                    tick={{ fontSize: 11, fill: 'currentColor' }}
+                    tickLine={false}
                     axisLine={false}
                     tickFormatter={(v) => `${v}%`}
                   />
-                  <GeneralTooltip 
+                  <GeneralTooltip
                     formatter={(val: number) => [`${val}%`, 'Mastery Index']}
                     contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))', backgroundColor: 'hsl(var(--background))', color: 'hsl(var(--foreground))' }}
                   />
@@ -288,28 +357,25 @@ export function MasteryDashboard() {
     isSupported,
   } = useAudioRecorder();
 
-  // Stopwatch timer when recording - enforces 2-minute (120s) limit
+  // Stopwatch timer when recording - increments up to 2-minute (120s) cap
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-    if (isRecording) {
-      interval = setInterval(() => {
-        setElapsedSeconds((prev) => {
-          if (prev >= 120) {
-            stopRecording();
-            toast({
-              title: "Time Limit Reached (2:00)",
-              description: "You have utilized the full 2-minute oral defense window! Ready for analysis.",
-            });
-            return 120;
-          }
-          return prev + 1;
-        });
-      }, 1000);
+    if (!isRecording) return;
+    const interval = setInterval(() => {
+      setElapsedSeconds((prev) => (prev >= 120 ? 120 : prev + 1));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isRecording]);
+
+  // Clean side-effect when the 2-minute limit is reached
+  useEffect(() => {
+    if (isRecording && elapsedSeconds >= 120) {
+      stopRecording();
+      toast({
+        title: "Time Limit Reached (2:00)",
+        description: "You have utilized the full 2-minute oral defense window! Ready for analysis.",
+      });
     }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isRecording, stopRecording, toast]);
+  }, [isRecording, elapsedSeconds, stopRecording, toast]);
 
   const formatStopwatch = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -344,6 +410,7 @@ export function MasteryDashboard() {
   };
 
   const handleAnalysis = async () => {
+    if (isAnalyzing) return;
     const finalExplanation = transcript.trim();
 
     if (!conceptName.trim()) {
@@ -354,7 +421,7 @@ export function MasteryDashboard() {
       toast({ variant: 'destructive', title: 'Explanation Required', description: 'Please speak your explanation of the concept first.' });
       return;
     }
-    
+
     // Lock audio recorder and concept name input to prevent speech injection during analysis
     lockAndAbort();
     setIsTopicLocked(true);
@@ -362,8 +429,8 @@ export function MasteryDashboard() {
     setAnalysisReport(null);
 
     try {
-      const report = await analyzeConceptExplanation({ 
-        conceptName: conceptName.trim(), 
+      const report = await analyzeConceptExplanation({
+        conceptName: conceptName.trim(),
         userTranscript: finalExplanation,
         durationSeconds: elapsedSeconds
       });
@@ -371,7 +438,7 @@ export function MasteryDashboard() {
       toast({ title: 'Analysis Complete!', description: 'Your Mastery Report is ready with equations and charts.' });
     } catch (error: any) {
       console.error("Analysis failed:", error);
-      toast({ variant: 'destructive', title: 'Analysis Failed', description: error.message || 'The AI could not generate a report.' });
+      toast({ variant: 'destructive', title: 'Analysis Failed', description: error?.message || 'The AI could not generate a report.' });
       setIsTopicLocked(false);
     } finally {
       setIsAnalyzing(false);
@@ -385,12 +452,12 @@ export function MasteryDashboard() {
     setElapsedSeconds(0);
     resetTranscript();
   };
-  
+
   if (analysisReport) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 min-w-0 max-w-full overflow-x-hidden">
         <MasteryReportDisplay report={analysisReport} conceptName={conceptName} />
-        
+
         {/* Follow-up doubts and queries section */}
         <FollowUpChat
           topicName={conceptName}
@@ -410,7 +477,7 @@ export function MasteryDashboard() {
   }
 
   return (
-    <Card className="w-full">
+    <Card className="w-full overflow-hidden">
       <CardHeader>
         <CardTitle className="font-headline text-3xl">Concept Mirror</CardTitle>
         <CardDescription>
@@ -435,16 +502,17 @@ export function MasteryDashboard() {
               </span>
             )}
           </div>
-          <Input 
-            id="concept-name" 
+          <Input
+            id="concept-name"
             placeholder="e.g., Newton's Third Law, Photosynthesis, Thermodynamics"
             value={conceptName}
+            maxLength={120}
             onChange={(e) => setConceptName(e.target.value)}
             disabled={isTopicLocked || isRecording || isAnalyzing}
             className={isTopicLocked ? "bg-muted cursor-not-allowed text-muted-foreground" : ""}
           />
         </div>
-        
+
         <div className="space-y-4 rounded-xl border bg-card/60 p-5 shadow-sm">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="space-y-1">
@@ -508,7 +576,7 @@ export function MasteryDashboard() {
                 {isConnecting ? 'Starting...' : isRecording ? 'Finish Speaking' : 'Start Speaking'}
               </Button>
 
-              {/* Reset Button (NO PAUSE BUTTON) */}
+              {/* Reset Button */}
               <Button
                 type="button"
                 onClick={handleResetSpeech}
@@ -558,10 +626,10 @@ export function MasteryDashboard() {
         </div>
       </CardContent>
       <CardFooter className="pt-2">
-        <Button 
-          onClick={handleAnalysis} 
-          disabled={!transcript.trim() || !conceptName.trim() || isAnalyzing} 
-          className="w-full" 
+        <Button
+          onClick={handleAnalysis}
+          disabled={!transcript.trim() || !conceptName.trim() || isAnalyzing}
+          className="w-full"
           size="lg"
         >
           {isAnalyzing ? (

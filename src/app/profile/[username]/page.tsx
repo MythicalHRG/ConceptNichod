@@ -3,6 +3,7 @@ import { getPublicProfileData } from '@/app/actions/profile';
 import { notFound } from 'next/navigation';
 import { UserAnalytics } from '@/components/profile/user-analytics';
 import { UserBadgesShowcase } from '@/components/profile/user-badges-showcase';
+import { AskAboutProfile } from '@/components/profile/ask-about-profile';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { MapPin, Target, GraduationCap, Instagram, Ghost, Crown } from 'lucide-react';
@@ -44,12 +45,12 @@ export default async function PublicProfilePage({
   const encodedUsername = encodeURIComponent(user.username);
 
   return (
-    <div className="min-h-screen bg-background relative overflow-hidden">
+    <div className="min-h-screen bg-background relative overflow-x-hidden">
       {/* Background aesthetics */}
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/10 rounded-full blur-[120px] pointer-events-none -z-10" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[30%] h-[30%] bg-blue-500/10 rounded-full blur-[100px] pointer-events-none -z-10" />
 
-      <main className="container mx-auto px-3.5 sm:px-6 py-6 sm:py-12 max-w-6xl pb-safe">
+      <main className="container mx-auto px-3.5 sm:px-6 py-6 sm:py-12 max-w-6xl min-w-0 pb-safe">
 
         {/* Profile Header */}
         {isOwner ? (
@@ -114,11 +115,15 @@ export default async function PublicProfilePage({
 
                 {user.bio && (
                   <div className="rounded-xl border border-border/70 bg-muted/30 p-3.5 max-w-2xl">
-                    <p className="text-foreground/90 italic font-medium text-sm sm:text-base">
+                    <p className="text-foreground/90 italic font-medium text-sm sm:text-base break-words">
                       &ldquo;{user.bio}&rdquo;
                     </p>
                   </div>
                 )}
+
+                <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 pt-1">
+                  <AskAboutProfile username={user.username} displayName={displayName} />
+                </div>
 
                 <UserBadgesShowcase badges={data.badges} topBadge={data.topBadge} />
               </div>
@@ -136,7 +141,7 @@ export default async function PublicProfilePage({
               )}
             </Avatar>
 
-            <div className="flex-1 text-center md:text-left space-y-3">
+            <div className="flex-1 text-center md:text-left space-y-3 min-w-0">
               <div>
                 <div className="flex flex-wrap items-center justify-center gap-2 md:justify-start">
                   <h1 className="break-words text-3xl font-extrabold tracking-tight sm:text-4xl">{displayName}</h1>
@@ -178,7 +183,7 @@ export default async function PublicProfilePage({
                 )}
                 {user.snapchat && (
                   <a href={`https://snapchat.com/add/${encodeURIComponent(user.snapchat.replace(/^@/, ''))}`} target="_blank" rel="noopener noreferrer">
-                    <Badge variant="outline" className="flex items-center gap-1 cursor-pointer hover:bg-yellow-500/10 hover:text-yellow-500 transition-colors">
+                    <Badge variant="outline" className="flex items-center gap-1 cursor-pointer hover:bg-yellow-500/10 hover:text-yellow-600 dark:hover:text-yellow-400 transition-colors">
                       <Ghost className="w-3 h-3" />
                       {user.snapchat}
                     </Badge>
@@ -187,10 +192,14 @@ export default async function PublicProfilePage({
               </div>
 
               {user.bio && (
-                <p className="text-foreground/80 max-w-2xl mt-4 italic">
+                <p className="text-foreground/80 max-w-2xl mt-4 italic break-words">
                   &ldquo;{user.bio}&rdquo;
                 </p>
               )}
+
+              <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 pt-1">
+                <AskAboutProfile username={user.username} displayName={displayName} />
+              </div>
 
               {/* Dynamic & Hierarchical Badges Showcase */}
               <UserBadgesShowcase badges={data.badges} topBadge={data.topBadge} />
