@@ -65,7 +65,7 @@ export default function DonatePage() {
   const [settings, setSettings] = useState({
     upiId: "",
     payeeName: "ConceptNichod",
-    qrCodeUrl: "/qr.png",
+    qrCodeUrl: "",
     isEnabled: false,
     headline: "Support ConceptNichod & Join the Hall of Patrons",
     subtext:
