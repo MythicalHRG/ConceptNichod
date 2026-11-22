@@ -62,6 +62,7 @@ const TIER_CONFIG: Record<
 };
 
 export default function DonatePage() {
+  // Legacy /qr.png fallback is intentionally retired; never display an unverified recipient QR.
   const [settings, setSettings] = useState({
     upiId: "",
     payeeName: "ConceptNichod",
