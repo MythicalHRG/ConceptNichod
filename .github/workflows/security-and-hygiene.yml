@@ -1,0 +1,137 @@
+name: Security, BLA & Hygiene
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly Monday 03:30 UTC (09:00 IST) dependency & secret audit
+    - cron: "30 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-hygiene-\${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secret-scan-gitleaks:
+    name: Secret Scan (Gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full git history
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks secret scanner
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+          GITLEAKS_ENABLE_SUMMARY: true
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
+
+  dependency-cve-osv:
+    name: Dependency CVE Scan (OSV-Scanner)
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.7.1
+    with:
+      scan-args: |-
+        --lockfile=package-lock.json
+      upload-sarif: false
+      fail-on-vuln: false
+
+  sast-semgrep:
+    name: Static Security Analysis (Semgrep OSS)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Run Semgrep OWASP & Next.js/TS SAST (advisory)
+        continue-on-error: true
+        run: |
+          docker run --rm \
+            -v "\${GITHUB_WORKSPACE}:/src" \
+            -w /src \
+            semgrep/semgrep \
+            semgrep scan \
+              --config p/typescript \
+              --config p/react \
+              --config p/owasp-top-ten \
+              --exclude tests \
+              --exclude node_modules \
+              --exclude .next \
+              --metrics=off \
+              --severity WARNING \
+              --severity ERROR \
+              src | tee semgrep-report.txt
+          {
+            echo "## Semgrep OSS SAST Summary"
+            echo '```text'
+            tail -n 80 semgrep-report.txt || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  dead-code-knip:
+    name: Dead Code & Unused Deps (Knip)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Run Knip Next.js/TS hygiene report
+        run: |
+          npx -y knip --no-exit-code | tee knip-report.txt
+          {
+            echo "## Knip Dead-Code & Unused Dependency Report"
+            echo '```text'
+            head -n 120 knip-report.txt || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  bla-anti-agent-audit:
+    name: Client Bundle Exposure Audit (qybaihe/bla)
+    runs-on: ubuntu-latest
+    env:
+      ENCRYPTION_SECRET_KEY: ci-only-not-for-production-32-character-secret
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Build Next.js production bundle
+        run: npm run build
+        env:
+          NODE_ENV: production
+
+      - name: Run BLA (Blind LLM Agents) client-chunk exposure audit
+        continue-on-error: true
+        run: |
+          node scripts/bla-shield.mjs audit | tee bla-audit.txt
+          {
+            echo "## BLA (qybaihe/bla) Client Bundle Exposure Audit"
+            echo '```text'
+            tail -n 100 bla-audit.txt || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

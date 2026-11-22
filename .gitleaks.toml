@@ -1,0 +1,35 @@
+title = "ConceptNichod Secrets & Credential Guard"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "mongodb-srv-connection-uri"
+description = "MongoDB Atlas SRV connection string with embedded credentials"
+regex = '''mongodb\+srv://[^/\s:@]+:[^/\s@]+@[^\s"'`]+'''
+tags = ["secret", "database", "mongodb"]
+
+[[rules]]
+id = "openrouter-api-key"
+description = "OpenRouter API Key"
+regex = '''sk-or-v1-[a-fA-F0-9]{48,}'''
+tags = ["secret", "ai", "openrouter"]
+
+[[rules]]
+id = "resend-api-key"
+description = "Resend Email API Key"
+regex = '''re_[A-Za-z0-9_]{24,}'''
+tags = ["secret", "email", "resend"]
+
+[allowlist]
+description = "Ignore lockfiles, documentation placeholders, and synthetic test fixtures"
+paths = [
+  '''^package-lock\.json$''',
+  '''^tests/.*\.mjs$''',
+  '''^\.env\.example$''',
+]
+regexes = [
+  '''your[_-]?(api|secret|mongo|openrouter|resend|gmail)[_-]?(key|uri|pass|token)''',
+  '''example\.com''',
+  '''mongodb\+srv://user:pass@cluster''',
+]
