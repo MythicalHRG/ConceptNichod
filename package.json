@@ -9,7 +9,8 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "cleanup": "node scripts/run-cleanup.mjs",
-    "test": "node --test tests/*.mjs"
+    "test": "node --test tests/*.mjs",
+    "owner:bootstrap": "node scripts/bootstrap-owner.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
