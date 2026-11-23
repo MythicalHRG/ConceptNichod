@@ -399,7 +399,7 @@ export function DonationReconciliation({
       <div className="rounded-2xl border border-indigo-500/30 bg-card p-4 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h3 className="text-sm font-bold text-foreground">Accepting Donations</h3>
-          <span className={effectiveDonationsEnabled ? "inline-flex mt-1 rounded-full bg-emerald-500/15 px-2.5 py-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-700 dark:text-emerald-300" : "inline-flex mt-1 rounded-full bg-amber-500/15 px-2.5 py-1 text-[10px] font-bold text-amber-700 dark:text-amber-300"}>
+          <span className={effectiveDonationsEnabled ? "inline-flex mt-1 rounded-full bg-emerald-500/15 px-2.5 py-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300" : "inline-flex mt-1 rounded-full bg-amber-500/15 px-2.5 py-1 text-[10px] font-bold text-amber-700 dark:text-amber-300"}>
             {effectiveDonationsEnabled ? "ENABLED (LIVE)" : "DISABLED (PAUSED)"}
           </span>
         </div>
@@ -581,7 +581,7 @@ export function DonationReconciliation({
                         <span className="text-xs text-indigo-400">@{tx.username}</span>
                       )}
                       {tx.isAnonymous && (
-                        <span className="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-foreground">
+                        <span className="text-[11px] px-2 py-0.5 rounded bg-secondary text-foreground">
                           Anonymous on Public Wall
                         </span>
                       )}
@@ -608,7 +608,7 @@ export function DonationReconciliation({
                       <button
                         type="button"
                         onClick={() => handleCopyText(tx.utr, "UTR")}
-                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-foreground"
+                        className="p-1.5 rounded-lg bg-secondary hover:bg-secondary text-foreground"
                         title="Copy UTR"
                       >
                         <Copy className="w-3.5 h-3.5" />
@@ -628,7 +628,7 @@ export function DonationReconciliation({
                         type="button"
                         onClick={() => handleCopyText(tx.transactionId, "Transaction ID")}
                         disabled={!tx.transactionId?.trim()}
-                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-foreground"
+                        className="p-1.5 rounded-lg bg-secondary hover:bg-secondary text-foreground"
                         title="Copy Transaction ID"
                       >
                         <Copy className="w-3.5 h-3.5" />
@@ -849,7 +849,7 @@ export function DonationReconciliation({
                 <span className="flex items-center gap-2">
                   Display name
                   {!patron.isVisible && (
-                    <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-muted-foreground">
+                    <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] font-semibold uppercase text-muted-foreground">
                       Hidden
                     </span>
                   )}
