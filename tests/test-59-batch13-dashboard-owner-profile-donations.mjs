@@ -60,6 +60,8 @@ test("Batch 13: donations are permanently enabled and owner settings remain prot
   assert.ok(actions.includes("isPlatformOwner(adminUser)"));
   assert.ok(actions.includes("getCanonicalDonationSettings"));
   assert.ok(actions.includes("isEnabled: true"));
-  assert.doesNotMatch(panel, /DISABLED \\(PAUSED\\)|handleToggleDonations|adminSetDonationsEnabledAction|<Switch checked=\\{donationsEnabled/);
-  assert.doesNotMatch(reconciliation, /DISABLED \\(PAUSED\\)|handleToggleDonations|adminSetDonationsEnabledAction|<Switch checked=\\{effectiveDonationsEnabled/);
+  assert.ok(!panel.includes("DISABLED (PAUSED)") && !panel.includes("handleToggleDonations") && !panel.includes("adminSetDonationsEnabledAction"));
+  assert.ok(!panel.includes("<Switch checked={donationsEnabled}"));
+  assert.ok(!reconciliation.includes("DISABLED (PAUSED)") && !reconciliation.includes("handleToggleDonations") && !reconciliation.includes("adminSetDonationsEnabledAction"));
+  assert.ok(!reconciliation.includes("<Switch checked={effectiveDonationsEnabled}"));
 });
