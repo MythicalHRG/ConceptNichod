@@ -56,7 +56,7 @@ test("Batch 14: speaker defaults above mobile navigation and resets old saved po
   assert.match(speaker, /cn_music_btn_pos_v2/);
   assert.match(speaker, /bottom-\[calc\(5\.25rem\+env\(safe-area-inset-bottom,0px\)\)\]/);
   assert.match(speaker, /window\.innerWidth < 768 \? 84 : 0/);
-  assert.match(speaker, /md:right-\[5\.5rem\]/);
+  assert.match(speaker, /md:right-\[7\.5rem\]/);
 });
 
 test("Batch 14: profile removes verbose owner banners while server protection remains", () => {
