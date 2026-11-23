@@ -67,10 +67,10 @@ test("Batch 14: profile removes verbose owner banners while server protection re
   assert.match(admin, /The root platform owner email cannot be changed/);
 });
 
-test("Batch 14: dashboard displays the shared logo with Zirconel and no KRYOT", () => {
+test("Batch 14: dashboard displays the shared logo with ConceptNichod and no KRYOT", () => {
   const dashboard = read("src/app/dashboard/page.tsx");
   assert.match(dashboard, /<Logo className="size-8" \/>/);
-  assert.match(dashboard, />Zirconel</);
+  assert.match(dashboard, />ConceptNichod</);
   assert.doesNotMatch(dashboard, /KRYOT/i);
 });
 

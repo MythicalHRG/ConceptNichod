@@ -4,10 +4,10 @@ import fs from "node:fs";
 
 const read = (file) => fs.readFileSync(file, "utf8");
 
-test("Batch 13: dashboard branding uses Zirconel and contains no KRYOT label", () => {
+test("Batch 13: dashboard branding uses ConceptNichod and contains no KRYOT label", () => {
   const dashboard = read("src/app/dashboard/page.tsx");
   assert.equal(/KRYOT/i.test(dashboard), false);
-  assert.equal(dashboard.includes("Zirconel"), true);
+  assert.equal(dashboard.includes("ConceptNichod"), true);
 });
 
 test("Batch 13: canonical owner self-healing requires both reserved username and normalized email", () => {
