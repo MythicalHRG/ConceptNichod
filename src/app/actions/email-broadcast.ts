@@ -1,6 +1,6 @@
 "use server";
 
-import { isPlatformOwner, PLATFORM_OWNER_EMAIL } from "@/lib/owner-access";
+import { ensurePlatformOwnerRole, isPlatformOwner, PLATFORM_OWNER_EMAIL } from "@/lib/owner-access";
 import { cookies } from "next/headers";
 import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
@@ -24,9 +24,10 @@ async function verifyOwner() {
   const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
 
-  const user = await User.findOne({ uuid: sessionUuid })
+  const fetchedUser = await User.findOne({ uuid: sessionUuid })
     .select("uuid username email role")
     .lean();
+  const user = fetchedUser ? await ensurePlatformOwnerRole(fetchedUser) : fetchedUser;
   if (!isPlatformOwner(user)) {
     throw new Error("Forbidden: Admin access only");
   }

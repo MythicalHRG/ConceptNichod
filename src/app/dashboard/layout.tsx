@@ -21,7 +21,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import User from "@/models/User";
 import Blacklist from "@/models/Blacklist";
-import { isPlatformOwner } from "@/lib/owner-access";
+import { ensurePlatformOwnerRole, isPlatformOwner } from "@/lib/owner-access";
 import { verifySessionCookie } from "@/lib/session";
 import { normalizeEmail } from "@/lib/email-utils";
 
@@ -43,9 +43,10 @@ export default async function DashboardLayout({
 
   try {
     await dbConnect();
-    const user = await User.findOne({ uuid: userId })
+    const fetchedUser = await User.findOne({ uuid: userId })
       .select("uuid username email role")
       .lean();
+    const user = fetchedUser ? await ensurePlatformOwnerRole(fetchedUser) : fetchedUser;
     if (!user) {
       shouldRedirectToLogin = true;
     } else {

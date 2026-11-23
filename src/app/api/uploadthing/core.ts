@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
 import { verifySessionCookie } from "@/lib/session";
-import { isPlatformOwner } from "@/lib/owner-access";
+import { ensurePlatformOwnerRole, isPlatformOwner } from "@/lib/owner-access";
 import { checkDistributedRateLimit } from "@/lib/distributed-rate-limiter";
 
 const f = createUploadthing();
@@ -20,9 +20,10 @@ export const ourFileRouter = {
       const sessionUuid = verifySessionCookie(rawSession);
       if (!sessionUuid) throw new Error("Unauthorized");
 
-      const user = await User.findOne({ uuid: sessionUuid })
+      const fetchedUser = await User.findOne({ uuid: sessionUuid })
         .select("uuid username email role")
         .lean();
+      const user = fetchedUser ? await ensurePlatformOwnerRole(fetchedUser) : fetchedUser;
       if (!isPlatformOwner(user)) {
         throw new Error("Unauthorized");
       }

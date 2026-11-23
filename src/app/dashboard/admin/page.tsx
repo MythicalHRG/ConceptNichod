@@ -5,7 +5,7 @@ import User from "@/models/User";
 import dbConnect from "@/lib/mongoose";
 import { notFound } from "next/navigation";
 import { verifySessionCookie } from "@/lib/session";
-import { isPlatformOwner } from "@/lib/owner-access";
+import { ensurePlatformOwnerRole, isPlatformOwner } from "@/lib/owner-access";
 
 export const dynamic = "force-dynamic";
 
@@ -18,9 +18,10 @@ export default async function AdminPage() {
 
   await dbConnect();
 
-  const user = await User.findOne({ uuid: sessionUuid })
+  const fetchedUser = await User.findOne({ uuid: sessionUuid })
     .select("uuid username email role")
     .lean();
+  const user = fetchedUser ? await ensurePlatformOwnerRole(fetchedUser) : fetchedUser;
   if (!isPlatformOwner(user)) {
     notFound(); // Stealth 404: Never confirm to automated directory fuzzers that the admin dashboard exists
   }

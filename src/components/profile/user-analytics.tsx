@@ -235,8 +235,128 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
         </Card>
       </div>
 
+      {/* Concept Mirror Oral Defense summary follows the KPI strip. */}
+      {/* Concept Mirror Dedicated Analytics Section */}
+      <Card className="border-border shadow-sm overflow-hidden">
+        <CardHeader className="pb-3 border-b bg-muted/20">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <CardTitle className="text-lg font-bold flex items-center gap-2">
+                <Mic className="w-5 h-5 text-primary" />
+                Concept Mirror: Oral Defense & Verbal Analytics
+              </CardTitle>
+              <CardDescription className="text-xs mt-0.5">
+                Evaluations of verbal concept explanations, conceptual rigor, and oral delivery.
+              </CardDescription>
+            </div>
+            <Link
+              href="/dashboard/concept-mirror"
+              className="text-xs font-semibold text-primary hover:underline flex items-center gap-1 shrink-0 self-start sm:self-auto"
+            >
+              Open Concept Mirror <ArrowUpRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        </CardHeader>
+        <CardContent className="p-4 sm:p-5 space-y-4">
+          {/* Key Oral Defense Metrics */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            <div className="lg:col-span-4 p-4 rounded-xl border bg-card/60 flex items-center gap-3 min-w-0">
+              <div className="p-2.5 rounded-lg bg-primary/10 text-primary">
+                <BrainCircuit className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Oral Sessions</p>
+                <p className="text-xl font-extrabold">{mirrorData.totalSessions}</p>
+              </div>
+            </div>
+
+            <div className="lg:col-span-4 p-4 rounded-xl border bg-card/60 flex items-center gap-3 min-w-0">
+              <div className="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-500">
+                <Award className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Average Oral Score</p>
+                <p className="text-xl font-extrabold text-emerald-500">{mirrorData.averageScore}%</p>
+              </div>
+            </div>
+
+            <div className="lg:col-span-4 p-4 rounded-xl border bg-card/60 flex items-center gap-3 min-w-0">
+              <div className="p-2.5 rounded-lg bg-amber-500/10 text-amber-500">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Time Explaining</p>
+                <p className="text-xl font-extrabold">{formatDuration(mirrorData.totalDurationSeconds)}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Skill Breakdown or Recent Sessions */}
+          {mirrorData.skillAverages.length > 0 && (
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Verbal Competency Breakdown
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {mirrorData.skillAverages.map((skill) => (
+                  <div key={skill.name} className="p-3 rounded-lg border bg-background flex items-center justify-between gap-2 min-w-0">
+                    <span className="text-xs font-medium text-foreground truncate">{skill.name}</span>
+                    <Badge variant="outline" className={`font-mono text-xs font-bold shrink-0 ${
+                      skill.score >= 80 ? 'text-emerald-500 border-emerald-500/30' :
+                      skill.score >= 60 ? 'text-amber-500 border-amber-500/30' : 'text-red-500 border-red-500/30'
+                    }`}>
+                      {skill.score}%
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Recent Mirrored Concepts */}
+          {mirrorData.recentSessions.length > 0 ? (
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Recent Oral Defenses
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                {mirrorData.recentSessions.map((session, idx) => (
+                  <div
+                    key={session.id || idx}
+                    className="p-3 rounded-lg border bg-background/50 hover:bg-muted/30 transition-colors flex items-center justify-between gap-3 min-w-0"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold truncate text-foreground">{session.conceptName}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {session.durationSeconds > 0 ? formatDuration(session.durationSeconds) : 'Oral explanation'} • {new Date(session.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <Badge className={`font-mono font-bold text-xs shrink-0 ${
+                      session.overallScore >= 80 ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30' :
+                      session.overallScore >= 60 ? 'bg-amber-500/15 text-amber-500 border-amber-500/30' : 'bg-red-500/15 text-red-500 border-red-500/30'
+                    }`}>
+                      {session.overallScore}%
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="p-6 rounded-xl border border-dashed text-center space-y-2 bg-muted/10">
+              <Sparkles className="w-6 h-6 text-primary mx-auto opacity-80" />
+              <p className="text-sm font-medium text-foreground">No oral defense sessions recorded yet</p>
+              <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                Speak your understanding in Concept Mirror to unlock multi-dimensional verbal clarity scores and fluency analytics.
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Unified five-graph desktop bento grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-4 sm:gap-5 items-stretch">
       {/* Always-Visible BGMI-Style 5-Axis Pentagon Skill Radar Graph */}
-      <Card className="border-amber-500/25 bg-gradient-to-br from-card via-card to-primary/5 shadow-sm overflow-hidden">
+      <Card className="md:col-span-2 xl:col-span-3 min-w-0 overflow-hidden border-amber-500/25 bg-gradient-to-br from-card via-card to-primary/5 shadow-sm">
         <CardHeader className="pb-2 border-b border-border/60 bg-muted/15">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="min-w-0">
@@ -255,8 +375,8 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
             </span>
           </div>
         </CardHeader>
-        <CardContent className="p-4 sm:p-6 space-y-4">
-          <div className="w-full h-[290px] sm:h-[320px] flex items-center justify-center">
+        <CardContent className="p-3 sm:p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-1 gap-3 items-center">
+          <div className="w-full h-[250px] sm:h-[270px] flex items-center justify-center">
             {hasMounted && (
               <ResponsiveContainer width="100%" height="100%">
                 <RadarChart
@@ -314,7 +434,7 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
           </div>
 
           {/* 5-Axis Stat Pills */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-2 border-t border-border/50">
+          <div className="grid grid-cols-2 xl:grid-cols-5 gap-2 pt-2 md:pt-0 xl:pt-2 border-t md:border-t-0 xl:border-t border-border/50">
             {pentagonData.map((axis) => (
               <div
                 key={axis.metric}
@@ -333,128 +453,73 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
         </CardContent>
       </Card>
 
-      {/* Concept Mirror Dedicated Analytics Section */}
-      <Card className="border-border shadow-sm overflow-hidden">
-        <CardHeader className="pb-3 border-b bg-muted/20">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div>
-              <CardTitle className="text-lg font-bold flex items-center gap-2">
-                <Mic className="w-5 h-5 text-primary" />
-                Concept Mirror: Oral Defense & Verbal Analytics
+      {/* Chart 4: Polynomial Spline Area Chart - Mastery Trajectory Curve */}
+        <Card className="md:col-span-1 xl:col-span-3 min-w-0 overflow-hidden border-border shadow-sm flex flex-col justify-between">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-indigo-500" /> Mastery Learning Curve
               </CardTitle>
-              <CardDescription className="text-xs mt-0.5">
-                Evaluations of verbal concept explanations, conceptual rigor, and oral delivery.
-              </CardDescription>
+              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-muted text-muted-foreground">Polynomial Spline</span>
             </div>
-            <Link
-              href="/dashboard/concept-mirror"
-              className="text-xs font-semibold text-primary hover:underline flex items-center gap-1 shrink-0 self-start sm:self-auto"
-            >
-              Open Concept Mirror <ArrowUpRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-        </CardHeader>
-        <CardContent className="p-6 space-y-6">
-          {/* Key Oral Defense Metrics */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="p-4 rounded-xl border bg-card/60 flex items-center gap-3">
-              <div className="p-2.5 rounded-lg bg-primary/10 text-primary">
-                <BrainCircuit className="w-5 h-5" />
+            <CardDescription className="text-xs">Continuous progress curve over assessment sessions</CardDescription>
+          </CardHeader>
+          <CardContent className="flex-1 min-h-[250px]">
+            {hasMounted && progressionData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={250}>
+                <AreaChart data={progressionData} margin={{ top: 20, right: 20, left: -10, bottom: 25 }}>
+                  <defs>
+                    <linearGradient id="profilePolyGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#6366f1" stopOpacity={0.8} />
+                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0.05} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border) / 0.5)" />
+                  <XAxis
+                    dataKey="session"
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fontSize: 10, fill: 'currentColor' }}
+                    tickMargin={10}
+                  />
+                  <YAxis
+                    domain={[0, 100]}
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fontSize: 11, fill: 'currentColor' }}
+                    tickFormatter={(v) => `${v}%`}
+                  />
+                  <RechartsTooltip
+                    formatter={(val: number) => [`${val}%`, 'Mastery Score']}
+                    contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))', backgroundColor: 'hsl(var(--background))', color: 'hsl(var(--foreground))' }}
+                  />
+                  <Area
+                    type="natural"
+                    dataKey="score"
+                    stroke="#6366f1"
+                    strokeWidth={3}
+                    fillOpacity={1}
+                    fill="url(#profilePolyGrad)"
+                    dot={{ r: 4, fill: "#6366f1", stroke: "hsl(var(--background))", strokeWidth: 2 }}
+                    activeDot={{ r: 6 }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
+                No assessment history available yet
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground font-medium">Oral Sessions</p>
-                <p className="text-xl font-extrabold">{mirrorData.totalSessions}</p>
-              </div>
-            </div>
+            )}
+          </CardContent>
+        </Card>
 
-            <div className="p-4 rounded-xl border bg-card/60 flex items-center gap-3">
-              <div className="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-500">
-                <Award className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground font-medium">Average Oral Score</p>
-                <p className="text-xl font-extrabold text-emerald-500">{mirrorData.averageScore}%</p>
-              </div>
-            </div>
 
-            <div className="p-4 rounded-xl border bg-card/60 flex items-center gap-3">
-              <div className="p-2.5 rounded-lg bg-amber-500/10 text-amber-500">
-                <Clock className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground font-medium">Time Explaining</p>
-                <p className="text-xl font-extrabold">{formatDuration(mirrorData.totalDurationSeconds)}</p>
-              </div>
-            </div>
-          </div>
 
-          {/* Skill Breakdown or Recent Sessions */}
-          {mirrorData.skillAverages.length > 0 && (
-            <div className="space-y-3">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Verbal Competency Breakdown
-              </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                {mirrorData.skillAverages.map((skill) => (
-                  <div key={skill.name} className="p-3 rounded-lg border bg-background flex items-center justify-between gap-2 min-w-0">
-                    <span className="text-xs font-medium text-foreground truncate">{skill.name}</span>
-                    <Badge variant="outline" className={`font-mono text-xs font-bold shrink-0 ${
-                      skill.score >= 80 ? 'text-emerald-500 border-emerald-500/30' :
-                      skill.score >= 60 ? 'text-amber-500 border-amber-500/30' : 'text-red-500 border-red-500/30'
-                    }`}>
-                      {skill.score}%
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
 
-          {/* Recent Mirrored Concepts */}
-          {mirrorData.recentSessions.length > 0 ? (
-            <div className="space-y-3">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Recent Oral Defenses
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                {mirrorData.recentSessions.map((session, idx) => (
-                  <div
-                    key={session.id || idx}
-                    className="p-3 rounded-lg border bg-background/50 hover:bg-muted/30 transition-colors flex items-center justify-between gap-3 min-w-0"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold truncate text-foreground">{session.conceptName}</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {session.durationSeconds > 0 ? formatDuration(session.durationSeconds) : 'Oral explanation'} • {new Date(session.createdAt).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <Badge className={`font-mono font-bold text-xs shrink-0 ${
-                      session.overallScore >= 80 ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30' :
-                      session.overallScore >= 60 ? 'bg-amber-500/15 text-amber-500 border-amber-500/30' : 'bg-red-500/15 text-red-500 border-red-500/30'
-                    }`}>
-                      {session.overallScore}%
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="p-6 rounded-xl border border-dashed text-center space-y-2 bg-muted/10">
-              <Sparkles className="w-6 h-6 text-primary mx-auto opacity-80" />
-              <p className="text-sm font-medium text-foreground">No oral defense sessions recorded yet</p>
-              <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                Speak your understanding in Concept Mirror to unlock multi-dimensional verbal clarity scores and fluency analytics.
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
-      {/* 4 Additional Distinct Non-Repeating Chart Types */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
         {/* Chart 1: Pie / Donut Chart - Subject Distribution */}
-        <Card className="col-span-1 border-border shadow-sm flex flex-col justify-between overflow-hidden min-w-0">
+        <Card className="md:col-span-1 xl:col-span-2 min-w-0 overflow-hidden border-border shadow-sm flex flex-col justify-between">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-2">
               <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -464,9 +529,9 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
             </div>
             <CardDescription className="text-xs">Topics breakdown from ConceptNichod</CardDescription>
           </CardHeader>
-          <CardContent className="flex-1 min-h-[300px] flex items-center justify-center">
+          <CardContent className="flex-1 min-h-[250px] flex items-center justify-center">
             {hasMounted && subjectDistribution.length > 0 ? (
-              <ResponsiveContainer width="100%" height={280}>
+              <ResponsiveContainer width="100%" height={250}>
                 <PieChart>
                   <Pie
                     data={subjectDistribution}
@@ -502,7 +567,7 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
         </Card>
 
         {/* Chart 2: Histogram - Score Distribution */}
-        <Card className="col-span-1 border-border shadow-sm flex flex-col justify-between overflow-hidden min-w-0">
+        <Card className="md:col-span-1 xl:col-span-2 min-w-0 overflow-hidden border-border shadow-sm flex flex-col justify-between">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-2">
               <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -512,9 +577,9 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
             </div>
             <CardDescription className="text-xs">Frequency distribution of practice performance</CardDescription>
           </CardHeader>
-          <CardContent className="flex-1 min-h-[300px]">
+          <CardContent className="flex-1 min-h-[250px]">
             {hasMounted && scoreDistribution.length > 0 ? (
-              <ResponsiveContainer width="100%" height={280}>
+              <ResponsiveContainer width="100%" height={250}>
                 <BarChart data={scoreDistribution} margin={{ top: 20, right: 20, left: -10, bottom: 5 }} barCategoryGap={2}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border) / 0.5)" />
                   <XAxis
@@ -552,7 +617,7 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
         </Card>
 
         {/* Chart 3: Bar Chart - Skill Averages */}
-        <Card className="col-span-1 border-border shadow-sm flex flex-col justify-between overflow-hidden min-w-0">
+        <Card className="md:col-span-1 xl:col-span-2 min-w-0 overflow-hidden border-border shadow-sm flex flex-col justify-between">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-2">
               <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -562,7 +627,7 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
             </div>
             <CardDescription className="text-xs">Discrete evaluations across core competencies</CardDescription>
           </CardHeader>
-          <CardContent className="flex-1 min-h-[300px]">
+          <CardContent className="flex-1 min-h-[250px]">
             {hasMounted && skillAverages.length > 0 ? (
               <ChartContainer config={chartConfig} className="w-full h-[280px]">
                 <BarChart accessibilityLayer data={skillAverages} margin={{ top: 20, right: 20, left: -10, bottom: 25 }}>
@@ -598,67 +663,8 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
           </CardContent>
         </Card>
 
-        {/* Chart 4: Polynomial Spline Area Chart - Mastery Trajectory Curve */}
-        <Card className="col-span-1 border-border shadow-sm flex flex-col justify-between overflow-hidden min-w-0">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between gap-2">
-              <CardTitle className="text-base font-semibold flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-indigo-500" /> Mastery Learning Curve
-              </CardTitle>
-              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-muted text-muted-foreground">Polynomial Spline</span>
-            </div>
-            <CardDescription className="text-xs">Continuous progress curve over assessment sessions</CardDescription>
-          </CardHeader>
-          <CardContent className="flex-1 min-h-[300px]">
-            {hasMounted && progressionData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={280}>
-                <AreaChart data={progressionData} margin={{ top: 20, right: 20, left: -10, bottom: 25 }}>
-                  <defs>
-                    <linearGradient id="profilePolyGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#6366f1" stopOpacity={0.8} />
-                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0.05} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border) / 0.5)" />
-                  <XAxis
-                    dataKey="session"
-                    tickLine={false}
-                    axisLine={false}
-                    tick={{ fontSize: 10, fill: 'currentColor' }}
-                    tickMargin={10}
-                  />
-                  <YAxis
-                    domain={[0, 100]}
-                    tickLine={false}
-                    axisLine={false}
-                    tick={{ fontSize: 11, fill: 'currentColor' }}
-                    tickFormatter={(v) => `${v}%`}
-                  />
-                  <RechartsTooltip
-                    formatter={(val: number) => [`${val}%`, 'Mastery Score']}
-                    contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))', backgroundColor: 'hsl(var(--background))', color: 'hsl(var(--foreground))' }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="score"
-                    stroke="#6366f1"
-                    strokeWidth={3}
-                    fillOpacity={1}
-                    fill="url(#profilePolyGrad)"
-                    dot={{ r: 4, fill: "#6366f1", stroke: "hsl(var(--background))", strokeWidth: 2 }}
-                    activeDot={{ r: 6 }}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
-                No assessment history available yet
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        </div>
 
-      </div>
     </div>
   );
 }

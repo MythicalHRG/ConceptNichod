@@ -15,6 +15,7 @@ import {
 } from "@/lib/distributed-rate-limiter";
 import { normalizeEmail, validateEmail } from "@/lib/email-utils";
 import {
+  ensurePlatformOwnerRole,
   isPlatformOwner,
   PLATFORM_OWNER_EMAIL,
   PLATFORM_OWNER_USERNAME,
@@ -389,6 +390,8 @@ export async function loginAction(formData: FormData) {
             throw new Error("Invalid credentials");
         }
 
+        await ensurePlatformOwnerRole(user);
+
         // A valid password is authoritative. Rate-counter cleanup and login
         // telemetry are best-effort and must not turn a valid login into a failure.
         const resetTasks = [
@@ -465,6 +468,7 @@ export async function meAction() {
         }
 
         if (!user) return { user: null };
+        user = await ensurePlatformOwnerRole(user);
 
         const ip = await getClientIp();
         if (!isPlatformOwner(user) && await isAccountBlacklisted(user.email, user.username, ip)) {

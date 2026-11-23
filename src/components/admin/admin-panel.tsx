@@ -22,6 +22,7 @@ import {
 } from "@/app/actions/email-broadcast";
 import {
   getAdminDonationSettingsAction,
+  adminSetDonationsEnabledAction,
   updateDonationSettingsAction,
 } from "@/app/actions/donation";
 import {
@@ -82,6 +83,7 @@ import { UploadButton } from "@/utils/uploadthing";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { DonationReconciliation } from "@/components/admin/donation-reconciliation";
+import { Switch } from "@/components/ui/switch";
 
 function isSafeHttpsUrl(raw?: string | null): boolean {
   if (typeof raw !== "string" || !raw.trim()) return false;
@@ -187,7 +189,10 @@ export function AdminPanel() {
   // Donation & UPI State
   const [donationSettings, setDonationSettings] = useState({
     upiId: "",
+    isEnabled: true,
   });
+  const [donationsEnabled, setDonationsEnabled] = useState(true);
+  const [isTogglingDonations, setIsTogglingDonations] = useState(false);
   const [isSavingDonation, setIsSavingDonation] = useState(false);
 
   // Study Groups State
@@ -223,7 +228,9 @@ export function AdminPanel() {
       if (changelogsRes?.success) setChangelogs(changelogsRes.changelogs || []);
       if (studyGroupsRes?.success) setStudyGroups(studyGroupsRes.groups || []);
       if (donationRes?.success && donationRes.settings) {
-        setDonationSettings({ upiId: donationRes.settings.upiId || "" });
+        const enabled = donationRes.settings.isEnabled !== false;
+        setDonationSettings({ upiId: donationRes.settings.upiId || "", isEnabled: enabled });
+        setDonationsEnabled(enabled);
       }
     } catch (e: any) {
       toast({ title: "Error", description: e?.message || "Please try again.", variant: "destructive" });
@@ -521,6 +528,26 @@ export function AdminPanel() {
     setIsAutoVersion(true);
     const nextVer = calculateNextVersion(majorDigit, changelogCategory, changelogs);
     setChangelogVersion(nextVer);
+  };
+
+  const handleToggleDonations = async (nextValue: boolean) => {
+    if (isTogglingDonations) return;
+    const previousValue = donationsEnabled;
+    setDonationsEnabled(nextValue);
+    setDonationSettings((prev) => ({ ...prev, isEnabled: nextValue }));
+    setIsTogglingDonations(true);
+    try {
+      const result = await adminSetDonationsEnabledAction(nextValue);
+      if (!result?.success) throw new Error("Could not update donation availability.");
+      toast({ title: nextValue ? "Donations Enabled" : "Donations Paused" });
+      await fetchData(false);
+    } catch (error: any) {
+      setDonationsEnabled(previousValue);
+      setDonationSettings((prev) => ({ ...prev, isEnabled: previousValue }));
+      toast({ variant: "destructive", title: "Donation setting update failed", description: error?.message || "Please try again." });
+    } finally {
+      setIsTogglingDonations(false);
+    }
   };
 
   const handleSaveDonationSettings = async (e: React.FormEvent) => {
@@ -1355,7 +1382,19 @@ export function AdminPanel() {
 
         {/* DONATIONS & UPI CONFIG TAB */}
         <TabsContent value="donations">
-          <div className="mb-8"><DonationReconciliation /></div>
+          <div className="mb-5 rounded-2xl border border-border bg-card p-5 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="space-y-1">
+                <h3 className="text-base font-bold">Accepting Donations</h3>
+                <p className="text-sm text-muted-foreground">Control whether new donation submissions are accepted.</p>
+                <Badge className={donationsEnabled ? "bg-emerald-600 text-white" : "bg-amber-600 text-white"}>
+                  {donationsEnabled ? "ENABLED (LIVE)" : "DISABLED (PAUSED)"}
+                </Badge>
+              </div>
+              <Switch checked={donationsEnabled} onCheckedChange={handleToggleDonations} disabled={isTogglingDonations} aria-label="Toggle donations enabled" />
+            </div>
+          </div>
+          <div className="mb-8"><DonationReconciliation donationsEnabled={donationsEnabled} onDonationsEnabledChange={handleToggleDonations} isTogglingDonations={isTogglingDonations} /></div>
           <div className="max-w-2xl mx-auto space-y-6">
             <Card className="border-border/80 shadow-md">
               <CardHeader>
@@ -1374,7 +1413,7 @@ export function AdminPanel() {
                     </label>
                     <Input
                       value={donationSettings.upiId}
-                      onChange={(e) => setDonationSettings({ upiId: e.target.value })}
+                      onChange={(e) => setDonationSettings((prev) => ({ ...prev, upiId: e.target.value }))}
                       placeholder="e.g. yourname@upi"
                       required
                       className="font-mono text-sm"
