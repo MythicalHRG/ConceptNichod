@@ -36,12 +36,12 @@ const TIER_CONFIG: Record<
 > = {
   LEGEND: {
     title: "👑 Legend Patron",
-    badgeClass: "bg-amber-500/20 text-amber-300 border-amber-400/50",
+    badgeClass: "bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-400/50",
     cardBorder: "border-amber-500/50 shadow-[0_0_25px_rgba(245,158,11,0.15)]",
   },
   DIAMOND: {
     title: "💎 Diamond Patron",
-    badgeClass: "bg-cyan-500/20 text-cyan-300 border-cyan-400/50",
+    badgeClass: "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border-cyan-400/50",
     cardBorder: "border-cyan-500/40 shadow-[0_0_20px_rgba(6,182,212,0.12)]",
   },
   GOLD: {
@@ -51,13 +51,13 @@ const TIER_CONFIG: Record<
   },
   SILVER: {
     title: "🥈 Silver Patron",
-    badgeClass: "bg-slate-400/20 text-slate-200 border-slate-400/40",
+    badgeClass: "bg-slate-400/20 text-foreground border-slate-400/40",
     cardBorder: "border-slate-700",
   },
   SUPPORTER: {
     title: "❤️ Supporter",
-    badgeClass: "bg-emerald-500/20 text-emerald-300 border-emerald-400/40",
-    cardBorder: "border-slate-800",
+    badgeClass: "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-400/40",
+    cardBorder: "border-border",
   },
 };
 
@@ -225,20 +225,20 @@ export default function DonatePage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 py-10 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-background text-foreground py-10 px-4 sm:px-6 lg:px-8">
       <div className="max-w-6xl mx-auto space-y-14">
         {/* Top Back Link */}
         <div className="flex items-center justify-between">
           <Link
             href="/dashboard"
-            className="inline-flex items-center gap-2 text-xs sm:text-sm font-medium text-slate-400 hover:text-white transition"
+            className="inline-flex items-center gap-2 text-xs sm:text-sm font-medium text-muted-foreground hover:text-foreground transition"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Dashboard
           </Link>
           <a
             href="#hall-of-patrons"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-400 hover:text-amber-300"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-400 hover:text-amber-700 dark:text-amber-300"
           >
             <Award className="w-4 h-4" />
             View Hall of Patrons ({totalPatrons})
@@ -251,10 +251,10 @@ export default function DonatePage() {
             <Sparkles className="w-3.5 h-3.5" />
             100% Direct Student-First Support
           </div>
-          <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white">
+          <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-foreground">
             {settings.headline}
           </h1>
-          <p className="text-slate-400 text-sm sm:text-base leading-relaxed">
+          <p className="text-muted-foreground text-sm sm:text-base leading-relaxed">
             {settings.subtext}
           </p>
         </div>
@@ -262,39 +262,39 @@ export default function DonatePage() {
         {/* Main 2-Column Section: Step 1 (UPI Details) + Step 2 (Submit UTR & Transaction ID) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Step 1: Direct UPI Card */}
-          <div className="lg:col-span-5 bg-slate-900/90 border border-slate-800 rounded-2xl p-6 sm:p-8 space-y-6">
+          <div className="lg:col-span-5 bg-card/90 border border-border rounded-2xl p-6 sm:p-8 space-y-6">
             {settings.isEnabled ? (
               <>
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">
                     Step 1 • Pay via Official UPI ID
                   </span>
-                  <span className="text-[11px] text-slate-400">Direct UPI</span>
+                  <span className="text-[11px] text-muted-foreground">Direct UPI</span>
                 </div>
-                <div className="rounded-xl border border-slate-700 bg-slate-950/70 p-4 text-center">
-                  <p className="text-xs font-semibold text-slate-200">Use the official UPI ID</p>
-                  <p className="mt-1 text-xs text-slate-400">No QR image is displayed until a verified QR-generation flow is available. Copy the UPI ID below and confirm the recipient name in your payment app.</p>
+                <div className="rounded-xl border border-slate-700 bg-background/70 p-4 text-center">
+                  <p className="text-xs font-semibold text-foreground">Use the official UPI ID</p>
+                  <p className="mt-1 text-xs text-muted-foreground">No QR image is displayed until a verified QR-generation flow is available. Copy the UPI ID below and confirm the recipient name in your payment app.</p>
                 </div>
-                <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 flex items-center justify-between gap-3">
+                <div className="bg-background border border-border rounded-xl p-3.5 flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-[11px] text-slate-500 uppercase font-semibold">Official UPI ID</p>
-                    <p className="text-sm font-mono font-bold text-slate-200 truncate">{receiverUpiId ? receiverUpiId : "Recipient UPI ID will appear once enabled."}</p>
+                    <p className="text-[11px] text-muted-foreground uppercase font-semibold">Official UPI ID</p>
+                    <p className="text-sm font-mono font-bold text-foreground truncate">{receiverUpiId ? receiverUpiId : "Recipient UPI ID will appear once enabled."}</p>
                   </div>
                   <button
                     type="button"
                     onClick={handleCopyUpi}
                     disabled={!receiverUpiId}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white transition shrink-0"
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-foreground transition shrink-0"
                   >
                     {copiedUpi ? <><CheckCircle2 className="w-3.5 h-3.5" />Copied</> : <><Copy className="w-3.5 h-3.5" />Copy ID</>}
                   </button>
                 </div>
-                <div className="bg-indigo-950/30 border border-indigo-500/20 rounded-xl p-4 space-y-2 text-xs text-slate-300">
+                <div className="bg-indigo-950/30 border border-indigo-500/20 rounded-xl p-4 space-y-2 text-xs text-foreground">
                   <div className="flex items-center gap-2 font-semibold text-indigo-300">
                     <ShieldCheck className="w-4 h-4 shrink-0" />
                     Manual Admin Reconciliation
                   </div>
-                  <p className="text-slate-400 leading-relaxed">
+                  <p className="text-muted-foreground leading-relaxed">
                     After paying, retain your 12-digit UTR and payment-app Transaction ID. The Admin checks the bank record and recipient account before verifying a submission.
                   </p>
                 </div>
@@ -302,7 +302,7 @@ export default function DonatePage() {
             ) : (
               <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-5 space-y-2">
                 <p className="text-sm font-bold text-amber-200">Donations are temporarily paused</p>
-                <p className="text-xs leading-relaxed text-slate-300">
+                <p className="text-xs leading-relaxed text-foreground">
                   The recipient account has not been enabled for payments yet. No QR code or payment ID is displayed. Please do not send money until the official account is confirmed.
                 </p>
               </div>
@@ -312,13 +312,13 @@ export default function DonatePage() {
           {/* Step 2: Submit UTR + Transaction ID Form */}
           <form
             onSubmit={handleSubmit}
-            className="lg:col-span-7 bg-slate-900/90 border border-slate-800 rounded-2xl p-6 sm:p-8 space-y-5"
+            className="lg:col-span-7 bg-card/90 border border-border rounded-2xl p-6 sm:p-8 space-y-5"
           >
             <div>
               <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">
                 Step 2 • Send UTR & Transaction ID to Admin Panel
               </span>
-              <h2 className="text-xl sm:text-2xl font-bold text-white mt-1">
+              <h2 className="text-xl sm:text-2xl font-bold text-foreground mt-1">
                 Submit Payment Reference for Verification
               </h2>
             </div>
@@ -352,7 +352,7 @@ export default function DonatePage() {
             />
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+              <label className="block text-xs font-semibold text-foreground mb-1.5">
                 Your Name (for Hall of Patrons) <span className="text-rose-400">*</span>
               </label>
               <input
@@ -362,13 +362,13 @@ export default function DonatePage() {
                 placeholder="Enter your full name"
                 value={donorName}
                 onChange={(e) => setDonorName(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white focus:outline-none focus:border-indigo-500"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-background border border-border text-sm text-foreground focus:outline-none focus:border-indigo-500"
               />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                <label className="block text-xs font-semibold text-foreground mb-1.5">
                   12-Digit UTR / UPI Ref No. <span className="text-rose-400">*</span>
                 </label>
                 <input
@@ -379,15 +379,15 @@ export default function DonatePage() {
                   placeholder="e.g. 431987654321"
                   value={utr}
                   onChange={(e) => setUtr(e.target.value.replace(/\D/g, "").slice(0, 12))}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 font-mono text-sm text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-background border border-border font-mono text-sm text-foreground focus:outline-none focus:border-indigo-500"
                 />
-                <p className="text-[11px] text-slate-500 mt-1">
+                <p className="text-[11px] text-muted-foreground mt-1">
                   12-digit numeric UPI Reference ({utr.length}/12 digits)
                 </p>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                <label className="block text-xs font-semibold text-foreground mb-1.5">
                   Transaction ID <span className="text-rose-400">*</span>
                 </label>
                 <input
@@ -397,17 +397,17 @@ export default function DonatePage() {
                   placeholder="e.g. T2611151423598812"
                   value={transactionId}
                   onChange={(e) => setTransactionId(e.target.value.toUpperCase())}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 font-mono text-sm text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-background border border-border font-mono text-sm text-foreground focus:outline-none focus:border-indigo-500"
                 />
-                <p className="text-[11px] text-slate-500 mt-1">
+                <p className="text-[11px] text-muted-foreground mt-1">
                   Alphanumeric Transaction ID from your UPI app
                 </p>
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Message for Hall of Patrons <span className="text-slate-500">(Optional)</span>
+              <label className="block text-xs font-semibold text-foreground mb-1.5">
+                Message for Hall of Patrons <span className="text-muted-foreground">(Optional)</span>
               </label>
               <textarea
                 rows={3}
@@ -415,7 +415,7 @@ export default function DonatePage() {
                 placeholder="Write a message to display on your Patron card..."
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white focus:outline-none focus:border-indigo-500"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-background border border-border text-sm text-foreground focus:outline-none focus:border-indigo-500"
               />
             </div>
 
@@ -424,9 +424,9 @@ export default function DonatePage() {
                 type="checkbox"
                 checked={isAnonymous}
                 onChange={(e) => setIsAnonymous(e.target.checked)}
-                className="w-4 h-4 rounded border-slate-700 bg-slate-950 text-indigo-600"
+                className="w-4 h-4 rounded border-slate-700 bg-background text-indigo-600"
               />
-              <span className="text-xs text-slate-300">
+              <span className="text-xs text-foreground">
                 Show me as <strong>Anonymous Patron</strong> in the public Hall of Patrons
               </span>
             </label>
@@ -434,7 +434,7 @@ export default function DonatePage() {
             <button
               type="submit"
               disabled={submitting || !settings.isEnabled}
-              className="w-full py-3 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 transition"
+              className="w-full py-3 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-foreground font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 transition"
             >
               <Send className="w-4 h-4" />
               {!settings.isEnabled ? "Donations Temporarily Unavailable" : submitting ? "Submitting UTR & Transaction ID..." : "Submit UTR & Transaction ID to Admin"}
@@ -443,32 +443,32 @@ export default function DonatePage() {
         </div>
 
         {/* Hall of Patrons Leaderboard */}
-        <section id="hall-of-patrons" className="pt-10 border-t border-slate-800/80 space-y-8">
+        <section id="hall-of-patrons" className="pt-10 border-t border-border/80 space-y-8">
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div>
               <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-amber-400">
                 <Award className="w-4 h-4" />
                 Hall of Patrons
               </div>
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-white mt-1">
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-foreground mt-1">
                 Verified Patrons & Supporters
               </h2>
-              <p className="text-xs sm:text-sm text-slate-400 mt-1">
+              <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                 Manually verified by the Admin after UTR & Transaction ID reconciliation.
               </p>
             </div>
 
-            <div className="flex items-center gap-5 bg-slate-900 border border-slate-800 rounded-2xl px-5 py-3">
+            <div className="flex items-center gap-5 bg-card border border-border rounded-2xl px-5 py-3">
               <div>
-                <p className="text-[11px] text-slate-400">Total Verified Support</p>
+                <p className="text-[11px] text-muted-foreground">Total Verified Support</p>
                 <p className="text-xl font-extrabold text-emerald-400">
                   <Rupee />{totalRaised.toLocaleString("en-IN")}
                 </p>
               </div>
               <div className="h-8 w-px bg-slate-800" />
               <div>
-                <p className="text-[11px] text-slate-400">Verified Patrons</p>
-                <p className="text-xl font-extrabold text-white">{totalPatrons}</p>
+                <p className="text-[11px] text-muted-foreground">Verified Patrons</p>
+                <p className="text-xl font-extrabold text-foreground">{totalPatrons}</p>
               </div>
             </div>
           </div>
@@ -478,17 +478,17 @@ export default function DonatePage() {
               {[1, 2, 3].map((i) => (
                 <div
                   key={i}
-                  className="h-36 rounded-2xl bg-slate-900/50 border border-slate-800 animate-pulse"
+                  className="h-36 rounded-2xl bg-card/50 border border-border animate-pulse"
                 />
               ))}
             </div>
           ) : patrons.length === 0 ? (
-            <div className="text-center py-12 bg-slate-900/40 border border-slate-800 rounded-2xl space-y-2">
+            <div className="text-center py-12 bg-card/40 border border-border rounded-2xl space-y-2">
               <Heart className="w-8 h-8 text-rose-400 mx-auto" />
-              <p className="text-sm font-semibold text-slate-200">
+              <p className="text-sm font-semibold text-foreground">
                 Be the first verified supporter in the Hall of Patrons!
               </p>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-muted-foreground">
                 Submit your UTR & Transaction ID above after completing a UPI contribution.
               </p>
             </div>
@@ -503,7 +503,7 @@ export default function DonatePage() {
                 return (
                   <div
                     key={patron.id}
-                    className={`bg-slate-900/90 border ${cfg.cardBorder} rounded-2xl p-5 flex flex-col justify-between space-y-4`}
+                    className={`bg-card/90 border ${cfg.cardBorder} rounded-2xl p-5 flex flex-col justify-between space-y-4`}
                   >
                     <div className="space-y-3">
                       <div className="flex items-center justify-between gap-2">
@@ -518,7 +518,7 @@ export default function DonatePage() {
                       </div>
 
                       <div>
-                        <h3 className="text-base font-bold text-white truncate">
+                        <h3 className="text-base font-bold text-foreground truncate">
                           {patron.name}
                         </h3>
                         {patron.username && (
@@ -532,13 +532,13 @@ export default function DonatePage() {
                       </div>
 
                       {patron.message && (
-                        <p className="text-xs text-slate-300 italic bg-slate-950/70 p-3 rounded-xl border border-slate-800">
+                        <p className="text-xs text-foreground italic bg-background/70 p-3 rounded-xl border border-border">
                           &ldquo;{patron.message}&rdquo;
                         </p>
                       )}
                     </div>
 
-                    <div className="flex items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-800/70">
+                    <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-2 border-t border-border/70">
                       <span className="text-emerald-400 font-medium">✔ Admin Verified</span>
                       <span>{formattedDate}</span>
                     </div>
