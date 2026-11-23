@@ -3,7 +3,7 @@
 
 import mongoose from "mongoose";
 import { ensurePlatformOwnerRole, isPlatformOwner } from "@/lib/owner-access";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, unstable_noStore as noStore } from "next/cache";
 import connectToDatabase from "@/lib/mongoose";
 import DonationTransaction from "@/models/DonationTransaction";
 import Donor from "@/models/Donor";
@@ -105,6 +105,7 @@ async function requireOwnerSession() {
  * 1. Public Data Loader for /donate (UPI Config + Verified Hall of Patrons)
  */
 export async function getPublicDonationPageData() {
+  noStore();
   try {
     await connectToDatabase();
     const settings = await getCanonicalDonationSettings();
