@@ -2,7 +2,7 @@
 
 import mongoose from "mongoose";
 import { revalidatePath } from "next/cache";
-import { isPlatformOwner } from "@/lib/owner-access";
+import { ensurePlatformOwnerRole, isPlatformOwner } from "@/lib/owner-access";
 import { cookies } from "next/headers";
 import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
@@ -37,9 +37,10 @@ async function verifyOwner() {
   const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
 
-  const user = await User.findOne({ uuid: sessionUuid })
+  const fetchedUser = await User.findOne({ uuid: sessionUuid })
     .select("uuid username email role")
     .lean();
+  const user = fetchedUser ? await ensurePlatformOwnerRole(fetchedUser) : fetchedUser;
   if (!isPlatformOwner(user)) {
     throw new Error("Forbidden: Admin access only");
   }
@@ -52,9 +53,10 @@ export async function checkIsAdminAction(): Promise<boolean> {
     const rawSession = (await cookies()).get("user_session")?.value;
     const sessionUuid = verifySessionCookie(rawSession);
     if (!sessionUuid) return false;
-    const user = await User.findOne({ uuid: sessionUuid })
+    const fetchedUser = await User.findOne({ uuid: sessionUuid })
       .select("uuid username email role")
       .lean();
+    const user = fetchedUser ? await ensurePlatformOwnerRole(fetchedUser) : fetchedUser;
     return isPlatformOwner(user);
   } catch {
     return false;

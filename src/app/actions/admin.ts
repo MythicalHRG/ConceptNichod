@@ -54,9 +54,10 @@ async function verifyOwner() {
   const sessionUuid = verifySessionCookie(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
 
-  const user = await User.findOne({ uuid: sessionUuid })
+  const fetchedUser = await User.findOne({ uuid: sessionUuid })
     .select("uuid username email role")
     .lean();
+  const user = fetchedUser ? await ensurePlatformOwnerRole(fetchedUser) : fetchedUser;
   if (!isPlatformOwner(user)) {
     throw new Error("Forbidden: Admin access only");
   }

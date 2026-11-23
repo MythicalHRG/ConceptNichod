@@ -67,7 +67,7 @@ export default function DonatePage() {
     upiId: "",
     payeeName: "ConceptNichod",
     qrCodeUrl: "",
-    isEnabled: false,
+    isEnabled: true,
     headline: "Support ConceptNichod & Join the Hall of Patrons",
     subtext:
       "Pay via the official UPI ID below, then submit your 12-digit UTR & Transaction ID. Our Admin will verify it manually, enter the confirmed amount, and feature you in the Hall of Patrons!",
@@ -107,6 +107,7 @@ export default function DonatePage() {
             ...prev,
             ...res.settings,
             upiId: res.settings.upiId || "",
+            isEnabled: res.settings.isEnabled !== false,
           }));
         }
         if (Array.isArray(res.patrons)) setPatrons(res.patrons as PatronItem[]);

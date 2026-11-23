@@ -50,7 +50,7 @@ export default async function PublicProfilePage({
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/10 rounded-full blur-[120px] pointer-events-none -z-10" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[30%] h-[30%] bg-blue-500/10 rounded-full blur-[100px] pointer-events-none -z-10" />
 
-      <main className="container mx-auto px-3.5 sm:px-6 py-6 sm:py-12 max-w-6xl min-w-0 pb-safe">
+      <main className="container mx-auto px-3.5 sm:px-6 py-6 sm:py-8 max-w-7xl min-w-0 pb-safe">
 
         {/* Profile Header */}
         {isOwner ? (

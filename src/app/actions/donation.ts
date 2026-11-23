@@ -2,7 +2,7 @@
 "use server";
 
 import mongoose from "mongoose";
-import { isPlatformOwner } from "@/lib/owner-access";
+import { ensurePlatformOwnerRole, isPlatformOwner } from "@/lib/owner-access";
 import { revalidatePath } from "next/cache";
 import connectToDatabase from "@/lib/mongoose";
 import DonationTransaction from "@/models/DonationTransaction";
@@ -67,7 +67,8 @@ async function requireOwnerSession() {
   await connectToDatabase();
   const sessionUuid = verifySessionCookie((await cookies()).get("user_session")?.value);
   if (!sessionUuid) throw new Error("Unauthorized: Please log in as Admin.");
-  const adminUser = await User.findOne({ uuid: sessionUuid }).select("uuid username role email").lean();
+  const fetchedAdminUser = await User.findOne({ uuid: sessionUuid }).select("uuid username role email").lean();
+  const adminUser = fetchedAdminUser ? await ensurePlatformOwnerRole(fetchedAdminUser) : fetchedAdminUser;
   if (!isPlatformOwner(adminUser)) throw new Error("Forbidden: Owner privileges required.");
   return adminUser;
 }
@@ -82,7 +83,7 @@ export async function getPublicDonationPageData() {
 
     const settings = await DonationSetting.findOne().lean();
     const configuredVpa = normalizeVpa(settings?.upiId || "");
-    const donationsAvailable = DONATIONS_ENABLED && Boolean(settings?.isEnabled) && Boolean(configuredVpa);
+    const donationsAvailable = DONATIONS_ENABLED && settings?.isEnabled !== false;
 
     const [patronsRaw, totalRaisedAgg] = await Promise.all([
       Donor.find({ isVisible: true, isPublic: true, amount: { $gt: 0 } })
@@ -192,8 +193,11 @@ export async function submitDonationTransaction(formData: {
 
     const settings = await DonationSetting.findOne().select("upiId isEnabled").lean();
     const configuredVpa = normalizeVpa((settings as any)?.upiId || "");
-    if (!settings?.isEnabled || !configuredVpa) {
-      return { success: false, error: "Donations are temporarily unavailable because the recipient account is not configured and enabled." };
+    if (settings?.isEnabled === false) {
+      return { success: false, error: "Donations are currently paused by the administrator." };
+    }
+    if (!configuredVpa) {
+      return { success: false, error: "Donations are temporarily unavailable because the recipient account is not configured." };
     }
 
     const ipUnavailable = clientIp === "127.0.0.1" || clientIp === "unknown";
@@ -391,7 +395,7 @@ export async function getAdminDonationDashboard(filterStatus?: string, search?: 
         upiId: (settingsRaw as any)?.upiId || "",
         payeeName: (settingsRaw as any)?.payeeName || "ConceptNichod",
         qrCodeUrl: "",
-        isEnabled: Boolean((settingsRaw as any)?.isEnabled) && process.env.DONATIONS_ENABLED === "true",
+        isEnabled: (settingsRaw as any)?.isEnabled !== false && process.env.DONATIONS_ENABLED === "true",
       },
     };
   } catch (error: any) {
@@ -736,7 +740,7 @@ export async function adminUpdateDonationSettings(input: {
     settings.upiId = upiId;
     settings.payeeName = payeeName || "ConceptNichod";
     settings.qrCodeUrl = "";
-    settings.isEnabled = input.isEnabled ?? true;
+    if (input.isEnabled !== undefined) settings.isEnabled = input.isEnabled;
     settings.updatedBy = (adminUser as any).username || "Admin";
     if (input.customInstructions !== undefined) settings.subtext = sanitizeDonationText(input.customInstructions, 500);
     settings.customInstructions = settings.subtext || settings.customInstructions;
@@ -810,7 +814,7 @@ export async function getDonationInfoAction() {
   const configuredVpa = normalizeVpa(setting?.upiId || "");
   const donationsAvailable =
     process.env.DONATIONS_ENABLED === "true" &&
-    Boolean(setting?.isEnabled) &&
+    setting?.isEnabled !== false &&
     Boolean(configuredVpa);
 
   const publicSettings = {
@@ -890,9 +894,27 @@ export async function getAdminDonationSettingsAction() {
     settings: {
       upiId: (settings as any)?.upiId || "",
       qrCodeUrl: "",
-      isEnabled: Boolean((settings as any)?.isEnabled),
+      isEnabled: (settings as any)?.isEnabled !== false,
     },
   };
+}
+
+export async function adminSetDonationsEnabledAction(enabled: boolean) {
+  const owner = await requireOwnerSession();
+  if (typeof enabled !== "boolean") {
+    throw new Error("A boolean donations-enabled value is required.");
+  }
+
+  await DonationSetting.updateOne(
+    {},
+    { $set: { isEnabled: enabled, updatedBy: owner.username || "mythicalhrg" } },
+    { upsert: true, setDefaultsOnInsert: true }
+  );
+
+  revalidatePath("/donate");
+  revalidatePath("/dashboard/admin");
+  revalidatePath("/dashboard/admin/donations");
+  return { success: true, isEnabled: enabled };
 }
 
 export async function updateDonationSettingsAction(payload: { upiId: string; qrCodeUrl?: string; customInstructions?: string; thankYouNote?: string }) {
@@ -900,7 +922,6 @@ export async function updateDonationSettingsAction(payload: { upiId: string; qrC
     upiId: payload?.upiId || "",
     payeeName: "ConceptNichod",
     qrCodeUrl: payload?.qrCodeUrl || "",
-    isEnabled: true,
     customInstructions: payload?.customInstructions,
     thankYouNote: payload?.thankYouNote,
   });

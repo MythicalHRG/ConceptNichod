@@ -1,7 +1,7 @@
 "use server";
 
 import mongoose from "mongoose";
-import { isPlatformOwner } from "@/lib/owner-access";
+import { ensurePlatformOwnerRole, isPlatformOwner } from "@/lib/owner-access";
 import { cookies } from "next/headers";
 import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
@@ -36,9 +36,10 @@ async function getAuthenticatedUser() {
     throw new Error("Authentication required.");
   }
   await assertActiveNonBlacklistedUser(sessionUuid);
-  const user = await User.findOne({ uuid: sessionUuid })
+  const fetchedUser = await User.findOne({ uuid: sessionUuid })
     .select("uuid username fullName email role")
     .lean();
+  const user = fetchedUser ? await ensurePlatformOwnerRole(fetchedUser) : fetchedUser;
   if (!user) {
     throw new Error("User account not found.");
   }

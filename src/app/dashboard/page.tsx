@@ -9,7 +9,7 @@ import Blacklist from "@/models/Blacklist";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { verifySessionCookie } from "@/lib/session";
-import { isPlatformOwner } from "@/lib/owner-access";
+import { ensurePlatformOwnerRole, isPlatformOwner } from "@/lib/owner-access";
 import { normalizeEmail } from "@/lib/email-utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { MapPin, GraduationCap, Target, Instagram, Cake } from "lucide-react";
@@ -45,6 +45,7 @@ export default async function DashboardPage() {
       await dbConnect();
       user = await User.findOne({ uuid: sessionUuid }).select(userFields).lean();
     }
+    if (user) user = await ensurePlatformOwnerRole(user);
     if (user && !isPlatformOwner(user)) {
       const emailVals = Array.from(
         new Set([String(user.email || "").toLowerCase(), normalizeEmail(String(user.email || ""))].filter(Boolean))
@@ -101,6 +102,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-10 pb-10">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Zirconel</p>
       {/* User Profile Hero Card */}
       <Card className="bg-secondary/30 border-primary/20 shadow-sm relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none"></div>
