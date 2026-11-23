@@ -1398,7 +1398,7 @@ export function AdminPanel() {
               <div className="space-y-1">
                 <h3 className="text-base font-bold">Accepting Donations</h3>
                 <p className="text-sm text-muted-foreground">Control whether new donation submissions are accepted.</p>
-                <Badge className={donationsEnabled ? "bg-emerald-600 text-emerald-50 dark:text-white" : "bg-amber-600 text-amber-50 dark:text-white"}>
+                <Badge className={donationsEnabled ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300" : "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300"}>
                   {donationsEnabled ? "ENABLED (LIVE)" : "DISABLED (PAUSED)"}
                 </Badge>
               </div>
