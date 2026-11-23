@@ -74,7 +74,7 @@ test("admin verification requires bank statement UTR and recipient VPA evidence"
   const model = read("src/models/DonationTransaction.ts");
   const adminUi = read("src/components/admin/donation-reconciliation.tsx");
   assert.match(actions, /bankReference: string/);
-  assert.match(actions, /bank statement reference must exactly match the submitted UTR/i);
+  assert.match(actions, /Bank statement UTR does not match the submitted 12-digit UTR/i);
   assert.match(actions, /recipientVpa !== configuredVpa/);
   assert.match(actions, /verificationMethod:\s*"manual-bank-reconciliation"/);
   assert.match(model, /bankReference:/);
