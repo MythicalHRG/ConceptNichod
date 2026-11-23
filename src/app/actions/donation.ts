@@ -694,6 +694,7 @@ export async function adminRejectDonationTransaction(
           adminNote: rejectionNote,
           verifiedBy: (adminUser as any).username || "Admin",
           verifiedAt: new Date(),
+          donorRecordId: null,
         },
       },
       { new: true }
