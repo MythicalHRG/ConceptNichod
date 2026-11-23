@@ -43,7 +43,7 @@ test("donation availability is independent of deployment environment variables",
   const settings = fs.readFileSync("src/models/DonationSetting.ts", "utf8");
   const page = fs.readFileSync("src/app/donate/page.tsx", "utf8");
   assert.doesNotMatch(donation, /DONATIONS_ENABLED/);
-  assert.match(settings, /isEnabled: \\{ type: Boolean, default: true \\}/);
+  assert.ok(settings.includes("isEnabled: { type: Boolean, default: true }"));
   assert.doesNotMatch(page, /Donations are temporarily paused|Donations Temporarily Unavailable/);
   assert.match(donation, /isEnabled: true/);
 });
