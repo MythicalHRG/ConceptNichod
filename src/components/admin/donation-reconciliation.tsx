@@ -4,6 +4,9 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
+import { Rupee } from "@/components/ui/rupee-symbol";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import {
   getAdminDonationDashboard,
   adminVerifyDonationAndSetAmount,
@@ -71,7 +74,7 @@ export function DonationReconciliation({
     totalVerifiedAmount: 0,
   });
 
-  // Per-row Admin inputs for manual ₹ amount, tier, note, and Hall of Patrons checkbox
+  // Per-row Admin inputs for manual INR amount, tier, note, and Hall of Patrons checkbox
   const [amountMap, setAmountMap] = useState<Record<string, string>>({});
   const [bankReferenceMap, setBankReferenceMap] = useState<Record<string, string>>({});
   const [recipientVpaMap, setRecipientVpaMap] = useState<Record<string, string>>({});
@@ -79,6 +82,11 @@ export function DonationReconciliation({
   const [publishMap, setPublishMap] = useState<Record<string, boolean>>({});
   const [noteMap, setNoteMap] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [confirmationOpen, setConfirmationOpen] = useState(false);
+  const [confirmationKind, setConfirmationKind] = useState<"reject" | "remove" | null>(null);
+  const [confirmationTx, setConfirmationTx] = useState<AdminTxItem | null>(null);
+  const [confirmationPatronId, setConfirmationPatronId] = useState<string | null>(null);
+  const [confirmationNote, setConfirmationNote] = useState("");
 
   // UPI Settings Collapsible State
   const [showSettings, setShowSettings] = useState(false);
@@ -198,7 +206,7 @@ export function DonationReconciliation({
       toast({
         variant: "destructive",
         title: "Amount required",
-        description: "Please manually enter a valid ₹ amount received for this UTR before verifying.",
+        description: "Please manually enter a valid INR amount received for this UTR before verifying.",
       });
       return;
     }
@@ -272,30 +280,9 @@ export function DonationReconciliation({
     }
   };
 
-  const handleReject = async (tx: AdminTxItem) => {
-    if (!confirm(`Reject UTR ${tx.utr} from ${tx.donorName}?`)) return;
-    setBusyId(tx.id);
-    try {
-      const res = await adminRejectDonationTransaction(tx.id, noteMap[tx.id]);
-      if (!res.success) {
-        toast({
-          variant: "destructive",
-          title: "Rejection failed",
-          description: res.error || "Failed to reject transaction.",
-        });
-      } else {
-        toast({ title: "Transaction rejected", description: res.message });
-        await loadDashboard();
-      }
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Donation mutation failed",
-        description: error instanceof Error ? error.message : "Please try again.",
-      });
-    } finally {
-      setBusyId(null);
-    }
+  const handleReject = (tx: AdminTxItem) => {
+    setConfirmationKind("reject"); setConfirmationTx(tx); setConfirmationPatronId(null);
+    setConfirmationNote(noteMap[tx.id] || ""); setConfirmationOpen(true);
   };
 
   const handleSavePatron = async (patronId: string) => {
@@ -325,29 +312,28 @@ export function DonationReconciliation({
     }
   };
 
-  const handleRemovePatron = async (patronId: string) => {
-    if (!confirm("Hide this patron from the public Hall of Patrons?")) return;
-    setBusyId(patronId);
-    try {
-      const result = await adminRemovePatron(patronId);
-      if (!result.success) {
-        toast({
-          variant: "destructive",
-          title: "Could not hide patron",
-          description: result.error || "Could not remove patron.",
-        });
-      } else {
-        toast({ title: "Patron hidden", description: result.message });
-        await loadDashboard();
-      }
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Donation mutation failed",
-        description: error instanceof Error ? error.message : "Please try again.",
-      });
-    } finally {
-      setBusyId(null);
+  const handleRemovePatron = (patronId: string) => {
+    setConfirmationKind("remove"); setConfirmationTx(null); setConfirmationPatronId(patronId);
+    setConfirmationNote(""); setConfirmationOpen(true);
+  };
+
+  const confirmPendingAction = async () => {
+    if (confirmationKind === "reject" && confirmationTx) {
+      const tx = confirmationTx; setBusyId(tx.id);
+      try {
+        const res = await adminRejectDonationTransaction(tx.id, confirmationNote);
+        if (!res.success) toast({ variant: "destructive", title: "Rejection failed", description: res.error || "Failed to reject transaction." });
+        else { toast({ title: "Transaction rejected", description: res.message }); setConfirmationOpen(false); await loadDashboard(); }
+      } catch (error) { toast({ variant: "destructive", title: "Donation mutation failed", description: error instanceof Error ? error.message : "Please try again." }); }
+      finally { setBusyId(null); }
+    } else if (confirmationKind === "remove" && confirmationPatronId) {
+      const id = confirmationPatronId; setBusyId(id);
+      try {
+        const result = await adminRemovePatron(id);
+        if (!result.success) toast({ variant: "destructive", title: "Could not hide patron", description: result.error || "Could not remove patron." });
+        else { toast({ title: "Patron hidden", description: result.message }); setConfirmationOpen(false); await loadDashboard(); }
+      } catch (error) { toast({ variant: "destructive", title: "Donation mutation failed", description: error instanceof Error ? error.message : "Please try again." }); }
+      finally { setBusyId(null); }
     }
   };
 
@@ -405,12 +391,12 @@ export function DonationReconciliation({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0">
       {/* Header & Summary Cards */}
-      <div className="rounded-2xl border border-indigo-500/30 bg-slate-900 p-4 flex flex-wrap items-center justify-between gap-4">
+      <div className="rounded-2xl border border-indigo-500/30 bg-card p-4 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h3 className="text-sm font-bold text-white">Accepting Donations</h3>
-          <span className={effectiveDonationsEnabled ? "inline-flex mt-1 rounded-full bg-emerald-500/15 px-2.5 py-1 text-[10px] font-bold text-emerald-300" : "inline-flex mt-1 rounded-full bg-amber-500/15 px-2.5 py-1 text-[10px] font-bold text-amber-300"}>
+          <h3 className="text-sm font-bold text-foreground">Accepting Donations</h3>
+          <span className={effectiveDonationsEnabled ? "inline-flex mt-1 rounded-full bg-emerald-500/15 px-2.5 py-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300" : "inline-flex mt-1 rounded-full bg-amber-500/15 px-2.5 py-1 text-[10px] font-bold text-amber-700 dark:text-amber-300"}>
             {effectiveDonationsEnabled ? "ENABLED (LIVE)" : "DISABLED (PAUSED)"}
           </span>
         </div>
@@ -419,10 +405,10 @@ export function DonationReconciliation({
 
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl sm:text-2xl font-extrabold text-white">
+          <h2 className="text-xl sm:text-2xl font-extrabold text-foreground">
             UTR & Transaction ID Manual Reconciliation
           </h2>
-          <p className="text-xs sm:text-sm text-slate-400">
+          <p className="text-xs sm:text-sm text-muted-foreground">
             Compare the UTR, Transaction ID, credited amount, and recipient VPA against your actual bank record before verifying.
           </p>
         </div>
@@ -431,7 +417,7 @@ export function DonationReconciliation({
           <button
             type="button"
             onClick={() => setShowSettings(!showSettings)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-foreground"
           >
             <Settings className="w-4 h-4" />
             UPI Settings
@@ -439,7 +425,7 @@ export function DonationReconciliation({
           <button
             type="button"
             onClick={loadDashboard}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-foreground"
           >
             <RefreshCw className="w-4 h-4" />
             Refresh Queue
@@ -451,10 +437,10 @@ export function DonationReconciliation({
       {showSettings && (
         <form
           onSubmit={handleSaveSettings}
-          className="bg-slate-900 border border-indigo-500/40 rounded-2xl p-5 grid grid-cols-1 sm:grid-cols-4 gap-4 items-end"
+          className="bg-card border border-indigo-500/40 rounded-2xl p-5 grid grid-cols-1 sm:grid-cols-4 gap-4 items-end"
         >
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
+            <label className="block text-xs font-semibold text-foreground mb-1">
               Official UPI ID
             </label>
             <input
@@ -463,11 +449,11 @@ export function DonationReconciliation({
               value={upiId}
               onChange={(e) => setUpiId(e.target.value)}
               placeholder="yourname@upi"
-              className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white"
+              className="w-full px-3 py-2 rounded-xl bg-background border border-border text-xs text-foreground"
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
+            <label className="block text-xs font-semibold text-foreground mb-1">
               Payee Name
             </label>
             <input
@@ -475,17 +461,17 @@ export function DonationReconciliation({
               required
               value={payeeName}
               onChange={(e) => setPayeeName(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white"
+              className="w-full px-3 py-2 rounded-xl bg-background border border-border text-xs text-foreground"
             />
           </div>
           <div className="flex items-center gap-3 py-2">
-            <span className="text-xs text-slate-300">Accepting Donations</span>
+            <span className="text-xs text-foreground">Accepting Donations</span>
             <Switch checked={effectiveDonationsEnabled} onCheckedChange={handleToggleDonations} disabled={onDonationsEnabledChange ? isTogglingDonations : localTogglingDonations} aria-label="Toggle donations enabled" />
           </div>
           <button
             type="submit"
             disabled={savingSettings}
-            className="py-2 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-xs font-bold text-white"
+            className="py-2 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-xs font-bold text-foreground"
           >
             {savingSettings ? "Saving..." : "Save UPI Settings"}
           </button>
@@ -495,11 +481,11 @@ export function DonationReconciliation({
       {/* KPI Summary Strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4">
-          <p className="text-xs text-amber-300">Pending Verification</p>
+          <p className="text-xs text-amber-700 dark:text-amber-300">Pending Verification</p>
           <p className="text-2xl font-extrabold text-amber-400">{summary.pendingCount}</p>
         </div>
         <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-4">
-          <p className="text-xs text-emerald-300">Verified UTRs</p>
+          <p className="text-xs text-emerald-700 dark:text-emerald-300">Verified UTRs</p>
           <p className="text-2xl font-extrabold text-emerald-400">{summary.verifiedCount}</p>
         </div>
         <div className="bg-rose-500/10 border border-rose-500/30 rounded-2xl p-4">
@@ -509,19 +495,19 @@ export function DonationReconciliation({
         <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-2xl p-4">
           <p className="text-xs text-indigo-300">Total Verified Money</p>
           <p className="text-2xl font-extrabold text-indigo-400">
-            ₹{summary.totalVerifiedAmount.toLocaleString("en-IN")}
+            <Rupee />{summary.totalVerifiedAmount.toLocaleString("en-IN")}
           </p>
         </div>
       </div>
 
       {/* Filter Tabs & Search */}
-      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between bg-card border border-border p-4 rounded-2xl">
         <div className="flex flex-wrap gap-2">
           {[
-            { id: "pending", label: "Pending Queue" },
-            { id: "verified", label: "Verified & Patrons" },
-            { id: "rejected", label: "Rejected" },
-            { id: "all", label: "All Submissions" },
+            { id: "pending", label: `Pending (${summary.pendingCount})` },
+            { id: "verified", label: `Verified (${summary.verifiedCount})` },
+            { id: "rejected", label: `Rejected (${summary.rejectedCount})` },
+            { id: "all", label: "All" },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -529,8 +515,8 @@ export function DonationReconciliation({
               onClick={() => setStatusFilter(tab.id)}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition ${
                 statusFilter === tab.id
-                  ? "bg-indigo-600 text-white"
-                  : "bg-slate-950 text-slate-400 hover:text-white"
+                  ? "bg-indigo-600 text-foreground"
+                  : "bg-background text-muted-foreground hover:text-foreground"
               }`}
             >
               {tab.label}
@@ -539,25 +525,25 @@ export function DonationReconciliation({
         </div>
 
         <div className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             placeholder="Search UTR, Transaction ID, or Name..."
             value={search}
             maxLength={100}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3.5 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white"
+            className="w-full pl-9 pr-3.5 py-1.5 rounded-xl bg-background border border-border text-xs text-foreground"
           />
         </div>
       </div>
 
       {/* Transactions List */}
       {loading ? (
-        <div className="text-center py-12 text-sm text-slate-400">
+        <div className="text-center py-12 text-sm text-muted-foreground">
           Loading UTR & Transaction ID submissions...
         </div>
       ) : transactions.length === 0 ? (
-        <div className="text-center py-12 bg-slate-900/50 border border-slate-800 rounded-2xl text-sm text-slate-400">
+        <div className="text-center py-12 bg-card/50 border border-border rounded-2xl text-sm text-muted-foreground">
           No submissions found in this view.
         </div>
       ) : (
@@ -570,48 +556,48 @@ export function DonationReconciliation({
             return (
               <div
                 key={tx.id}
-                className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4"
+                className="bg-card border border-border rounded-2xl p-5 space-y-4"
               >
                 {/* Top Row: Donor Info + Copyable UTR & Transaction ID */}
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-border pb-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2.5 flex-wrap">
                       <span
                         className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase ${
                           tx.status === "pending"
-                            ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                            ? "bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30"
                             : tx.status === "verified"
-                            ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                            ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30"
                             : "bg-rose-500/20 text-rose-300 border border-rose-500/30"
                         }`}
                       >
                         {tx.status}
                       </span>
-                      <span className="text-base font-bold text-white">{tx.donorName}</span>
+                      <span className="text-base font-bold text-foreground">{tx.donorName || (tx.username ? `@${tx.username}` : "Unnamed Donor")}</span>
                       {tx.username && (
                         <span className="text-xs text-indigo-400">@{tx.username}</span>
                       )}
                       {tx.isAnonymous && (
-                        <span className="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                        <span className="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-foreground">
                           Anonymous on Public Wall
                         </span>
                       )}
                       {tx.isPublishedToPatrons && (
-                        <span className="inline-flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-semibold">
+                        <span className="inline-flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/40 font-semibold">
                           <Award className="w-3 h-3" /> In Hall of Patrons
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-muted-foreground">
                       Submitted: {new Date(tx.createdAt).toLocaleString("en-IN")}
                     </p>
                   </div>
 
                   {/* Copyable UTR & Transaction ID Boxes */}
                   <div className="flex flex-wrap gap-3">
-                    <div className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 flex items-center gap-2.5">
+                    <div className="bg-background border border-border rounded-xl px-3.5 py-2 flex items-center gap-2.5">
                       <div>
-                        <p className="text-[10px] uppercase font-semibold text-slate-500">
+                        <p className="text-[10px] uppercase font-semibold text-muted-foreground">
                           12-Digit UTR
                         </p>
                         <p className="font-mono text-sm font-bold text-indigo-300">{tx.utr}</p>
@@ -619,26 +605,27 @@ export function DonationReconciliation({
                       <button
                         type="button"
                         onClick={() => handleCopyText(tx.utr, "UTR")}
-                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200"
+                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-foreground"
                         title="Copy UTR"
                       >
                         <Copy className="w-3.5 h-3.5" />
                       </button>
                     </div>
 
-                    <div className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 flex items-center gap-2.5">
+                    <div className="bg-background border border-border rounded-xl px-3.5 py-2 flex items-center gap-2.5">
                       <div>
-                        <p className="text-[10px] uppercase font-semibold text-slate-500">
+                        <p className="text-[10px] uppercase font-semibold text-muted-foreground">
                           Transaction ID
                         </p>
-                        <p className="font-mono text-sm font-bold text-emerald-300">
-                          {tx.transactionId}
+                        <p className="font-mono text-sm font-bold text-emerald-700 dark:text-emerald-300">
+                          {tx.transactionId?.trim() || <span className="text-muted-foreground font-normal">Not provided (legacy)</span>}
                         </p>
                       </div>
                       <button
                         type="button"
                         onClick={() => handleCopyText(tx.transactionId, "Transaction ID")}
-                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200"
+                        disabled={!tx.transactionId?.trim()}
+                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-foreground"
                         title="Copy Transaction ID"
                       >
                         <Copy className="w-3.5 h-3.5" />
@@ -654,19 +641,22 @@ export function DonationReconciliation({
                 )}
 
                 {tx.message && (
-                  <div className="text-xs text-slate-300 bg-slate-950/70 p-3 rounded-xl border border-slate-800">
-                    <span className="text-slate-500 font-semibold">Donor Message: </span>
+                  <div className="min-w-0 break-words overflow-hidden text-xs text-foreground bg-background/70 p-3 rounded-xl border border-border">
+                    <span className="text-muted-foreground font-semibold">Donor Message: </span>
                     &ldquo;{tx.message}&rdquo;
                   </div>
                 )}
+
+                {!upiId && canVerifyNow && <div role="alert" className="sm:col-span-2 rounded-lg border border-amber-500/35 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200">Official UPI ID is not configured. <button type="button" onClick={() => setShowSettings(true)} className="underline font-semibold">Open UPI Settings</button> before verifying.</div>}
 
                 {/* Mandatory bank evidence confirmation before any payment is marked verified */}
                 {canVerifyNow && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-xl border border-amber-500/20 bg-amber-950/10 p-3">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1">
+                      <label className="block text-xs font-semibold text-foreground mb-1">
                         Bank Statement UTR / Reference *
                       </label>
+                      <button type="button" onClick={() => setBankReferenceMap((prev) => ({ ...prev, [tx.id]: tx.utr }))} className="mb-1 text-[11px] text-primary underline">Matches Submitted UTR</button>
                       <input
                         type="text"
                         required
@@ -675,13 +665,14 @@ export function DonationReconciliation({
                         placeholder="Re-enter the UTR shown in bank records"
                         value={bankReferenceMap[tx.id] ?? ""}
                         onChange={(e) => setBankReferenceMap((prev) => ({ ...prev, [tx.id]: e.target.value }))}
-                        className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs font-mono text-white"
+                        className="w-full px-3 py-2 rounded-xl bg-background border border-input text-xs font-mono text-foreground"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1">
+                      <label className="block text-xs font-semibold text-foreground mb-1">
                         Recipient VPA in Bank Record *
                       </label>
+                      <button type="button" disabled={!upiId} onClick={() => setRecipientVpaMap((prev) => ({ ...prev, [tx.id]: upiId }))} className="mb-1 text-[11px] text-primary underline disabled:opacity-50">Use Official UPI ID</button>
                       <input
                         type="text"
                         required
@@ -689,7 +680,7 @@ export function DonationReconciliation({
                         placeholder="Enter the credited recipient UPI ID"
                         value={recipientVpaMap[tx.id] ?? ""}
                         onChange={(e) => setRecipientVpaMap((prev) => ({ ...prev, [tx.id]: e.target.value }))}
-                        className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs font-mono text-white"
+                        className="w-full px-3 py-2 rounded-xl bg-background border border-input text-xs font-mono text-foreground"
                       />
                     </div>
                     <p className="sm:col-span-2 text-[11px] text-amber-200/80">
@@ -701,8 +692,8 @@ export function DonationReconciliation({
                 {/* Admin Manual Amount Input & Hall of Patrons Controls */}
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
                   <div className="md:col-span-3">
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">
-                      Enter Amount Received (₹) *
+                    <label className="block text-xs font-semibold text-foreground mb-1">
+                      Enter Amount Received (<Rupee />) *
                     </label>
                     <div className="relative">
                       <IndianRupee className="w-3.5 h-3.5 text-emerald-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -716,13 +707,13 @@ export function DonationReconciliation({
                         onChange={(e) =>
                           setAmountMap((prev) => ({ ...prev, [tx.id]: e.target.value }))
                         }
-                        className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-sm font-bold text-emerald-400 disabled:opacity-60 focus:outline-none focus:border-emerald-500"
+                        className="w-full pl-8 pr-3 py-2 rounded-xl bg-background border border-input text-sm font-bold text-emerald-400 disabled:opacity-60 focus:outline-none focus:border-emerald-500"
                       />
                     </div>
                   </div>
 
                   <div className="md:col-span-2">
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    <label className="block text-xs font-semibold text-foreground mb-1">
                       Patron Tier
                     </label>
                     <select
@@ -731,19 +722,19 @@ export function DonationReconciliation({
                       onChange={(e) =>
                         setTierMap((prev) => ({ ...prev, [tx.id]: e.target.value }))
                       }
-                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white disabled:opacity-60"
+                      className="w-full px-3 py-2 rounded-xl bg-background border border-input text-xs text-foreground disabled:opacity-60"
                     >
-                      <option value="AUTO">Auto (From ₹ Amount)</option>
-                      <option value="LEGEND">👑 Legend (₹5000+)</option>
-                      <option value="DIAMOND">💎 Diamond (₹2000+)</option>
-                      <option value="GOLD">🥇 Gold (₹500+)</option>
-                      <option value="SILVER">🥈 Silver (₹100+)</option>
+                      <option value="AUTO">Auto (From INR Amount)</option>
+                      <option value="LEGEND">👑 Legend (INR 5,000+)</option>
+                      <option value="DIAMOND">💎 Diamond (INR 2,000+)</option>
+                      <option value="GOLD">🥇 Gold (INR 500+)</option>
+                      <option value="SILVER">🥈 Silver (INR 100+)</option>
                       <option value="SUPPORTER">❤️ Supporter</option>
                     </select>
                   </div>
 
                   <div className="md:col-span-3">
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    <label className="block text-xs font-semibold text-foreground mb-1">
                       Admin Verification Note
                     </label>
                     <input
@@ -753,14 +744,14 @@ export function DonationReconciliation({
                       onChange={(e) =>
                         setNoteMap((prev) => ({ ...prev, [tx.id]: e.target.value }))
                       }
-                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white"
+                      className="w-full px-3 py-2 rounded-xl bg-background border border-border text-xs text-foreground"
                     />
                   </div>
 
                   <div className="md:col-span-4 flex flex-wrap items-center justify-end gap-2">
                     {canVerifyNow && (
                       <>
-                        <label className="flex items-center gap-2 text-xs text-slate-300 mr-2 cursor-pointer">
+                        <label className="flex items-center gap-2 text-xs text-foreground mr-2 cursor-pointer">
                           <input
                             type="checkbox"
                             checked={Boolean(publishMap[tx.id])}
@@ -771,7 +762,7 @@ export function DonationReconciliation({
                                 [tx.id]: e.target.checked,
                               }))
                             }
-                            className="rounded border-slate-700 bg-slate-950 text-indigo-600"
+                            className="rounded border-input bg-background text-indigo-600"
                           />
                           <span>Add to Hall of Patrons</span>
                         </label>
@@ -780,10 +771,10 @@ export function DonationReconciliation({
                           type="button"
                           disabled={busy}
                           onClick={() => handleVerifyAndSave(tx)}
-                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-xs font-bold text-white transition"
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-xs font-bold text-foreground transition"
                         >
                           <CheckCircle2 className="w-3.5 h-3.5" />
-                          {needsSyncRecovery ? "Retry Donor Sync" : "Verify & Save ₹"}
+                          {needsSyncRecovery ? "Retry Donor Sync" : "Verify & Save INR"}
                         </button>
                       </>
                     )}
@@ -795,7 +786,7 @@ export function DonationReconciliation({
                         onClick={() => handleTogglePatron(tx)}
                         className={`px-3 py-2 rounded-xl text-xs font-semibold border transition ${
                           tx.isPublishedToPatrons
-                            ? "bg-amber-500/10 border-amber-500/40 text-amber-300"
+                            ? "bg-amber-500/10 border-amber-500/40 text-amber-700 dark:text-amber-300"
                             : "bg-indigo-500/10 border-indigo-500/40 text-indigo-300"
                         }`}
                       >
@@ -824,13 +815,13 @@ export function DonationReconciliation({
         </div>
       )}
 
-      <section className="space-y-4 border-t border-slate-800 pt-8">
+      <section className="space-y-4 border-t border-border pt-8">
         <div>
-          <h3 className="text-xl font-extrabold text-white">Hall of Patrons Manager</h3>
-          <p className="text-xs text-slate-400">Edit the confirmed amount, tier, display name and message, or hide a patron from the public list.</p>
+          <h3 className="text-xl font-extrabold text-foreground">Hall of Patrons Manager</h3>
+          <p className="text-xs text-muted-foreground">Edit the confirmed amount, tier, display name and message, or hide a patron from the public list.</p>
         </div>
         {patrons.length === 0 ? (
-          <p className="rounded-xl border border-slate-800 bg-slate-900/50 p-4 text-sm text-slate-400">No patron entries exist yet.</p>
+          <p className="rounded-xl border border-border bg-card/50 p-4 text-sm text-muted-foreground">No patron entries exist yet.</p>
         ) : patrons.map((patron) => {
           const edit = patronEdits[patron.id] || {
             name: patron.name || "",
@@ -840,12 +831,12 @@ export function DonationReconciliation({
             isAnonymous: Boolean(patron.isAnonymous),
           };
           return (
-            <article key={patron.id} className="grid gap-3 rounded-xl border border-slate-800 bg-slate-900 p-4 sm:grid-cols-2 lg:grid-cols-5">
+            <article key={patron.id} className="grid gap-3 rounded-xl border border-border bg-card p-4 sm:grid-cols-2 lg:grid-cols-5">
               <label className="space-y-1 text-xs">
                 <span className="flex items-center gap-2">
                   Display name
                   {!patron.isVisible && (
-                    <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-400">
+                    <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-muted-foreground">
                       Hidden
                     </span>
                   )}
@@ -853,18 +844,18 @@ export function DonationReconciliation({
                 <input
                   value={edit.name}
                   onChange={(e) => setPatronEdits((p) => ({ ...p, [patron.id]: { ...edit, name: e.target.value } }))}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
                 />
               </label>
               <label className="space-y-1 text-xs">
-                Confirmed amount (₹)
+                Confirmed amount (<Rupee />)
                 <input
                   type="number"
                   min="1"
                   step="0.01"
                   value={edit.amount}
                   onChange={(e) => setPatronEdits((p) => ({ ...p, [patron.id]: { ...edit, amount: e.target.value } }))}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
                 />
               </label>
               <label className="space-y-1 text-xs">
@@ -872,7 +863,7 @@ export function DonationReconciliation({
                 <select
                   value={edit.tier}
                   onChange={(e) => setPatronEdits((p) => ({ ...p, [patron.id]: { ...edit, tier: e.target.value } }))}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
                 >
                   <option value="LEGEND">LEGEND</option>
                   <option value="DIAMOND">DIAMOND</option>
@@ -887,7 +878,7 @@ export function DonationReconciliation({
                   value={edit.message}
                   onChange={(e) => setPatronEdits((p) => ({ ...p, [patron.id]: { ...edit, message: e.target.value } }))}
                   maxLength={250}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
                 />
               </label>
               <div className="flex flex-wrap items-end gap-2">
@@ -903,7 +894,7 @@ export function DonationReconciliation({
                   type="button"
                   disabled={busyId === patron.id}
                   onClick={() => void handleSavePatron(patron.id)}
-                  className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                  className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-foreground disabled:opacity-50"
                 >
                   Save
                 </button>
@@ -921,6 +912,32 @@ export function DonationReconciliation({
         })}
       </section>
     </div>
+      <Dialog open={confirmationOpen} onOpenChange={setConfirmationOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{confirmationKind === "reject" ? "Reject donation?" : "Hide patron?"}</DialogTitle>
+            <DialogDescription>
+              {confirmationKind === "reject" && confirmationTx
+                ? <>Reject {confirmationTx.donorName || (confirmationTx.username ? `@${confirmationTx.username}` : "Unnamed Donor")} (UTR {confirmationTx.utr})?</>
+                : "This patron will be hidden from the public Hall of Patrons."}
+            </DialogDescription>
+          </DialogHeader>
+          {confirmationKind === "reject" && <>
+            <div className="flex flex-wrap gap-2">
+              {["UTR not found in bank statement", "Duplicate / invalid reference", "Payment not received", "Test / accidental submission"].map((reason) => (
+                <button key={reason} type="button" onClick={() => setConfirmationNote(reason)} className="rounded-full border border-border px-3 py-1.5 text-xs hover:bg-muted">{reason}</button>
+              ))}
+            </div>
+            <Textarea value={confirmationNote} onChange={(e) => setConfirmationNote(e.target.value)} maxLength={500} placeholder="Optional rejection note" />
+          </>}
+          <DialogFooter>
+            <button type="button" onClick={() => setConfirmationOpen(false)} className="rounded-md border border-border px-4 py-2 text-sm">Cancel</button>
+            <button type="button" disabled={Boolean(busyId)} onClick={() => void confirmPendingAction()} className="rounded-md bg-destructive px-4 py-2 text-sm font-semibold text-destructive-foreground disabled:opacity-50">
+              {busyId ? "Processing..." : confirmationKind === "reject" ? "Confirm Reject" : "Confirm Hide"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
   );
 }
 
