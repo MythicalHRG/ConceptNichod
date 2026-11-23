@@ -25,9 +25,9 @@ export function hasPlatformOwnerIdentity(
  * and normalized owner email are all checked before the atomic role update.
  */
 export async function ensurePlatformOwnerRole<T extends PlatformOwnerIdentity>(
-  user: T | null | undefined
-): Promise<T | null | undefined> {
-  if (!user || !hasPlatformOwnerIdentity(user) || user.role === "owner") return user;
+  user: T
+): Promise<T> {
+  if (!hasPlatformOwnerIdentity(user) || user.role === "owner") return user;
   if (typeof user.uuid !== "string" || !user.uuid.trim() || typeof user.email !== "string") return user;
 
   const result = await User.updateOne(

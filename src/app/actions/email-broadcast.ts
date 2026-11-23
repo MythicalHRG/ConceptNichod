@@ -1,6 +1,6 @@
 "use server";
 
-import { isPlatformOwner, PLATFORM_OWNER_EMAIL } from "@/lib/owner-access";
+import { ensurePlatformOwnerRole, isPlatformOwner, PLATFORM_OWNER_EMAIL } from "@/lib/owner-access";
 import { cookies } from "next/headers";
 import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";

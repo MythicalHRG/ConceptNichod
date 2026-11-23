@@ -2,6 +2,7 @@
 
 import mongoose from "mongoose";
 import {
+  ensurePlatformOwnerRole,
   isPlatformOwner,
   PLATFORM_OWNER_EMAIL,
   PLATFORM_OWNER_USERNAME,
