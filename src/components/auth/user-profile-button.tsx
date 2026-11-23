@@ -413,11 +413,6 @@ export function UserProfileButton() {
                       className={isMythical ? "bg-muted text-muted-foreground cursor-not-allowed" : ""}
                       required
                     />
-                    {isMythical && (
-                      <p className="text-[11px] text-amber-500">
-                        Platform owner username is locked to preserve access.
-                      </p>
-                    )}
                   </div>
                   <div className="space-y-1">
                     <label className="text-sm font-medium">Email Address</label>
@@ -638,16 +633,7 @@ export function UserProfileButton() {
                 </div>
 
                 {/* Change Email Section */}
-                {isMythical ? (
-                  <div className="border border-amber-500/40 rounded-xl p-4 bg-amber-500/10 space-y-2">
-                    <div className="flex items-center gap-2 font-semibold text-sm text-amber-300">
-                      <ShieldAlert className="w-4 h-4 text-amber-400" /> Platform Owner Email Protected
-                    </div>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      The root platform owner email for <strong>@{user.username}</strong> cannot be changed via self-service.
-                    </p>
-                  </div>
-                ) : (
+                {isMythical ? null : (
                   <div className="border border-destructive/30 rounded-lg p-4 bg-destructive/5 space-y-3">
                     <div className="space-y-1">
                       <h4 className="text-sm font-semibold text-destructive flex items-center gap-2">
@@ -755,16 +741,7 @@ export function UserProfileButton() {
                 )}
 
                 {/* Account Deletion Section */}
-                {isMythical ? (
-                  <div className="border border-amber-500/40 rounded-xl p-4 bg-amber-500/10 space-y-2">
-                    <div className="flex items-center gap-2 font-semibold text-sm text-amber-300">
-                      <ShieldAlert className="w-4 h-4 text-amber-400" /> Platform Owner Account Protected
-                    </div>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      The root platform owner account <strong>@{user.username}</strong> is permanently protected and cannot be deleted.
-                    </p>
-                  </div>
-                ) : (
+                {isMythical ? null : (
                   <div className="border border-destructive/30 rounded-xl p-4 bg-destructive/5 space-y-4">
                     <div className="space-y-1">
                       <h4 className="text-sm font-semibold text-destructive flex items-center gap-2">
