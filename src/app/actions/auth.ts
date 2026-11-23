@@ -459,16 +459,16 @@ export async function meAction() {
         if (!sessionUuid) return { user: null };
 
         await dbConnect();
-        let user = await User.findOne({ uuid: sessionUuid }).select(SAFE_USER_PROJECTION).lean();
+        let fetchedUser = await User.findOne({ uuid: sessionUuid }).select(SAFE_USER_PROJECTION).lean();
 
         // Resilience: if the connection was still initializing, retry lookup once
-        if (!user && mongoose.connection.readyState !== 1) {
+        if (!fetchedUser && mongoose.connection.readyState !== 1) {
             await dbConnect();
-            user = await User.findOne({ uuid: sessionUuid }).select(SAFE_USER_PROJECTION).lean();
+            fetchedUser = await User.findOne({ uuid: sessionUuid }).select(SAFE_USER_PROJECTION).lean();
         }
 
-        if (!user) return { user: null };
-        user = await ensurePlatformOwnerRole(user);
+        if (!fetchedUser) return { user: null };
+        const user = await ensurePlatformOwnerRole(fetchedUser);
 
         const ip = await getClientIp();
         if (!isPlatformOwner(user) && await isAccountBlacklisted(user.email, user.username, ip)) {
