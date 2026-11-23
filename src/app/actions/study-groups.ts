@@ -455,7 +455,10 @@ export async function sendDirectMessageAction(targetUsername: string, body: stri
 }
 
 export async function adminDeleteStudyGroupAction(groupId: string) {
-  await requirePlatformOwner();
+  const user = await requirePlatformOwner();
+  if (!isPlatformOwner(user)) {
+    throw new Error("Forbidden: Only @mythicalhrg is authorized to delete study groups.");
+  }
 
   if (typeof groupId !== "string" || !mongoose.isValidObjectId(groupId)) {
     throw new Error("Valid Group ID is required.");
