@@ -134,8 +134,8 @@ test("Tareeka 16: Admin role isolation requires the canonical owner role and bot
     const at = email.lastIndexOf("@");
     if (at <= 0) return email;
     let local = email.slice(0, at).split("+")[0];
-    const domain = email.slice(at + 1).replace(/\\.+$/, "");
-    if (domain === "gmail.com" || domain === "googlemail.com") local = local.replace(/\\./g, "");
+    const domain = email.slice(at + 1).replace(/\.+$/, "");
+    if (domain === "gmail.com" || domain === "googlemail.com") local = local.replace(/\./g, "");
     return local + "@" + domain;
   }
 
