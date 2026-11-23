@@ -460,7 +460,7 @@ export async function adminVerifyDonationAndSetAmount(payload: {
     if (!configuredVpa) {
       return { success: false, error: "Configure your Official UPI ID in UPI Settings first before verifying donations." };
     }
-    if (!recipientVpa || recipientVpa.trim().toLowerCase() !== configuredVpa.trim().toLowerCase()) {
+    if (!recipientVpa || recipientVpa !== configuredVpa) {
       return { success: false, error: "Recipient VPA does not match your configured Official UPI ID." };
     }
 
