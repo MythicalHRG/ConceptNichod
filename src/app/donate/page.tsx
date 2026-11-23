@@ -265,7 +265,6 @@ export default function DonatePage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Step 1: Direct UPI Card */}
           <div className="lg:col-span-5 bg-card/90 border border-border rounded-2xl p-6 sm:p-8 space-y-6">
-            <>
                <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-300">
                     Step 1 • Pay via Official UPI ID
@@ -308,9 +307,7 @@ export default function DonatePage() {
                     After paying, retain your 12-digit UTR and payment-app Transaction ID. The Admin checks the bank record and recipient account before verifying a submission.
                   </p>
                 </div>
-              </>
-            </>}
-          </div>
+            </div>
 
           {/* Step 2: Submit UTR + Transaction ID Form */}
           <form
