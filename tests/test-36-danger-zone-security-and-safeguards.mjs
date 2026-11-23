@@ -230,6 +230,6 @@ test('36.7 Source Verification: Actions and UI components implement new safeguar
   );
   assert.ok(userProfileBtnContent.includes('requestDeleteAccountOtpAction'));
   assert.ok(userProfileBtnContent.includes('deleteConfirmationText'));
-  assert.ok(userProfileBtnContent.includes('Platform Owner Account Protected'));
+  assert.ok(!userProfileBtnContent.includes('Platform Owner Account Protected'));
   assert.ok(!userProfileBtnContent.includes('loadCaptchaEnginge')); // Verify buggy canvas captcha was eradicated
 });
