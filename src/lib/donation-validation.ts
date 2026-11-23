@@ -68,7 +68,7 @@ export function normalizeVpa(value: unknown): string | null {
   if (typeof value !== "string" || value.length === 0 || value !== value.trim()) return null;
   const v = value.toLowerCase();
   if (!/^[a-zA-Z0-9._-]{2,64}@[a-zA-Z0-9.-]{2,64}$/.test(value)) return null;
-  if (/[<>\\s/\\\\:]/.test(value) || value.includes("..") || value.includes("@." ) || value.endsWith(".")) return null;
+  if (/[<>\s/\\:]/.test(value) || value.includes("..") || value.includes("@.") || value.endsWith(".")) return null;
   if (/^(?:example|yourname|test|placeholder)@(?:upi|ybl|okaxis|oksbi|okhdfcbank|okicici|paytm|ibl|axl|ptyes|ptaxis)$/i.test(v)) return null;
   return v;
 }
