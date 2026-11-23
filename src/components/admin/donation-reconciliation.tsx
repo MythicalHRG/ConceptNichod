@@ -653,6 +653,21 @@ export function DonationReconciliation({
 
                 {inlineErrorMap[tx.id] && <div role="alert" className="rounded-lg border border-destructive/35 bg-destructive/10 px-3 py-2 text-xs text-destructive">{inlineErrorMap[tx.id]}</div>}
 
+                {tx.status !== "pending" && (
+                  <div className="min-w-0 break-words rounded-xl border border-border bg-muted/30 p-3 text-xs space-y-1">
+                    {tx.status === "verified" && (
+                      <p className="font-semibold text-emerald-800 dark:text-emerald-300">
+                        Verified amount: <Rupee amount={tx.verifiedAmount ?? 0} /> · Patron tier: {tx.patronTier || "SUPPORTER"}
+                      </p>
+                    )}
+                    <p className="text-muted-foreground">
+                      {tx.status === "verified" ? "Verified" : "Rejected"}: {tx.verifiedAt ? new Date(tx.verifiedAt).toLocaleString("en-IN") : "Timestamp unavailable"}
+                      {tx.verifiedBy ? ` · By ${tx.verifiedBy}` : ""}
+                    </p>
+                    {tx.adminNote && <p className="break-words"><span className="font-semibold">Admin note:</span> {tx.adminNote}</p>}
+                  </div>
+                )}
+
                 {/* Mandatory bank evidence confirmation before any payment is marked verified */}
                 {canVerifyNow && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-xl border border-amber-500/20 bg-amber-950/10 p-3">
