@@ -928,7 +928,7 @@ export async function getAdminDonationSettingsAction() {
     settings: {
       upiId: (settings as any)?.upiId || "",
       qrCodeUrl: "",
-      isEnabled: (settings as any)?.isEnabled !== false,
+      isEnabled: true,
     },
   };
 }
