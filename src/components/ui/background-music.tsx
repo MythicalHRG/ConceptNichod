@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { Volume2, VolumeX } from "lucide-react";
 import { Button } from "./button";
 
-const STORAGE_KEY = "cn_music_btn_pos_v1";
+const STORAGE_KEY = "cn_music_btn_pos_v2";
 const BUTTON_SIZE = 44;
 const EDGE_MARGIN = 12;
 const DRAG_THRESHOLD_PX = 6;
@@ -17,7 +17,8 @@ interface Position {
 function clampPosition(x: number, y: number): Position {
   if (typeof window === "undefined") return { x, y };
   const maxX = Math.max(EDGE_MARGIN, window.innerWidth - BUTTON_SIZE - EDGE_MARGIN);
-  const maxY = Math.max(EDGE_MARGIN, window.innerHeight - BUTTON_SIZE - EDGE_MARGIN);
+  const mobileBottomClearance = window.innerWidth < 768 ? 84 : 0;
+  const maxY = Math.max(EDGE_MARGIN, window.innerHeight - BUTTON_SIZE - EDGE_MARGIN - mobileBottomClearance);
   return {
     x: Math.min(Math.max(EDGE_MARGIN, x), maxX),
     y: Math.min(Math.max(EDGE_MARGIN, y), maxY),
@@ -278,7 +279,7 @@ export function BackgroundMusic() {
       className={
         position
           ? "fixed z-40 touch-none select-none"
-          : "fixed bottom-[calc(1rem+env(safe-area-inset-bottom,0px))] left-[calc(1rem+env(safe-area-inset-left,0px))] z-40 touch-none select-none"
+          : "fixed bottom-[calc(5.25rem+env(safe-area-inset-bottom,0px))] left-[calc(1rem+env(safe-area-inset-left,0px))] md:bottom-[calc(1.25rem+env(safe-area-inset-bottom,0px))] md:left-auto md:right-[5.5rem] z-40 touch-none select-none"
       }
     >
       <Button
