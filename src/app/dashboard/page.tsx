@@ -105,7 +105,7 @@ export default async function DashboardPage() {
     <div className="space-y-10 pb-10">
       <div className="flex items-center gap-2 pl-1">
         <Logo className="size-8" />
-        <h2 className="text-lg font-headline font-bold tracking-tight">Zirconel</h2>
+        <h2 className="text-lg font-headline font-bold tracking-tight">ConceptNichod</h2>
       </div>
       {/* User Profile Hero Card */}
       <Card className="bg-secondary/30 border-primary/20 shadow-sm relative overflow-hidden">
