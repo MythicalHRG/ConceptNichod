@@ -67,7 +67,7 @@ async function requireOwnerSession() {
   await connectToDatabase();
   const sessionUuid = verifySessionCookie((await cookies()).get("user_session")?.value);
   if (!sessionUuid) throw new Error("Unauthorized: Please log in as Admin.");
-  const fetchedAdminUser = await User.findOne({ uuid: sessionUuid }).select("uuid username role email").lean();
+  const fetchedAdminUser = await User.findOne({ uuid: sessionUuid }).select("uuid username email role").lean();
   const adminUser = fetchedAdminUser ? await ensurePlatformOwnerRole(fetchedAdminUser) : fetchedAdminUser;
   if (!isPlatformOwner(adminUser)) throw new Error("Forbidden: Owner privileges required.");
   return adminUser;
@@ -449,15 +449,19 @@ export async function adminVerifyDonationAndSetAmount(payload: {
 
     // An admin-entered amount is not proof of payment. Require explicit bank-record
     // reference and recipient VPA confirmation before changing a transaction to verified.
-    const bankReference = sanitizeDonationText(payload.bankReference || "", 60).replace(/\s+/g, "");
-    if (!bankReference || bankReference !== String(tx.utr)) {
-      return { success: false, error: "Bank statement reference must exactly match the submitted UTR." };
+    const bankReference = sanitizeDonationText(payload.bankReference || "", 60).replace(/\D/g, "");
+    const submittedUtr = String(tx.utr || "").replace(/\D/g, "");
+    if (!bankReference || bankReference !== submittedUtr) {
+      return { success: false, error: "Bank statement UTR does not match the submitted 12-digit UTR." };
     }
     const settings = await DonationSetting.findOne().select("upiId").lean();
     const configuredVpa = normalizeVpa((settings as any)?.upiId);
     const recipientVpa = normalizeVpa(sanitizeDonationText(payload.recipientVpa || "", 100));
-    if (!configuredVpa || !recipientVpa || recipientVpa !== configuredVpa) {
-      return { success: false, error: "Recipient VPA must match the configured donation account and the bank record." };
+    if (!configuredVpa) {
+      return { success: false, error: "Configure your Official UPI ID in UPI Settings first before verifying donations." };
+    }
+    if (!recipientVpa || recipientVpa.trim().toLowerCase() !== configuredVpa.trim().toLowerCase()) {
+      return { success: false, error: "Recipient VPA does not match your configured Official UPI ID." };
     }
 
     if (isDonorSyncRecovery && Number(tx.verifiedAmount) !== confirmedAmount) {
@@ -512,7 +516,7 @@ export async function adminVerifyDonationAndSetAmount(payload: {
         userId: tx.userId || null,
         userUuid: tx.userId || null,
         username: tx.username || null,
-        name: tx.donorName,
+        name: (tx.donorName || "").trim() || (tx.username ? `@${tx.username}` : "Supporter"),
         amount: confirmedAmount,
         tier,
         message: tx.message || "",
@@ -539,9 +543,11 @@ export async function adminVerifyDonationAndSetAmount(payload: {
       await Donor.findByIdAndUpdate(tx.donorRecordId, { $set: { isVisible: false, isPublic: false } });
     }
 
-    // Keep the bank-verified status if patron sync fails. A retry is safe because
-    // the deterministic donor UUID prevents duplicate credits.
-    await tx.save();
+    // The transaction was atomically claimed above. Persist only the donor link
+    // so legacy documents missing newly-required fields never re-enter validation.
+    if (tx.isPublishedToPatrons && tx.donorRecordId) {
+      await DonationTransaction.findByIdAndUpdate(tx._id, { $set: { donorRecordId: tx.donorRecordId } });
+    }
 
     revalidatePath("/donate");
     revalidatePath("/dashboard/admin");
@@ -598,7 +604,7 @@ export async function adminToggleHallOfPatrons(
         userId: tx.userId || null,
         userUuid: tx.userId || null,
         username: tx.username || null,
-        name: tx.donorName,
+        name: (tx.donorName || "").trim() || (tx.username ? `@${tx.username}` : "Supporter"),
         amount: tx.verifiedAmount,
         tier,
         message: tx.message || "",
@@ -625,7 +631,14 @@ export async function adminToggleHallOfPatrons(
       await Donor.findByIdAndUpdate(tx.donorRecordId, { $set: { isVisible: false, isPublic: false } });
     }
 
-    await tx.save();
+    await DonationTransaction.findByIdAndUpdate(tx._id, {
+      $set: {
+        isPublishedToPatrons: Boolean(publish),
+        isPublic: Boolean(publish),
+        patronTier: tier,
+        ...(tx.donorRecordId ? { donorRecordId: tx.donorRecordId } : {}),
+      },
+    });
 
     revalidatePath("/donate");
     revalidatePath("/dashboard/admin");
@@ -660,32 +673,36 @@ export async function adminRejectDonationTransaction(
       return { success: false, error: "Invalid transaction ID." };
     }
 
-    const tx = await DonationTransaction.findById(transactionDbId);
+    const tx = await DonationTransaction.findById(transactionDbId).select("_id utr donorRecordId");
     if (!tx) {
       return { success: false, error: "Transaction not found." };
     }
 
-    tx.status = "rejected";
-    tx.verifiedAmount = null;
-    tx.amount = null;
-    tx.patronTier = null;
-    tx.bankReference = null;
-    tx.recipientVpa = null;
-    tx.verificationMethod = null;
-    tx.isPublishedToPatrons = false;
-    tx.isPublic = false;
-    tx.adminNote = sanitizeDonationText(
+    const rejectionNote = sanitizeDonationText(
       adminNote || "UTR / Transaction ID could not be verified in bank statement.",
       500
     );
-    tx.verifiedBy = (adminUser as any).username || "Admin";
-    tx.verifiedAt = new Date();
+    // Atomic field-only update deliberately bypasses validation of legacy
+    // required fields (transactionId / donorName) absent from older documents.
+    const rejected = await DonationTransaction.findOneAndUpdate(
+      { _id: tx._id },
+      {
+        $set: {
+          status: "rejected",
+          isPublishedToPatrons: false,
+          isPublic: false,
+          adminNote: rejectionNote,
+          verifiedBy: (adminUser as any).username || "Admin",
+          verifiedAt: new Date(),
+        },
+      },
+      { new: true }
+    );
+    if (!rejected) return { success: false, error: "Transaction could not be found for rejection." };
 
     if (tx.donorRecordId && mongoose.isValidObjectId(tx.donorRecordId)) {
       await Donor.findByIdAndUpdate(tx.donorRecordId, { $set: { isVisible: false, isPublic: false } });
     }
-
-    await tx.save();
 
     revalidatePath("/donate");
     revalidatePath("/dashboard/admin");
