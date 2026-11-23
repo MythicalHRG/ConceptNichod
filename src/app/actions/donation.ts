@@ -543,6 +543,7 @@ export async function adminVerifyDonationAndSetAmount(payload: {
       await Donor.findByIdAndUpdate(tx.donorRecordId, { $set: { isVisible: false, isPublic: false } });
     }
 
+    // Keep the bank-verified status if patron sync fails; retrying the donor link is safe.
     // The transaction was atomically claimed above. Persist only the donor link
     // so legacy documents missing newly-required fields never re-enter validation.
     if (tx.isPublishedToPatrons && tx.donorRecordId) {
