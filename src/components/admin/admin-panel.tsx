@@ -147,6 +147,7 @@ export function AdminPanel() {
   const [changelogs, setChangelogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyActionId, setBusyActionId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ kind: "user" | "broadcast" | "changelog"; id: string } | null>(null);
 
   // Bans state
   const [banType, setBanType] = useState<"ip" | "email" | "username">("email");
@@ -279,9 +280,8 @@ export function AdminPanel() {
     );
   });
 
-  const handleDeleteUser = async (uuid: string) => {
+  const performDeleteUser = async (uuid: string) => {
     if (busyActionId) return;
-    if (!confirm("Are you sure you want to permanently delete this user?")) return;
     setBusyActionId(uuid);
     try {
       await deleteUserAction(uuid);
@@ -403,9 +403,8 @@ export function AdminPanel() {
     }
   };
 
-  const handleDeleteBroadcast = async (id: string) => {
+  const performDeleteBroadcast = async (id: string) => {
     if (busyActionId) return;
-    if (!confirm("Are you sure you want to delete this broadcast?")) return;
     setBusyActionId(id);
     try {
       await deleteBroadcastAction(id);
@@ -578,9 +577,8 @@ export function AdminPanel() {
     }
   };
 
-  const handleDeleteChangelog = async (id: string) => {
+  const performDeleteChangelog = async (id: string) => {
     if (busyActionId) return;
-    if (!confirm("Are you sure you want to delete this changelog entry?")) return;
     setBusyActionId(id);
     try {
       await deleteChangelogAction(id);
@@ -591,6 +589,19 @@ export function AdminPanel() {
     } finally {
       setBusyActionId(null);
     }
+  };
+
+  const handleDeleteUser = (id: string) => setPendingDelete({ kind: "user", id });
+  const handleDeleteBroadcast = (id: string) => setPendingDelete({ kind: "broadcast", id });
+  const handleDeleteChangelog = (id: string) => setPendingDelete({ kind: "changelog", id });
+
+  const confirmPendingDelete = async () => {
+    const pending = pendingDelete;
+    if (!pending) return;
+    setPendingDelete(null);
+    if (pending.kind === "user") await performDeleteUser(pending.id);
+    else if (pending.kind === "broadcast") await performDeleteBroadcast(pending.id);
+    else await performDeleteChangelog(pending.id);
   };
 
   if (loading) {
@@ -1387,7 +1398,7 @@ export function AdminPanel() {
               <div className="space-y-1">
                 <h3 className="text-base font-bold">Accepting Donations</h3>
                 <p className="text-sm text-muted-foreground">Control whether new donation submissions are accepted.</p>
-                <Badge className={donationsEnabled ? "bg-emerald-600 text-white" : "bg-amber-600 text-white"}>
+                <Badge className={donationsEnabled ? "bg-emerald-600 text-emerald-50 dark:text-white" : "bg-amber-600 text-amber-50 dark:text-white"}>
                   {donationsEnabled ? "ENABLED (LIVE)" : "DISABLED (PAUSED)"}
                 </Badge>
               </div>
@@ -1501,7 +1512,7 @@ export function AdminPanel() {
                           <h4 className="font-semibold text-sm text-foreground truncate max-w-xs sm:max-w-md">
                             {group.name}
                           </h4>
-                          <Badge variant="outline" className="text-[10px] bg-cyan-500/10 border-cyan-500/30 text-cyan-300">
+                          <Badge variant="outline" className="text-[10px] bg-cyan-500/10 border-cyan-500/30 text-cyan-700 dark:text-cyan-300">
                             {group.subject}
                           </Badge>
                           <Badge variant="outline" className="text-[10px] bg-primary/10 border-primary/20 text-primary">
@@ -1534,7 +1545,7 @@ export function AdminPanel() {
                             <Users className="w-3 h-3" /> {group.memberCount} {group.memberCount === 1 ? "member" : "members"}
                           </span>
                           <span>•</span>
-                          <span className="flex items-center gap-1 text-emerald-300 font-mono">
+                          <span className="flex items-center gap-1 text-emerald-700 dark:text-emerald-300 font-mono">
                             <MessageSquare className="w-3 h-3" /> {group.messageCount} messages
                           </span>
                           <span>•</span>
@@ -1672,8 +1683,8 @@ export function AdminPanel() {
                 </p>
               </div>
 
-              <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300">
-                🔒 Security Note: Only platform owner @mythicalhrg is authorized to modify user credentials.
+              <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-700 dark:text-amber-300">
+                
               </div>
             </div>
 
@@ -1693,6 +1704,26 @@ export function AdminPanel() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!pendingDelete} onOpenChange={(open) => !open && setPendingDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm deletion</DialogTitle>
+            <DialogDescription>
+              {pendingDelete?.kind === "user" ? "Permanently delete this user and associated data?" :
+               pendingDelete?.kind === "broadcast" ? "Delete this broadcast?" :
+               "Delete this changelog entry?"}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setPendingDelete(null)} disabled={!!busyActionId}>Cancel</Button>
+            <Button type="button" variant="destructive" onClick={() => void confirmPendingDelete()} disabled={!!busyActionId}>
+              {busyActionId ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+              Confirm Delete
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
