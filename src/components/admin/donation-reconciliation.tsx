@@ -396,7 +396,7 @@ export function DonationReconciliation({
       <div className="rounded-2xl border border-indigo-500/30 bg-card p-4 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h3 className="text-sm font-bold text-foreground">Accepting Donations</h3>
-          <span className={effectiveDonationsEnabled ? "inline-flex mt-1 rounded-full bg-emerald-500/15 px-2.5 py-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300" : "inline-flex mt-1 rounded-full bg-amber-500/15 px-2.5 py-1 text-[10px] font-bold text-amber-700 dark:text-amber-300"}>
+          <span className={effectiveDonationsEnabled ? "inline-flex mt-1 rounded-full bg-emerald-500/15 px-2.5 py-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-700 dark:text-emerald-300" : "inline-flex mt-1 rounded-full bg-amber-500/15 px-2.5 py-1 text-[10px] font-bold text-amber-700 dark:text-amber-300"}>
             {effectiveDonationsEnabled ? "ENABLED (LIVE)" : "DISABLED (PAUSED)"}
           </span>
         </div>
@@ -417,7 +417,7 @@ export function DonationReconciliation({
           <button
             type="button"
             onClick={() => setShowSettings(!showSettings)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-foreground"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-secondary hover:bg-secondary/80 text-xs font-semibold text-foreground"
           >
             <Settings className="w-4 h-4" />
             UPI Settings
@@ -425,7 +425,7 @@ export function DonationReconciliation({
           <button
             type="button"
             onClick={loadDashboard}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-foreground"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-semibold"
           >
             <RefreshCw className="w-4 h-4" />
             Refresh Queue
@@ -471,7 +471,7 @@ export function DonationReconciliation({
           <button
             type="submit"
             disabled={savingSettings}
-            className="py-2 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-xs font-bold text-foreground"
+            className="py-2 px-4 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 text-xs font-bold"
           >
             {savingSettings ? "Saving..." : "Save UPI Settings"}
           </button>
@@ -489,11 +489,11 @@ export function DonationReconciliation({
           <p className="text-2xl font-extrabold text-emerald-400">{summary.verifiedCount}</p>
         </div>
         <div className="bg-rose-500/10 border border-rose-500/30 rounded-2xl p-4">
-          <p className="text-xs text-rose-300">Rejected</p>
+          <p className="text-xs text-rose-700 dark:text-rose-300">Rejected</p>
           <p className="text-2xl font-extrabold text-rose-400">{summary.rejectedCount}</p>
         </div>
         <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-2xl p-4">
-          <p className="text-xs text-indigo-300">Total Verified Money</p>
+          <p className="text-xs text-indigo-700 dark:text-indigo-300">Total Verified Money</p>
           <p className="text-2xl font-extrabold text-indigo-400">
             <Rupee />{summary.totalVerifiedAmount.toLocaleString("en-IN")}
           </p>
@@ -801,7 +801,7 @@ export function DonationReconciliation({
                         type="button"
                         disabled={busy}
                         onClick={() => handleReject(tx)}
-                        className="inline-flex items-center gap-1 px-3 py-2 rounded-xl bg-rose-950 hover:bg-rose-900 border border-rose-500/40 text-xs font-semibold text-rose-200 transition"
+                        className="inline-flex items-center gap-1 px-3 py-2 rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90 text-xs font-semibold transition"
                       >
                         <XCircle className="w-3.5 h-3.5" />
                         Reject
