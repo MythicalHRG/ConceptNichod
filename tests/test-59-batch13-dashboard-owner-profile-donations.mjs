@@ -12,10 +12,15 @@ test("Batch 13: dashboard branding uses Zirconel and contains no KRYOT label", (
 
 test("Batch 13: canonical owner self-healing requires both reserved username and normalized email", () => {
   const owner = read("src/lib/owner-access.ts");
+  const sidebar = read("src/components/dashboard/sidebar-nav.tsx");
+  const bottomNav = read("src/components/dashboard/bottom-nav.tsx");
   assert.ok(owner.includes("username === PLATFORM_OWNER_USERNAME && email === normalizeEmail(PLATFORM_OWNER_EMAIL)"));
   assert.ok(owner.includes("User.updateOne("));
   assert.ok(owner.includes('$set: { role: "owner" }'));
   assert.ok(owner.includes('user.role = "owner"'));
+  assert.ok(sidebar.includes('if (isAdmin)'));
+  assert.ok(sidebar.includes('href: "/dashboard/admin"'));
+  assert.ok(bottomNav.includes("setOpenMobile(true)"));
 
   const isOwner = (user) => Boolean(
     user && user.role === "owner" &&

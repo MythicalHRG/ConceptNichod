@@ -125,48 +125,71 @@ test("Tareeka 16: UUID is strictly redacted from Aspirants Connect search payloa
   }
 });
 
-test("Tareeka 16: Admin role isolation - only mythicalhrg is authorized, all other users fail closed", () => {
-  const ADMIN_USERNAME = "mythicalhrg";
+test("Tareeka 16: Admin role isolation requires the canonical owner role and both identity fields", () => {
+  const OWNER_USERNAME = "mythicalhrg";
+  const OWNER_EMAIL = "mythicalhrg@gmail.com";
+
+  function normalizeOwnerEmail(value) {
+    const email = String(value || "").trim().toLowerCase();
+    const at = email.lastIndexOf("@");
+    if (at <= 0) return email;
+    let local = email.slice(0, at).split("+")[0];
+    const domain = email.slice(at + 1).replace(/\\.+$/, "");
+    if (domain === "gmail.com" || domain === "googlemail.com") local = local.replace(/\\./g, "");
+    return local + "@" + domain;
+  }
 
   function simulateVerifyAdmin(sessionUser) {
-    if (!sessionUser) {
-      throw new Error("Not authenticated");
-    }
-    if (sessionUser.username !== ADMIN_USERNAME) {
+    if (!sessionUser) throw new Error("Not authenticated");
+    const username = String(sessionUser.username || "").trim().toLowerCase();
+    const email = normalizeOwnerEmail(sessionUser.email);
+    if (sessionUser.role !== "owner" || username !== OWNER_USERNAME || email !== OWNER_EMAIL) {
       throw new Error("Forbidden: Admin access only");
     }
     return { authorized: true, user: sessionUser };
   }
 
-  // 1. Unauthenticated request
   assert.throws(() => simulateVerifyAdmin(null), /Not authenticated/);
-
-  // 2. Normal student user
   assert.throws(
-    () => simulateVerifyAdmin({ username: "student_john", role: "user" }),
-    /Forbidden: Admin access only/
-  );
-
-  // 3. Privileged badge-holders (@anurag and @rohit have Bade Maalik badge, but NOT Admin access)
-  assert.throws(
-    () => simulateVerifyAdmin({ username: "anurag", role: "user" }),
+    () => simulateVerifyAdmin({ username: "student_john", email: "student@gmail.com", role: "user" }),
     /Forbidden: Admin access only/
   );
   assert.throws(
-    () => simulateVerifyAdmin({ username: "rohit", role: "user" }),
+    () => simulateVerifyAdmin({ username: "anurag", email: "anurag@gmail.com", role: "user" }),
     /Forbidden: Admin access only/
   );
-
-  // 4. Case sensitivity / whitespace spoofing
   assert.throws(
-    () => simulateVerifyAdmin({ username: "mythicalhrg ", role: "user" }),
+    () => simulateVerifyAdmin({ username: "rohit", email: "rohit@gmail.com", role: "user" }),
+    /Forbidden: Admin access only/
+  );
+  assert.throws(
+    () => simulateVerifyAdmin({ username: "mythicalhrg ", email: "student@gmail.com", role: "owner" }),
+    /Forbidden: Admin access only/
+  );
+  assert.throws(
+    () => simulateVerifyAdmin({ username: "mythicalhrg", email: "student@gmail.com", role: "owner" }),
+    /Forbidden: Admin access only/
+  );
+  assert.throws(
+    () => simulateVerifyAdmin({ username: "student", email: "mythicalhrg@gmail.com", role: "owner" }),
+    /Forbidden: Admin access only/
+  );
+  assert.throws(
+    () => simulateVerifyAdmin({ username: "mythicalhrg", email: "mythicalhrg@gmail.com", role: "user" }),
+    /Forbidden: Admin access only/
+  );
+  assert.throws(
+    () => simulateVerifyAdmin({ username: "mythicalhrg", email: "mythicalhrg@gmail.com", role: "admin" }),
     /Forbidden: Admin access only/
   );
 
-  // 5. Genuine admin
-  const adminResult = simulateVerifyAdmin({ username: "mythicalhrg", role: "admin" });
-  assert.strictEqual(adminResult.authorized, true);
-  assert.strictEqual(adminResult.user.username, "mythicalhrg");
+  const ownerResult = simulateVerifyAdmin({
+    username: "MythicalHRG",
+    email: "Mythical.HRG+owner@gmail.com",
+    role: "owner",
+  });
+  assert.strictEqual(ownerResult.authorized, true);
+  assert.strictEqual(ownerResult.user.username, "MythicalHRG");
 });
 
 test("Tareeka 16: Anti-Bypass & Route Lockdown - Middleware and Security Headers Verification", () => {
