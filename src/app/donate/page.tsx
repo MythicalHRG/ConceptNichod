@@ -36,12 +36,12 @@ const TIER_CONFIG: Record<
 > = {
   LEGEND: {
     title: "👑 Legend Patron",
-    badgeClass: "bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-400/50",
+    badgeClass: "bg-amber-500/20 text-amber-700 dark:text-amber-700 dark:text-amber-300 border-amber-400/50",
     cardBorder: "border-amber-500/50 shadow-[0_0_25px_rgba(245,158,11,0.15)]",
   },
   DIAMOND: {
     title: "💎 Diamond Patron",
-    badgeClass: "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border-cyan-400/50",
+    badgeClass: "bg-cyan-500/20 text-cyan-700 dark:text-cyan-700 dark:text-cyan-300 border-cyan-400/50",
     cardBorder: "border-cyan-500/40 shadow-[0_0_20px_rgba(6,182,212,0.12)]",
   },
   GOLD: {
@@ -52,11 +52,11 @@ const TIER_CONFIG: Record<
   SILVER: {
     title: "🥈 Silver Patron",
     badgeClass: "bg-slate-400/20 text-foreground border-slate-400/40",
-    cardBorder: "border-slate-700",
+    cardBorder: "border-border",
   },
   SUPPORTER: {
     title: "❤️ Supporter",
-    badgeClass: "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-400/40",
+    badgeClass: "bg-emerald-500/20 text-emerald-700 dark:text-emerald-700 dark:text-emerald-300 border-emerald-400/40",
     cardBorder: "border-border",
   },
 };
@@ -249,7 +249,7 @@ export default function DonatePage() {
 
         {/* Hero Section */}
         <div className="text-center max-w-3xl mx-auto space-y-4">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs font-semibold">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-700 dark:text-indigo-300 text-xs font-semibold">
             <Sparkles className="w-3.5 h-3.5" />
             100% Direct Student-First Support
           </div>
@@ -290,7 +290,7 @@ export default function DonatePage() {
                     type="button"
                     onClick={handleCopyUpi}
                     disabled={!receiverUpiId}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-foreground transition shrink-0"
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground transition shrink-0"
                   >
                     {copiedUpi ? <><CheckCircle2 className="w-3.5 h-3.5" />Copied</> : <><Copy className="w-3.5 h-3.5" />Copy ID</>}
                   </button>
@@ -450,7 +450,7 @@ export default function DonatePage() {
             <button
               type="submit"
               disabled={submitting || !settings.isEnabled}
-              className="w-full py-3 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-foreground font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 transition"
+              className="w-full py-3 px-5 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 transition"
             >
               <Send className="w-4 h-4" />
               {!settings.isEnabled ? "Donations Temporarily Unavailable" : submitting ? "Submitting UTR & Transaction ID..." : "Submit UTR & Transaction ID to Admin"}
