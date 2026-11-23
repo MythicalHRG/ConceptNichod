@@ -46,6 +46,18 @@ async function getAuthenticatedUser() {
   return user;
 }
 
+async function requirePlatformOwner() {
+  await dbConnect();
+  const sessionUuid = verifySessionCookie((await cookies()).get("user_session")?.value);
+  if (!sessionUuid) throw new Error("Authentication required.");
+  const fetchedUser = await User.findOne({ uuid: sessionUuid })
+    .select("uuid username email role")
+    .lean();
+  const owner = fetchedUser ? await ensurePlatformOwnerRole(fetchedUser) : fetchedUser;
+  if (!isPlatformOwner(owner)) throw new Error("Forbidden: Only @mythicalhrg is authorized to delete study groups.");
+  return owner;
+}
+
 export async function getStudyGroupsDataAction() {
   const user = await getAuthenticatedUser();
 
@@ -443,10 +455,7 @@ export async function sendDirectMessageAction(targetUsername: string, body: stri
 }
 
 export async function adminDeleteStudyGroupAction(groupId: string) {
-  const user = await getAuthenticatedUser();
-  if (!isPlatformOwner(user)) {
-    throw new Error("Forbidden: Only @mythicalhrg is authorized to delete study groups.");
-  }
+  await requirePlatformOwner();
 
   if (typeof groupId !== "string" || !mongoose.isValidObjectId(groupId)) {
     throw new Error("Valid Group ID is required.");
