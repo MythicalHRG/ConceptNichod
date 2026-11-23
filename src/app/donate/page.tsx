@@ -36,12 +36,12 @@ const TIER_CONFIG: Record<
 > = {
   LEGEND: {
     title: "👑 Legend Patron",
-    badgeClass: "bg-amber-500/20 text-amber-700 dark:text-amber-700 dark:text-amber-300 border-amber-400/50",
+    badgeClass: "bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-400/50",
     cardBorder: "border-amber-500/50 shadow-[0_0_25px_rgba(245,158,11,0.15)]",
   },
   DIAMOND: {
     title: "💎 Diamond Patron",
-    badgeClass: "bg-cyan-500/20 text-cyan-700 dark:text-cyan-700 dark:text-cyan-300 border-cyan-400/50",
+    badgeClass: "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border-cyan-400/50",
     cardBorder: "border-cyan-500/40 shadow-[0_0_20px_rgba(6,182,212,0.12)]",
   },
   GOLD: {
@@ -51,12 +51,12 @@ const TIER_CONFIG: Record<
   },
   SILVER: {
     title: "🥈 Silver Patron",
-    badgeClass: "bg-slate-400/20 text-foreground border-slate-400/40",
+    badgeClass: "bg-muted text-foreground border-border",
     cardBorder: "border-border",
   },
   SUPPORTER: {
     title: "❤️ Supporter",
-    badgeClass: "bg-emerald-500/20 text-emerald-700 dark:text-emerald-700 dark:text-emerald-300 border-emerald-400/40",
+    badgeClass: "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-400/40",
     cardBorder: "border-border",
   },
 };
@@ -277,7 +277,7 @@ export default function DonatePage() {
                   </div>
                   <span className="text-[11px] text-muted-foreground">Direct UPI</span>
                 </div>
-                <div className="rounded-xl border border-slate-700 bg-background/70 p-4 text-center">
+                <div className="rounded-xl border border-border bg-background/70 p-4 text-center">
                   <p className="text-xs font-semibold text-foreground">Use the official UPI ID</p>
                   <p className="mt-1 text-xs text-muted-foreground">No QR image is displayed until a verified QR-generation flow is available. Copy the UPI ID below and confirm the recipient name in your payment app.</p>
                 </div>
@@ -440,7 +440,7 @@ export default function DonatePage() {
                 type="checkbox"
                 checked={isAnonymous}
                 onChange={(e) => setIsAnonymous(e.target.checked)}
-                className="w-4 h-4 rounded border-slate-700 bg-background text-indigo-600"
+                className="w-4 h-4 rounded border-border bg-background text-indigo-600"
               />
               <span className="text-xs text-foreground">
                 Show me as <strong>Anonymous Patron</strong> in the public Hall of Patrons
@@ -481,7 +481,7 @@ export default function DonatePage() {
                   <Rupee />{totalRaised.toLocaleString("en-IN")}
                 </p>
               </div>
-              <div className="h-8 w-px bg-slate-800" />
+              <div className="h-8 w-px bg-secondary" />
               <div>
                 <p className="text-[11px] text-muted-foreground">Verified Patrons</p>
                 <p className="text-xl font-extrabold text-foreground">{totalPatrons}</p>
