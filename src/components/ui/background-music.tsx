@@ -279,7 +279,7 @@ export function BackgroundMusic() {
       className={
         position
           ? "fixed z-40 touch-none select-none"
-          : "fixed bottom-[calc(5.25rem+env(safe-area-inset-bottom,0px))] left-[calc(1rem+env(safe-area-inset-left,0px))] md:bottom-[calc(1.25rem+env(safe-area-inset-bottom,0px))] md:left-auto md:right-[5.5rem] z-40 touch-none select-none"
+          : "fixed bottom-[calc(5.25rem+env(safe-area-inset-bottom,0px))] left-[calc(1rem+env(safe-area-inset-left,0px))] md:bottom-[calc(1.25rem+env(safe-area-inset-bottom,0px))] md:left-auto md:right-[7.5rem] z-40 touch-none select-none"
       }
     >
       <Button
