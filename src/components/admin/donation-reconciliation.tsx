@@ -393,6 +393,7 @@ export function DonationReconciliation({
   };
 
   return (
+    <>
     <div className="space-y-6 min-w-0">
       {/* Header & Summary Cards */}
       <div className="rounded-2xl border border-indigo-500/30 bg-card p-4 flex flex-wrap items-center justify-between gap-4">
@@ -950,6 +951,7 @@ export function DonationReconciliation({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </>
   );
 }
 
