@@ -163,7 +163,7 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
     <div className="space-y-8 min-w-0 max-w-full overflow-x-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
 
       {/* Overview Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
 
         {/* Card 1: Concept Mirror Oral Defense */}
         <Card className={cn(
@@ -464,9 +464,9 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
             </div>
             <CardDescription className="text-xs">Continuous progress curve over assessment sessions</CardDescription>
           </CardHeader>
-          <CardContent className="flex-1 min-h-[250px]">
+          <CardContent className="flex-1 min-h-[260px] sm:min-h-[280px]">
             {hasMounted && progressionData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={250}>
+              <ResponsiveContainer width="100%" height={280}>
                 <AreaChart data={progressionData} margin={{ top: 20, right: 20, left: -10, bottom: 25 }}>
                   <defs>
                     <linearGradient id="profilePolyGrad" x1="0" y1="0" x2="0" y2="1">
@@ -629,7 +629,7 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
           </CardHeader>
           <CardContent className="flex-1 min-h-[250px]">
             {hasMounted && skillAverages.length > 0 ? (
-              <ChartContainer config={chartConfig} className="w-full h-[280px]">
+              <ChartContainer config={chartConfig} className="w-full h-[250px]">
                 <BarChart accessibilityLayer data={skillAverages} margin={{ top: 20, right: 20, left: -10, bottom: 25 }}>
                   <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
                   <XAxis
