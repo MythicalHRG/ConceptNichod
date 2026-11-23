@@ -88,6 +88,7 @@ export default function DonatePage() {
 
   // Submission State
   const [submitting, setSubmitting] = useState(false);
+  const [receipt, setReceipt] = useState<{ utr: string; transactionId: string } | null>(null);
   const [copiedUpi, setCopiedUpi] = useState(false);
   const [statusBanner, setStatusBanner] = useState<{
     type: "success" | "error";
@@ -202,6 +203,7 @@ export default function DonatePage() {
           text: result.error || "Could not submit your transaction details.",
         });
       } else {
+        setReceipt({ utr: cleanUtr, transactionId: cleanTxn });
         setStatusBanner({
           type: "success",
           text:
@@ -266,9 +268,13 @@ export default function DonatePage() {
             {settings.isEnabled ? (
               <>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">
+                  <span className="text-xs font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-300">
                     Step 1 • Pay via Official UPI ID
                   </span>
+                  <div className="text-left">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Official Payee Name</p>
+                    <p className="text-sm font-semibold text-foreground">{settings.payeeName}</p>
+                  </div>
                   <span className="text-[11px] text-muted-foreground">Direct UPI</span>
                 </div>
                 <div className="rounded-xl border border-slate-700 bg-background/70 p-4 text-center">
@@ -417,7 +423,17 @@ export default function DonatePage() {
                 onChange={(e) => setMessage(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-background border border-border text-sm text-foreground focus:outline-none focus:border-indigo-500"
               />
+              <p className="mt-1 text-[11px] text-muted-foreground text-right">{message.length}/250</p>
             </div>
+
+            {receipt && (
+              <div role="status" className="rounded-xl border border-emerald-500/35 bg-emerald-500/10 p-4 space-y-2 min-w-0 break-words">
+                <div className="flex items-center gap-2 text-sm font-bold text-emerald-800 dark:text-emerald-200"><CheckCircle2 className="h-4 w-4" /> Payment reference received</div>
+                <div className="text-xs text-foreground">UTR: <span className="font-mono font-semibold">{receipt.utr}</span></div>
+                <div className="text-xs text-foreground">Transaction ID: <span className="font-mono font-semibold">{receipt.transactionId}</span></div>
+                <span className="inline-flex rounded-full border border-amber-500/35 bg-amber-500/15 px-2.5 py-1 text-[11px] font-semibold text-amber-800 dark:text-amber-200">Pending Admin Verification</span>
+              </div>
+            )}
 
             <label className="flex items-center gap-2.5 cursor-pointer select-none">
               <input
