@@ -25,7 +25,6 @@ import {
   RefreshCw,
   Search,
   Settings,
-  IndianRupee,
 } from "lucide-react";
 
 interface AdminTxItem {
@@ -82,6 +81,7 @@ export function DonationReconciliation({
   const [publishMap, setPublishMap] = useState<Record<string, boolean>>({});
   const [noteMap, setNoteMap] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [inlineErrorMap, setInlineErrorMap] = useState<Record<string, string>>({});
   const [confirmationOpen, setConfirmationOpen] = useState(false);
   const [confirmationKind, setConfirmationKind] = useState<"reject" | "remove" | null>(null);
   const [confirmationTx, setConfirmationTx] = useState<AdminTxItem | null>(null);
@@ -203,6 +203,7 @@ export function DonationReconciliation({
     const rawAmount = (amountMap[tx.id] || "").trim();
     const parsedAmount = Number(rawAmount);
     if (!rawAmount || !Number.isFinite(parsedAmount) || parsedAmount < 1) {
+      setInlineErrorMap((prev) => ({ ...prev, [tx.id]: "Enter a valid amount received before verifying." }));
       toast({
         variant: "destructive",
         title: "Amount required",
@@ -213,6 +214,7 @@ export function DonationReconciliation({
     const bankReference = (bankReferenceMap[tx.id] || "").trim();
     const recipientVpa = (recipientVpaMap[tx.id] || "").trim();
     if (!bankReference || !recipientVpa) {
+      setInlineErrorMap((prev) => ({ ...prev, [tx.id]: "Enter the bank-statement UTR and credited recipient VPA." }));
       toast({
         variant: "destructive",
         title: "Bank evidence required",
@@ -223,6 +225,7 @@ export function DonationReconciliation({
 
     setBusyId(tx.id);
     try {
+      setInlineErrorMap((prev) => ({ ...prev, [tx.id]: "" }));
       const res = await adminVerifyDonationAndSetAmount({
         transactionDbId: tx.id,
         verifiedAmount: parsedAmount,
@@ -235,6 +238,7 @@ export function DonationReconciliation({
       });
 
       if (!res.success) {
+        setInlineErrorMap((prev) => ({ ...prev, [tx.id]: res.error || "Verification failed." }));
         toast({
           variant: "destructive",
           title: "Verification failed",
@@ -245,11 +249,9 @@ export function DonationReconciliation({
         await loadDashboard();
       }
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Donation mutation failed",
-        description: error instanceof Error ? error.message : "Please try again.",
-      });
+      const message = error instanceof Error ? error.message : "Please try again.";
+      setInlineErrorMap((prev) => ({ ...prev, [tx.id]: message }));
+      toast({ variant: "destructive", title: "Donation mutation failed", description: message });
     } finally {
       setBusyId(null);
     }
@@ -649,6 +651,8 @@ export function DonationReconciliation({
 
                 {!upiId && canVerifyNow && <div role="alert" className="sm:col-span-2 rounded-lg border border-amber-500/35 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200">Official UPI ID is not configured. <button type="button" onClick={() => setShowSettings(true)} className="underline font-semibold">Open UPI Settings</button> before verifying.</div>}
 
+                {inlineErrorMap[tx.id] && <div role="alert" className="rounded-lg border border-destructive/35 bg-destructive/10 px-3 py-2 text-xs text-destructive">{inlineErrorMap[tx.id]}</div>}
+
                 {/* Mandatory bank evidence confirmation before any payment is marked verified */}
                 {canVerifyNow && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-xl border border-amber-500/20 bg-amber-950/10 p-3">
@@ -696,7 +700,7 @@ export function DonationReconciliation({
                       Enter Amount Received (<Rupee />) *
                     </label>
                     <div className="relative">
-                      <IndianRupee className="w-3.5 h-3.5 text-emerald-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <Rupee className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-300 absolute left-3 top-1/2 -translate-y-1/2" />
                       <input
                         type="number"
                         min={1}
@@ -709,6 +713,10 @@ export function DonationReconciliation({
                         }
                         className="w-full pl-8 pr-3 py-2 rounded-xl bg-background border border-input text-sm font-bold text-emerald-400 disabled:opacity-60 focus:outline-none focus:border-emerald-500"
                       />
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {[50, 100, 250, 500, 1000].map((value) => <button key={value} type="button" disabled={!canVerifyNow || needsSyncRecovery} onClick={() => setAmountMap((prev) => ({ ...prev, [tx.id]: String(value) }))} className="rounded-full border border-border px-2.5 py-1 text-[11px] hover:bg-muted disabled:opacity-50">{value}</button>)}
+                      </div>
+                      <p className="mt-1 text-[11px] text-muted-foreground">Suggested tier: {Number(amountMap[tx.id] || 0) >= 5000 ? "Legend" : Number(amountMap[tx.id] || 0) >= 2000 ? "Diamond" : Number(amountMap[tx.id] || 0) >= 500 ? "Gold" : Number(amountMap[tx.id] || 0) >= 100 ? "Silver" : "Supporter"}</p>
                     </div>
                   </div>
 
@@ -752,18 +760,7 @@ export function DonationReconciliation({
                     {canVerifyNow && (
                       <>
                         <label className="flex items-center gap-2 text-xs text-foreground mr-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={Boolean(publishMap[tx.id])}
-                            disabled={needsSyncRecovery}
-                            onChange={(e) =>
-                              setPublishMap((prev) => ({
-                                ...prev,
-                                [tx.id]: e.target.checked,
-                              }))
-                            }
-                            className="rounded border-input bg-background text-indigo-600"
-                          />
+                          <Switch checked={Boolean(publishMap[tx.id])} disabled={needsSyncRecovery} onCheckedChange={(checked) => setPublishMap((prev) => ({ ...prev, [tx.id]: checked }))} aria-label="Add to Hall of Patrons" />
                           <span>Add to Hall of Patrons</span>
                         </label>
 
