@@ -3,7 +3,6 @@
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { Switch } from "@/components/ui/switch";
 import { Rupee } from "@/components/ui/rupee-symbol";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,7 +12,6 @@ import {
   adminToggleHallOfPatrons,
   adminRejectDonationTransaction,
   adminUpdateDonationSettings,
-  adminSetDonationsEnabledAction,
   adminUpdatePatron,
   adminRemovePatron,
 } from "@/app/actions/donation";
@@ -47,17 +45,7 @@ interface AdminTxItem {
   createdAt: string;
 }
 
-type DonationReconciliationProps = {
-  donationsEnabled?: boolean;
-  onDonationsEnabledChange?: (enabled: boolean) => Promise<void> | void;
-  isTogglingDonations?: boolean;
-};
-
-export function DonationReconciliation({
-  donationsEnabled,
-  onDonationsEnabledChange,
-  isTogglingDonations = false,
-}: DonationReconciliationProps = {}) {
+export function DonationReconciliation() {
   const { toast } = useToast();
   const [statusFilter, setStatusFilter] = useState<string>("pending");
   const [search, setSearch] = useState("");
@@ -92,10 +80,7 @@ export function DonationReconciliation({
   const [showSettings, setShowSettings] = useState(false);
   const [upiId, setUpiId] = useState("");
   const [payeeName, setPayeeName] = useState("");
-  const [isEnabled, setIsEnabled] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
-  const [localTogglingDonations, setLocalTogglingDonations] = useState(false);
-  const effectiveDonationsEnabled = donationsEnabled ?? isEnabled;
 
   const latestLoadIdRef = useRef(0);
 
@@ -154,7 +139,6 @@ export function DonationReconciliation({
       if (res.settings) {
         setUpiId(res.settings.upiId || "");
         setPayeeName(res.settings.payeeName || "ConceptNichod");
-        setIsEnabled(res.settings.isEnabled !== false);
       }
 
       const nextAmounts: Record<string, string> = {};
@@ -339,28 +323,6 @@ export function DonationReconciliation({
     }
   };
 
-  const handleToggleDonations = async (nextValue: boolean) => {
-    if (onDonationsEnabledChange) {
-      await onDonationsEnabledChange(nextValue);
-      return;
-    }
-    if (localTogglingDonations) return;
-    const previousValue = isEnabled;
-    setIsEnabled(nextValue);
-    setLocalTogglingDonations(true);
-    try {
-      const result = await adminSetDonationsEnabledAction(nextValue);
-      if (!result?.success) throw new Error("Could not update donation availability.");
-      toast({ title: nextValue ? "Donations Enabled" : "Donations Paused" });
-      await loadDashboard();
-    } catch (error) {
-      setIsEnabled(previousValue);
-      toast({ variant: "destructive", title: "Donation setting update failed", description: error instanceof Error ? error.message : "Please try again." });
-    } finally {
-      setLocalTogglingDonations(false);
-    }
-  };
-
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     setSavingSettings(true);
@@ -396,14 +358,10 @@ export function DonationReconciliation({
     <>
     <div className="space-y-6 min-w-0">
       {/* Header & Summary Cards */}
-      <div className="rounded-2xl border border-indigo-500/30 bg-card p-4 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h3 className="text-sm font-bold text-foreground">Accepting Donations</h3>
-          <span className={effectiveDonationsEnabled ? "inline-flex mt-1 rounded-full bg-emerald-500/15 px-2.5 py-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300" : "inline-flex mt-1 rounded-full bg-amber-500/15 px-2.5 py-1 text-[10px] font-bold text-amber-700 dark:text-amber-300"}>
-            {effectiveDonationsEnabled ? "ENABLED (LIVE)" : "DISABLED (PAUSED)"}
-          </span>
-        </div>
-        <Switch checked={effectiveDonationsEnabled} onCheckedChange={handleToggleDonations} disabled={onDonationsEnabledChange ? isTogglingDonations : localTogglingDonations} aria-label="Toggle donations enabled" />
+      <div className="rounded-2xl border border-emerald-500/30 bg-card p-4">
+        <h3 className="text-sm font-bold text-foreground">Donations: Permanently Enabled</h3>
+        <span className="inline-flex mt-1 rounded-full bg-emerald-500/15 px-2.5 py-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">LIVE</span>
+        <p className="mt-2 text-xs text-muted-foreground">{upiId ? "Official UPI ID: " + upiId : "Official UPI ID not configured yet — configure it in Admin Panel → Donations."}</p>
       </div>
 
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -467,10 +425,7 @@ export function DonationReconciliation({
               className="w-full px-3 py-2 rounded-xl bg-background border border-border text-xs text-foreground"
             />
           </div>
-          <div className="flex items-center gap-3 py-2">
-            <span className="text-xs text-foreground">Accepting Donations</span>
-            <Switch checked={effectiveDonationsEnabled} onCheckedChange={handleToggleDonations} disabled={onDonationsEnabledChange ? isTogglingDonations : localTogglingDonations} aria-label="Toggle donations enabled" />
-          </div>
+          <div className="py-2 text-xs font-semibold text-emerald-600 dark:text-emerald-300">Donations permanently enabled (LIVE)</div>
           <button
             type="submit"
             disabled={savingSettings}
