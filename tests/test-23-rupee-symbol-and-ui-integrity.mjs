@@ -61,14 +61,15 @@ test('Tareeka 23.6: topic-history.tsx wraps topic names in LatexRenderer for mat
   assert.ok(topicHistory.includes('<LatexRenderer content={topic.name}'), 'topic-history.tsx must wrap topic.name in LatexRenderer');
 });
 
-test('Tareeka 23.7: Donation recipient is never assumed or hardcoded without explicit enablement', () => {
+test('Tareeka 23.7: Donation recipient is never hardcoded and enablement is not env-gated', () => {
   const donationSetting = fs.readFileSync(path.join(projectRoot, 'src/models/DonationSetting.ts'), 'utf8');
   const donatePage = fs.readFileSync(path.join(projectRoot, 'src/app/donate/page.tsx'), 'utf8');
   const donationAction = fs.readFileSync(path.join(projectRoot, 'src/app/actions/donation.ts'), 'utf8');
 
   assert.ok(donationSetting.includes('upiId: { type: String, default: "" }'), 'DonationSetting must not ship an unverified recipient default');
   assert.ok(!donatePage.includes('harsh.2525@ptaxis'), 'Donate page must not hardcode a recipient');
-  assert.ok(donationAction.includes('process.env.DONATIONS_ENABLED === "true"'), 'Payments must require explicit deployment opt-in');
+  assert.ok(!donationAction.includes('DONATIONS_ENABLED'), 'Payments must not use an environment kill switch');
+  assert.ok(donationAction.includes('getCanonicalDonationSettings'), 'Donation settings must use the canonical self-healing record');
 });
 
 test('Tareeka 23.8: Waste scratch folder is eliminated from workspace', () => {

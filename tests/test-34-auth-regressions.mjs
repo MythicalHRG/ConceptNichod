@@ -38,18 +38,15 @@ test("registration rejects expired or missing-expiry email OTP records", () => {
   assert.match(register, /await dbConnect\(\);[\\s\\S]*?if \(!email \\|\\| !username/);
 });
 
-test("donation payments remain disabled until an explicit deployment opt-in", () => {
+test("donation availability is independent of deployment environment variables", () => {
   const donation = fs.readFileSync("src/app/actions/donation.ts", "utf8");
   const settings = fs.readFileSync("src/models/DonationSetting.ts", "utf8");
   const page = fs.readFileSync("src/app/donate/page.tsx", "utf8");
-  assert.match(donation, /process\.env\.DONATIONS_ENABLED === "true"/);
-  assert.match(donation, /if \(!DONATIONS_ENABLED\)[\s\S]*?Donations are temporarily unavailable/);
-  assert.match(settings, /upiId: \{ type: String, default: "" \}/);
-  assert.doesNotMatch(page, /harsh\.2525@ptaxis/);
-  assert.match(page, /settings\.isEnabled \?/);
-  assert.match(page, /Donations are temporarily paused/);
+  assert.doesNotMatch(donation, /DONATIONS_ENABLED/);
+  assert.ok(settings.includes("isEnabled: { type: Boolean, default: true }"));
+  assert.doesNotMatch(page, /Donations are temporarily paused|Donations Temporarily Unavailable/);
+  assert.match(donation, /isEnabled: true/);
 });
-
 test("AI generation and text-to-speech server actions enforce per-user rate limits", () => {
   const actions = fs.readFileSync("src/app/actions.ts", "utf8");
   assert.ok(actions.includes("generate-content:${sessionUuid}"));

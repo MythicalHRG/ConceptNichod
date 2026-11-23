@@ -265,9 +265,7 @@ export default function DonatePage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Step 1: Direct UPI Card */}
           <div className="lg:col-span-5 bg-card/90 border border-border rounded-2xl p-6 sm:p-8 space-y-6">
-            {settings.isEnabled ? (
-              <>
-                <div className="flex items-center justify-between">
+               <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-300">
                     Step 1 • Pay via Official UPI ID
                   </span>
@@ -284,7 +282,7 @@ export default function DonatePage() {
                 <div className="bg-background border border-border rounded-xl p-3.5 flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-[11px] text-muted-foreground uppercase font-semibold">Official UPI ID</p>
-                    <p className="text-sm font-mono font-bold text-foreground truncate">{receiverUpiId ? receiverUpiId : "Recipient UPI ID will appear once enabled."}</p>
+                    <p className="text-sm font-mono font-bold text-foreground truncate">{receiverUpiId ? receiverUpiId : "Official UPI ID not configured yet — configure it in Admin Panel → Donations."}</p>
                   </div>
                   <button
                     type="button"
@@ -295,6 +293,11 @@ export default function DonatePage() {
                     {copiedUpi ? <><CheckCircle2 className="w-3.5 h-3.5" />Copied</> : <><Copy className="w-3.5 h-3.5" />Copy ID</>}
                   </button>
                 </div>
+                {!receiverUpiId && (
+                  <p role="status" className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-foreground">
+                    Official UPI ID not configured yet — configure it in Admin Panel → Donations.
+                  </p>
+                )}
                 <div className="bg-indigo-950/30 border border-indigo-500/20 rounded-xl p-4 space-y-2 text-xs text-foreground">
                   <div className="flex items-center gap-2 font-semibold text-indigo-300">
                     <ShieldCheck className="w-4 h-4 shrink-0" />
@@ -304,16 +307,7 @@ export default function DonatePage() {
                     After paying, retain your 12-digit UTR and payment-app Transaction ID. The Admin checks the bank record and recipient account before verifying a submission.
                   </p>
                 </div>
-              </>
-            ) : (
-              <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-5 space-y-2">
-                <p className="text-sm font-bold text-amber-200">Donations are temporarily paused</p>
-                <p className="text-xs leading-relaxed text-foreground">
-                  The recipient account has not been enabled for payments yet. No QR code or payment ID is displayed. Please do not send money until the official account is confirmed.
-                </p>
-              </div>
-            )}
-          </div>
+            </div>
 
           {/* Step 2: Submit UTR + Transaction ID Form */}
           <form
@@ -449,11 +443,11 @@ export default function DonatePage() {
 
             <button
               type="submit"
-              disabled={submitting || !settings.isEnabled}
+              disabled={submitting || !receiverUpiId}
               className="w-full py-3 px-5 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 transition"
             >
               <Send className="w-4 h-4" />
-              {!settings.isEnabled ? "Donations Temporarily Unavailable" : submitting ? "Submitting UTR & Transaction ID..." : "Submit UTR & Transaction ID to Admin"}
+              {submitting ? "Submitting UTR & Transaction ID..." : "Submit UTR & Transaction ID to Admin"}
             </button>
           </form>
         </div>

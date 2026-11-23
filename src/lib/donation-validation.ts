@@ -65,10 +65,12 @@ export function parseVerifiedAmount(value: unknown): number | null { const r=val
 export function parseDonationAmount(value: unknown): number | null { return parseVerifiedAmount(value); }
 export function normalizeUpiReference(value: unknown): string | null { return normalizeUtr(value); }
 export function normalizeVpa(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const v = value.trim().toLowerCase();
-  if (v.includes("..")) return null;
-  return /^[a-z0-9][a-z0-9._-]{0,254}[a-z0-9]@[a-z0-9][a-z0-9.-]{0,62}[a-z0-9]$/.test(v) ? v : null;
+  if (typeof value !== "string" || value.length === 0 || value !== value.trim()) return null;
+  const v = value.toLowerCase();
+  if (!/^[a-zA-Z0-9._-]{2,64}@[a-zA-Z0-9.-]{2,64}$/.test(value)) return null;
+  if (/[<>\s/\\:]/.test(value) || value.includes("..") || value.includes("@.") || value.endsWith(".")) return null;
+  if (/^(?:example|yourname|test|placeholder)@(?:upi|ybl|okaxis|oksbi|okhdfcbank|okicici|paytm|ibl|axl|ptyes|ptaxis)$/i.test(v)) return null;
+  return v;
 }
 export function isExactDonationMatch(a:number,b:number,c:string,d:string):boolean {
   if (!Number.isFinite(a) || !Number.isFinite(b) || typeof c !== "string" || typeof d !== "string") return false;

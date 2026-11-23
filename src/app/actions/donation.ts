@@ -3,7 +3,7 @@
 
 import mongoose from "mongoose";
 import { ensurePlatformOwnerRole, isPlatformOwner } from "@/lib/owner-access";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, unstable_noStore as noStore } from "next/cache";
 import connectToDatabase from "@/lib/mongoose";
 import DonationTransaction from "@/models/DonationTransaction";
 import Donor from "@/models/Donor";
@@ -27,6 +27,34 @@ import {
 } from "@/lib/donation-validation";
 
 const VALID_TIERS: PatronTier[] = ["LEGEND", "DIAMOND", "GOLD", "SILVER", "SUPPORTER"];
+
+/**
+ * Resolve one deterministic settings record and heal legacy disabled rows.
+ * A configured, valid recipient always outranks an empty/invalid legacy row.
+ */
+async function getCanonicalDonationSettings() {
+  await connectToDatabase();
+  const records = await DonationSetting.find({}).sort({ updatedAt: -1, _id: -1 }).lean();
+  const canonical = records.find((record: any) => Boolean(normalizeVpa(record.upiId || ""))) || records[0] || null;
+  await DonationSetting.updateMany(
+    { isEnabled: { $ne: true } },
+    { $set: { isEnabled: true } }
+  );
+  return canonical ? { ...canonical, isEnabled: true } : null;
+}
+
+async function saveCanonicalDonationSettings(values: Record<string, unknown>) {
+  const canonical = await getCanonicalDonationSettings();
+  const update = { ...values, isEnabled: true };
+  if (canonical?._id) {
+    await DonationSetting.findByIdAndUpdate(canonical._id, { $set: update }, { new: true, runValidators: true });
+  } else {
+    await DonationSetting.create(update);
+  }
+  // Keep every historical row in sync so a stale duplicate cannot resurface.
+  await DonationSetting.updateMany({}, { $set: update });
+  return getCanonicalDonationSettings();
+}
 
 function createDonorStore() {
   return {
@@ -77,13 +105,11 @@ async function requireOwnerSession() {
  * 1. Public Data Loader for /donate (UPI Config + Verified Hall of Patrons)
  */
 export async function getPublicDonationPageData() {
+  noStore();
   try {
     await connectToDatabase();
-    const DONATIONS_ENABLED = process.env.DONATIONS_ENABLED === "true";
-
-    const settings = await DonationSetting.findOne().lean();
+    const settings = await getCanonicalDonationSettings();
     const configuredVpa = normalizeVpa(settings?.upiId || "");
-    const donationsAvailable = DONATIONS_ENABLED && settings?.isEnabled !== false;
 
     const [patronsRaw, totalRaisedAgg] = await Promise.all([
       Donor.find({ isVisible: true, isPublic: true, amount: { $gt: 0 } })
@@ -115,10 +141,10 @@ export async function getPublicDonationPageData() {
     return {
       success: true,
       settings: {
-        upiId: donationsAvailable ? configuredVpa || "" : "",
+        upiId: configuredVpa || "",
         payeeName: settings?.payeeName || process.env.NEXT_PUBLIC_UPI_NAME || "ConceptNichod",
         qrCodeUrl: "",
-        isEnabled: donationsAvailable,
+        isEnabled: true,
         headline:
           settings?.headline || "Support ConceptNichod & Join the Hall of Patrons",
         subtext:
@@ -137,7 +163,7 @@ export async function getPublicDonationPageData() {
         upiId: "",
         payeeName: process.env.NEXT_PUBLIC_UPI_NAME || "ConceptNichod",
         qrCodeUrl: "",
-        isEnabled: false,
+        isEnabled: true,
         headline: "Support ConceptNichod & Join the Hall of Patrons",
         subtext:
           "Pay using any UPI app to the verified UPI ID above, then submit your 12-digit UTR and Transaction ID below.",
@@ -170,11 +196,6 @@ export async function submitDonationTransaction(formData: {
       return { success: true, message: "Your UTR & Transaction ID have been sent to the Admin Panel for verification." };
     }
 
-    const DONATIONS_ENABLED = process.env.DONATIONS_ENABLED === "true";
-    if (!DONATIONS_ENABLED) {
-      return { success: false, error: "Donations are temporarily unavailable while the recipient account is being confirmed." };
-    }
-
     const validation = validateDonationSubmission(formData);
     if (!validation.valid || !validation.data) {
       return { success: false, error: validation.error || "Invalid submission details." };
@@ -191,13 +212,10 @@ export async function submitDonationTransaction(formData: {
       return { success: false, error: "Access denied: Your IP address is banned." };
     }
 
-    const settings = await DonationSetting.findOne().select("upiId isEnabled").lean();
+    const settings = await getCanonicalDonationSettings();
     const configuredVpa = normalizeVpa((settings as any)?.upiId || "");
-    if (settings?.isEnabled === false) {
-      return { success: false, error: "Donations are currently paused by the administrator." };
-    }
     if (!configuredVpa) {
-      return { success: false, error: "Donations are temporarily unavailable because the recipient account is not configured." };
+      return { success: false, error: "Official UPI ID is not configured yet. Please contact the admin." };
     }
 
     const ipUnavailable = clientIp === "127.0.0.1" || clientIp === "unknown";
@@ -329,7 +347,7 @@ export async function getAdminDonationDashboard(filterStatus?: string, search?: 
           },
         },
       ]),
-      DonationSetting.findOne().lean(),
+      getCanonicalDonationSettings(),
       Donor.find().sort({ amount: -1, donatedAt: -1 }).limit(200).lean(),
       DonationTransaction.countDocuments({ $or: [{ status: { $exists: false } }, { status: null }] }),
     ]);
@@ -395,7 +413,7 @@ export async function getAdminDonationDashboard(filterStatus?: string, search?: 
         upiId: (settingsRaw as any)?.upiId || "",
         payeeName: (settingsRaw as any)?.payeeName || "ConceptNichod",
         qrCodeUrl: "",
-        isEnabled: (settingsRaw as any)?.isEnabled !== false && process.env.DONATIONS_ENABLED === "true",
+        isEnabled: true,
       },
     };
   } catch (error: any) {
@@ -454,7 +472,7 @@ export async function adminVerifyDonationAndSetAmount(payload: {
     if (!bankReference || bankReference !== submittedUtr) {
       return { success: false, error: "Bank statement UTR does not match the submitted 12-digit UTR." };
     }
-    const settings = await DonationSetting.findOne().select("upiId").lean();
+    const settings = await getCanonicalDonationSettings();
     const configuredVpa = normalizeVpa((settings as any)?.upiId);
     const recipientVpa = normalizeVpa(sanitizeDonationText(payload.recipientVpa || "", 100));
     if (!configuredVpa) {
@@ -751,21 +769,22 @@ export async function adminUpdateDonationSettings(input: {
       return { success: false, error: "Please enter a valid UPI ID (e.g. name@upi)." };
     }
 
-    let settings = await DonationSetting.findOne();
-    if (!settings) {
-      settings = new DonationSetting({});
+    const existingSettings = await getCanonicalDonationSettings();
+    const update: Record<string, unknown> = {
+      upiId,
+      payeeName: payeeName || "ConceptNichod",
+      qrCodeUrl: "",
+      isEnabled: true,
+      updatedBy: (adminUser as any).username || "Admin",
+    };
+    if (input.customInstructions !== undefined) {
+      update.subtext = sanitizeDonationText(input.customInstructions, 500);
+      update.customInstructions = update.subtext;
+    } else if (existingSettings?.customInstructions) {
+      update.customInstructions = existingSettings.customInstructions;
     }
-
-    settings.upiId = upiId;
-    settings.payeeName = payeeName || "ConceptNichod";
-    settings.qrCodeUrl = "";
-    if (input.isEnabled !== undefined) settings.isEnabled = input.isEnabled;
-    settings.updatedBy = (adminUser as any).username || "Admin";
-    if (input.customInstructions !== undefined) settings.subtext = sanitizeDonationText(input.customInstructions, 500);
-    settings.customInstructions = settings.subtext || settings.customInstructions;
-    if (input.thankYouNote !== undefined) settings.thankYouNote = sanitizeDonationText(input.thankYouNote, 500);
-
-    await settings.save();
+    if (input.thankYouNote !== undefined) update.thankYouNote = sanitizeDonationText(input.thankYouNote, 500);
+    await saveCanonicalDonationSettings(update);
 
     revalidatePath("/donate");
     revalidatePath("/dashboard/admin");
@@ -787,7 +806,7 @@ export async function adminUpdateDonationSettings(input: {
 /* Backward-compatible exports retained for existing imports. */
 export async function getDonationInfoAction() {
   await connectToDatabase();
-  const setting = await DonationSetting.findOne().lean();
+  const setting = await getCanonicalDonationSettings();
 
   // Keep legacy public metrics bank-verified only; unverified claims never contribute.
   const verifiedDonations = await DonationTransaction.aggregate([
@@ -831,16 +850,12 @@ export async function getDonationInfoAction() {
   }));
 
   const configuredVpa = normalizeVpa(setting?.upiId || "");
-  const donationsAvailable =
-    process.env.DONATIONS_ENABLED === "true" &&
-    setting?.isEnabled !== false &&
-    Boolean(configuredVpa);
 
   const publicSettings = {
-    upiId: donationsAvailable ? configuredVpa || "" : "",
+    upiId: configuredVpa || "",
     payeeName: setting?.payeeName || "ConceptNichod",
     qrCodeUrl: "",
-    isEnabled: donationsAvailable,
+    isEnabled: true,
     headline: setting?.headline || "Support ConceptNichod & Join the Hall of Patrons",
     subtext: setting?.subtext || "Pay using any UPI app, then submit your 12-digit UTR and Transaction ID for manual Admin verification.",
     customInstructions: setting?.customInstructions || "Pay using any UPI app, then submit your transaction reference for manual verification.",
@@ -863,7 +878,7 @@ export async function reconcileDonationManuallyAction(payload: { utr: string; ba
   if (!utr || String(payload.bankReference || "").trim() !== utr) return { success: false, error: "Bank reference mismatch." };
   const tx = await DonationTransaction.findOne({ utr }).select("_id").lean();
   if (!tx) return { success: false, error: "No donation submission found for this UTR." };
-  const settings = await DonationSetting.findOne().select("upiId").lean();
+  const settings = await getCanonicalDonationSettings();
   const configuredVpa = normalizeVpa((settings as any)?.upiId || "");
   const suppliedVpa = normalizeVpa(String(payload.recipientVpa || ""));
   if (!configuredVpa || !suppliedVpa || suppliedVpa !== configuredVpa) {
@@ -907,13 +922,13 @@ export async function getCurrentUserDonationContextAction() {
 
 export async function getAdminDonationSettingsAction() {
   await requireOwnerSession();
-  const settings = await DonationSetting.findOne().select("upiId qrCodeUrl isEnabled").lean();
+  const settings = await getCanonicalDonationSettings();
   return {
     success: true,
     settings: {
       upiId: (settings as any)?.upiId || "",
       qrCodeUrl: "",
-      isEnabled: (settings as any)?.isEnabled !== false,
+      isEnabled: true,
     },
   };
 }
@@ -924,16 +939,12 @@ export async function adminSetDonationsEnabledAction(enabled: boolean) {
     throw new Error("A boolean donations-enabled value is required.");
   }
 
-  await DonationSetting.updateOne(
-    {},
-    { $set: { isEnabled: enabled, updatedBy: owner.username || "mythicalhrg" } },
-    { upsert: true, setDefaultsOnInsert: true }
-  );
+  await saveCanonicalDonationSettings({ updatedBy: owner.username || "mythicalhrg" });
 
   revalidatePath("/donate");
   revalidatePath("/dashboard/admin");
   revalidatePath("/dashboard/admin/donations");
-  return { success: true, isEnabled: enabled };
+  return { success: true, isEnabled: true };
 }
 
 export async function updateDonationSettingsAction(payload: { upiId: string; qrCodeUrl?: string; customInstructions?: string; thankYouNote?: string }) {
