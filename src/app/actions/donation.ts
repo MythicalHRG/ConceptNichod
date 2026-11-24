@@ -467,7 +467,7 @@ export async function adminVerifyDonationAndSetAmount(payload: {
     if (!amountCheck.valid || !amountCheck.data) {
       return {
         success: false,
-        error: amountCheck.error || "Please enter a valid verified amount (₹).",
+        error: amountCheck.error || "Please enter a valid verified amount (INR).",
       };
     }
 
@@ -594,8 +594,8 @@ export async function adminVerifyDonationAndSetAmount(payload: {
     return {
       success: true,
       message: tx.isPublishedToPatrons
-        ? `Verified ₹${confirmedAmount.toLocaleString("en-IN")} and added ${tx.donorName} to the Hall of Patrons!`
-        : `Verified ₹${confirmedAmount.toLocaleString("en-IN")} for UTR ${tx.utr}.`,
+        ? `Verified INR ${new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 }).format(confirmedAmount)} and added ${tx.donorName} to the Hall of Patrons!`
+        : `Verified INR ${new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 }).format(confirmedAmount)} for UTR ${tx.utr}.`,
     };
   } catch (error: any) {
     console.error("[adminVerifyDonationAndSetAmount] Error:", error);
@@ -628,7 +628,7 @@ export async function adminToggleHallOfPatrons(
     if (tx.status !== "verified" || !tx.verifiedAmount || !Number.isFinite(tx.verifiedAmount) || tx.verifiedAmount <= 0) {
       return {
         success: false,
-        error: "You must verify the UTR and enter a valid ₹ amount before adding to the Hall of Patrons.",
+        error: "You must verify the UTR and enter a valid INR amount before adding to the Hall of Patrons.",
       };
     }
 
