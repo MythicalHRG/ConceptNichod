@@ -454,7 +454,7 @@ export function DonationReconciliation() {
         <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-2xl p-4">
           <p className="text-xs text-indigo-700 dark:text-indigo-300">Total Verified Money</p>
           <p className="text-2xl font-extrabold text-indigo-400">
-            <Rupee />{summary.totalVerifiedAmount.toLocaleString("en-IN")}
+            <Rupee amount={summary.totalVerifiedAmount} />
           </p>
         </div>
       </div>
