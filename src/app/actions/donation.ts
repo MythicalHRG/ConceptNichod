@@ -202,6 +202,7 @@ export async function submitDonationTransaction(formData: {
   donorName: string;
   utr: string;
   transactionId: string;
+  claimedAmount?: number | string;
   message?: string;
   isAnonymous?: boolean;
   honeypot?: string;
@@ -221,6 +222,14 @@ export async function submitDonationTransaction(formData: {
     }
 
     const { donorName, utr, transactionId, message, isAnonymous } = validation.data;
+    let claimedAmount: number | null = null;
+    if (formData.claimedAmount !== undefined && formData.claimedAmount !== null && formData.claimedAmount !== "") {
+      const claimedAmountCheck = validateAdminVerifiedAmount(formData.claimedAmount);
+      if (!claimedAmountCheck.valid || claimedAmountCheck.data === undefined) {
+        return { success: false, error: "Enter a valid claimed donation amount between INR 1 and INR 1,00,00,000." };
+      }
+      claimedAmount = claimedAmountCheck.data;
+    }
     const clientIp = await getClientIp();
 
     await connectToDatabase();
@@ -302,7 +311,7 @@ export async function submitDonationTransaction(formData: {
       isPublishedToPatrons: false,
       submitterIp: clientIp,
       amount: null,
-      claimedAmount: null,
+      claimedAmount,
       donatedAt: new Date(),
       isPublic: false,
     });
@@ -397,6 +406,7 @@ export async function getAdminDonationDashboard(filterStatus?: string, search?: 
       isAnonymous: Boolean(t.isAnonymous),
       utr: t.utr,
       transactionId: t.transactionId || "",
+      claimedAmount: t.claimedAmount ?? null,
       message: t.message || "",
       status: t.status || "pending",
       verifiedAmount: t.verifiedAmount ?? null,
