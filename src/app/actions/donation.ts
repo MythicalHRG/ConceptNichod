@@ -28,6 +28,9 @@ import {
 
 const VALID_TIERS: PatronTier[] = ["LEGEND", "DIAMOND", "GOLD", "SILVER", "SUPPORTER"];
 
+// Owner-confirmed official recipient VPA used when no valid Admin setting exists.
+const DEFAULT_DONATION_UPI_ID = "harsh.2525@ptaxis";
+
 /**
  * Resolve one deterministic settings record and heal legacy disabled rows.
  * A configured, valid recipient always outranks an empty/invalid legacy row.
@@ -35,12 +38,28 @@ const VALID_TIERS: PatronTier[] = ["LEGEND", "DIAMOND", "GOLD", "SILVER", "SUPPO
 async function getCanonicalDonationSettings() {
   await connectToDatabase();
   const records = await DonationSetting.find({}).sort({ updatedAt: -1, _id: -1 }).lean();
-  const canonical = records.find((record: any) => Boolean(normalizeVpa(record.upiId || ""))) || records[0] || null;
+  const configured = records.find((record: any) => Boolean(normalizeVpa(record.upiId || "")));
+  const canonical = configured || records[0] || null;
   await DonationSetting.updateMany(
     { isEnabled: { $ne: true } },
     { $set: { isEnabled: true } }
   );
-  return canonical ? { ...canonical, isEnabled: true } : null;
+
+  // Do not leave the public payment flow blank when the database has no valid VPA.
+  // Admin can still replace this fallback through the existing UPI settings screen.
+  if (!configured) {
+    if (records.length > 0) {
+      await DonationSetting.updateMany({}, { $set: { upiId: DEFAULT_DONATION_UPI_ID, isEnabled: true } });
+    }
+    return {
+      ...(canonical || {}),
+      upiId: DEFAULT_DONATION_UPI_ID,
+      payeeName: canonical?.payeeName || "ConceptNichod",
+      isEnabled: true,
+    };
+  }
+
+  return { ...canonical, isEnabled: true };
 }
 
 async function saveCanonicalDonationSettings(values: Record<string, unknown>) {
@@ -141,7 +160,7 @@ export async function getPublicDonationPageData() {
     return {
       success: true,
       settings: {
-        upiId: configuredVpa || "",
+        upiId: configuredVpa || DEFAULT_DONATION_UPI_ID,
         payeeName: settings?.payeeName || process.env.NEXT_PUBLIC_UPI_NAME || "ConceptNichod",
         qrCodeUrl: "",
         isEnabled: true,
@@ -160,7 +179,7 @@ export async function getPublicDonationPageData() {
     return {
       success: false,
       settings: {
-        upiId: "",
+        upiId: DEFAULT_DONATION_UPI_ID,
         payeeName: process.env.NEXT_PUBLIC_UPI_NAME || "ConceptNichod",
         qrCodeUrl: "",
         isEnabled: true,
@@ -213,7 +232,7 @@ export async function submitDonationTransaction(formData: {
     }
 
     const settings = await getCanonicalDonationSettings();
-    const configuredVpa = normalizeVpa((settings as any)?.upiId || "");
+    const configuredVpa = normalizeVpa((settings as any)?.upiId || DEFAULT_DONATION_UPI_ID);
     if (!configuredVpa) {
       return { success: false, error: "Official UPI ID is not configured yet. Please contact the admin." };
     }
