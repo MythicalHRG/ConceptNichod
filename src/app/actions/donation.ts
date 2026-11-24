@@ -692,7 +692,7 @@ export async function adminRejectDonationTransaction(
       return { success: false, error: "Invalid transaction ID." };
     }
 
-    const tx = await DonationTransaction.findById(transactionDbId).select("_id utr donorRecordId");
+    const tx = await DonationTransaction.findById(transactionDbId).select("_id utr donorRecordId status");
     if (!tx) {
       return { success: false, error: "Transaction not found." };
     }
@@ -701,10 +701,19 @@ export async function adminRejectDonationTransaction(
       adminNote || "UTR / Transaction ID could not be verified in bank statement.",
       500
     );
+    // Reject only unreviewed submissions. Include legacy rows with no status,
+    // and make the state check part of the write to prevent verify/reject races.
     // Atomic field-only update deliberately bypasses validation of legacy
     // required fields (transactionId / donorName) absent from older documents.
     const rejected = await DonationTransaction.findOneAndUpdate(
-      { _id: tx._id },
+      {
+        _id: tx._id,
+        $or: [
+          { status: "pending" },
+          { status: { $exists: false } },
+          { status: null },
+        ],
+      },
       {
         $set: {
           status: "rejected",
@@ -718,7 +727,9 @@ export async function adminRejectDonationTransaction(
       },
       { new: true }
     );
-    if (!rejected) return { success: false, error: "Transaction could not be found for rejection." };
+    if (!rejected) {
+      return { success: false, error: "This donation has already been reviewed or is being processed." };
+    }
 
     if (tx.donorRecordId && mongoose.isValidObjectId(tx.donorRecordId)) {
       await Donor.findByIdAndUpdate(tx.donorRecordId, { $set: { isVisible: false, isPublic: false } });
