@@ -82,6 +82,7 @@ export default function DonatePage() {
   const [donorName, setDonorName] = useState("");
   const [utr, setUtr] = useState("");
   const [transactionId, setTransactionId] = useState("");
+  const [donationAmount, setDonationAmount] = useState("");
   const [message, setMessage] = useState("");
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [honeypot, setHoneypot] = useState("");
@@ -138,6 +139,18 @@ export default function DonatePage() {
   }, []);
 
   const receiverUpiId = settings.upiId;
+  const parsedDonationAmount = Number(donationAmount);
+  const hasValidDonationAmount =
+    donationAmount.trim() !== "" &&
+    Number.isFinite(parsedDonationAmount) &&
+    parsedDonationAmount >= 1 &&
+    parsedDonationAmount <= 10000000;
+  const upiPaymentUri = hasValidDonationAmount && receiverUpiId
+    ? `upi://pay?pa=${encodeURIComponent(receiverUpiId)}&pn=${encodeURIComponent(settings.payeeName || "ConceptNichod")}&am=${parsedDonationAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent("Donation to ConceptNichod")}`
+    : "";
+  const donationQrUrl = upiPaymentUri
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=260x260&format=png&data=${encodeURIComponent(upiPaymentUri)}`
+    : "";
 
   const handleCopyUpi = async () => {
     if (!settings.upiId) return;
@@ -275,9 +288,57 @@ export default function DonatePage() {
                   </div>
                   <span className="text-[11px] text-muted-foreground">Direct UPI</span>
                 </div>
-                <div className="rounded-xl border border-border bg-background/70 p-4 text-center">
-                  <p className="text-xs font-semibold text-foreground">Use the official UPI ID</p>
-                  <p className="mt-1 text-xs text-muted-foreground">No QR image is displayed until a verified QR-generation flow is available. Copy the UPI ID below and confirm the recipient name in your payment app.</p>
+                <div className="rounded-xl border border-border bg-background/70 p-4 space-y-3">
+                  <div>
+                    <label htmlFor="donation-amount" className="block text-xs font-semibold text-foreground mb-1.5">
+                      Enter donation amount (INR)
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">₹</span>
+                      <input
+                        id="donation-amount"
+                        type="number"
+                        inputMode="decimal"
+                        min="1"
+                        max="10000000"
+                        step="0.01"
+                        placeholder="e.g. 100"
+                        value={donationAmount}
+                        onChange={(e) => setDonationAmount(e.target.value)}
+                        className="w-full rounded-xl border border-border bg-background py-2.5 pl-8 pr-3 text-sm text-foreground focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Enter ₹1 to ₹1,00,00,000. The QR updates automatically as you change the amount.
+                    </p>
+                  </div>
+                  {donationQrUrl ? (
+                    <div className="flex flex-col items-center gap-2 rounded-xl border border-border bg-white p-4">
+                      <img
+                        src={donationQrUrl}
+                        alt={`UPI payment QR for ₹${parsedDonationAmount.toLocaleString("en-IN")}`}
+                        width={220}
+                        height={220}
+                        className="h-[220px] w-[220px] object-contain"
+                      />
+                      <p className="text-sm font-bold text-gray-900">Pay ₹{parsedDonationAmount.toLocaleString("en-IN")}</p>
+                      <a
+                        href={upiPaymentUri}
+                        className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-700"
+                      >
+                        Open UPI app
+                      </a>
+                      <p className="text-center text-[10px] text-gray-600">
+                        Confirm the recipient name and amount in your UPI app before paying.
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="rounded-lg border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
+                      {receiverUpiId
+                        ? "Enter a valid amount to generate your payment QR code."
+                        : "The official UPI ID has not been configured by the Admin yet."}
+                    </p>
+                  )}
                 </div>
                 <div className="bg-background border border-border rounded-xl p-3.5 flex items-center justify-between gap-3">
                   <div className="min-w-0">
