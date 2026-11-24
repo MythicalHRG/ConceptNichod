@@ -3,7 +3,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Rupee } from "@/components/ui/rupee-symbol";
+import { Rupee, formatINR } from "@/components/ui/rupee-symbol";
 import {
   getPublicDonationPageData,
   submitDonationTransaction,
@@ -294,7 +294,7 @@ export default function DonatePage() {
                       Enter donation amount (INR)
                     </label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">₹</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground"><Rupee /></span>
                       <input
                         id="donation-amount"
                         type="number"
@@ -309,19 +309,19 @@ export default function DonatePage() {
                       />
                     </div>
                     <p className="mt-1 text-[11px] text-muted-foreground">
-                      Enter ₹1 to ₹1,00,00,000. The QR updates automatically as you change the amount.
+                      Enter INR 1 to INR 1,00,00,000. The QR updates automatically as you change the amount.
                     </p>
                   </div>
                   {donationQrUrl ? (
                     <div className="flex flex-col items-center gap-2 rounded-xl border border-border bg-white p-4">
                       <img
                         src={donationQrUrl}
-                        alt={`UPI payment QR for ₹${parsedDonationAmount.toLocaleString("en-IN")}`}
+                        alt={`UPI payment QR for INR ${formatINR(parsedDonationAmount)}`}
                         width={220}
                         height={220}
                         className="h-[220px] w-[220px] object-contain"
                       />
-                      <p className="text-sm font-bold text-gray-900">Pay ₹{parsedDonationAmount.toLocaleString("en-IN")}</p>
+                      <p className="text-sm font-bold text-gray-900">Pay <Rupee amount={parsedDonationAmount} /></p>
                       <a
                         href={upiPaymentUri}
                         className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-700"
@@ -533,7 +533,7 @@ export default function DonatePage() {
               <div>
                 <p className="text-[11px] text-muted-foreground">Total Verified Support</p>
                 <p className="text-xl font-extrabold text-emerald-400">
-                  <Rupee />{totalRaised.toLocaleString("en-IN")}
+                  <Rupee amount={totalRaised} />
                 </p>
               </div>
               <div className="h-8 w-px bg-secondary" />
@@ -584,7 +584,7 @@ export default function DonatePage() {
                           {cfg.title}
                         </span>
                         <span className="text-base font-extrabold text-emerald-400">
-                          <Rupee />{patron.amount.toLocaleString("en-IN")}
+                          <Rupee amount={patron.amount} />
                         </span>
                       </div>
 
