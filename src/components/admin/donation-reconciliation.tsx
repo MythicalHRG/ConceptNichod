@@ -34,6 +34,7 @@ interface AdminTxItem {
   isAnonymous: boolean;
   utr: string;
   transactionId: string;
+  claimedAmount?: number | null;
   message?: string;
   status: "pending" | "verified" | "rejected";
   verifiedAmount: number | null;
@@ -376,6 +377,14 @@ export function DonationReconciliation() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          <a
+            href="/donate"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-border bg-background hover:bg-muted text-xs font-semibold text-foreground"
+          >
+            View Public Donation Page
+          </a>
           <button
             type="button"
             onClick={() => setShowSettings(!showSettings)}
@@ -596,6 +605,14 @@ export function DonationReconciliation() {
                 {needsSyncRecovery && (
                   <div role="status" className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
                     Donor synchronization incomplete. Confirm the original bank evidence below, then retry the donor sync.
+                  </div>
+                )}
+
+                {tx.claimedAmount !== null && tx.claimedAmount !== undefined && (
+                  <div className="rounded-xl border border-indigo-500/25 bg-indigo-500/5 px-3 py-2 text-xs">
+                    <span className="font-semibold text-foreground">Donor-entered QR amount: </span>
+                    <Rupee amount={tx.claimedAmount} />
+                    <span className="ml-2 text-muted-foreground">Reference only — verify the actual credited amount in the bank record below.</span>
                   </div>
                 )}
 
