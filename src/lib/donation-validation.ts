@@ -43,12 +43,12 @@ export function validateAdminVerifiedAmount(raw: unknown): ValidationResult<numb
     amount = raw;
   } else if (typeof raw === "string") {
     const trimmed = raw.trim();
-    if (!/^\d+(?:\.\d+)?$/.test(trimmed)) return { valid: false, error: "Enter a verified amount between ₹1 and ₹1,00,00,000." };
+    if (!/^\d+(?:\.\d+)?$/.test(trimmed)) return { valid: false, error: "Enter a verified amount between INR 1 and INR 1,00,00,000." };
     amount = Number(trimmed);
   } else {
-    return { valid: false, error: "Enter a verified amount between ₹1 and ₹1,00,00,000." };
+    return { valid: false, error: "Enter a verified amount between INR 1 and INR 1,00,00,000." };
   }
-  if (!Number.isFinite(amount) || amount < 1 || amount > 10000000) return { valid: false, error: "Enter a verified amount between ₹1 and ₹1,00,00,000." };
+  if (!Number.isFinite(amount) || amount < 1 || amount > 10000000) return { valid: false, error: "Enter a verified amount between INR 1 and INR 1,00,00,000." };
   return { valid: true, data: Math.round(amount * 100) / 100 };
 }
 export function computePatronTier(amount: number): PatronTier {
