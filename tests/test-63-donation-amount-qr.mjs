@@ -15,8 +15,15 @@ test("donation amount drives an INR UPI intent and QR code", () => {
   assert.match(page, /href=\{upiPaymentUri\}/);
 });
 
-test("donor-entered amount never replaces admin-verified transaction amount", () => {
+test("donor-entered amount is sent only as a claimed reference, never as verified amount", () => {
   const page = fs.readFileSync("src/app/donate/page.tsx", "utf8");
+  const actions = fs.readFileSync("src/app/actions/donation.ts", "utf8");
+  const admin = fs.readFileSync("src/components/admin/donation-reconciliation.tsx", "utf8");
   const submit = page.slice(page.indexOf("const result = await submitDonationTransaction"), page.indexOf("if (!result.success)"));
-  assert.doesNotMatch(submit, /amount\s*:/);
+  assert.match(submit, /claimedAmount:\s*parsedDonationAmount/);
+  assert.match(actions, /claimedAmount,\s*$/m);
+  assert.match(actions, /claimedAmount:\s*t\.claimedAmount\s*\?\?\s*null/);
+  assert.match(admin, /Donor-entered QR amount/);
+  assert.match(admin, /View Public Donation Page/);
+  assert.doesNotMatch(submit, /verifiedAmount\s*:/);
 });
