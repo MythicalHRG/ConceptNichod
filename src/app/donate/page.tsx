@@ -199,12 +199,21 @@ export default function DonatePage() {
       return;
     }
 
+    if (!hasValidDonationAmount) {
+      setStatusBanner({
+        type: "error",
+        text: "Enter a valid donation amount between INR 1 and INR 1,00,00,000.",
+      });
+      return;
+    }
+
     setSubmitting(true);
     try {
       const result = await submitDonationTransaction({
         donorName: cleanName,
         utr: cleanUtr,
         transactionId: cleanTxn,
+        claimedAmount: parsedDonationAmount,
         message,
         isAnonymous,
         honeypot,
