@@ -112,3 +112,28 @@ test("leaderboard excludes unscored topics and never invents topic durations", (
   assert.doesNotMatch(leaderboard, /isCompleted \? 70|isInProgress \? 40|isCompleted \? 180 : 60/);
   assert.doesNotMatch(leaderboard, /hasNonEmptyAnswer|hasAnswers:|practiceStatus: 1/);
 });
+
+test("reload during AI evaluation waits for the result, then retries only after the analysis lease expires", () => {
+  const model = read("src/models/Topic.ts");
+  const types = read("src/lib/types.ts");
+  const action = read("src/app/actions.ts");
+  const page = read("src/components/topic/topic-page-client.tsx");
+  assert.match(model, /'analyzing'/);
+  assert.match(model, /analysisStartedAt: \{ type: Date/);
+  assert.match(types, /analysisStartedAt\?: Date/);
+  assert.match(action, /analysisLeaseStaleBefore = new Date\(Date\.now\(\) - 120_000\)/);
+  assert.match(action, /practiceStatus: "analyzing", analysisStartedAt: analysisLeaseStartedAt/);
+  assert.match(action, /analysisStartedAt: analysisLeaseStartedAt, analysis: \{ \$exists: false \}/);
+  assert.match(action, /\$unset: \{ analysisStartedAt: 1 \}/);
+  assert.match(page, /initialTopic\.practiceStatus === "analyzing"/);
+  assert.match(page, /router\.refresh\(\), 5_000/);
+  assert.match(page, /handleAutoSubmit\(\{ \.\.\.initialTopic, practiceStatus: "in_progress" \}\)/);
+});
+
+test("legacy completed-without-analysis sessions are auto-submitted instead of shown as finished", () => {
+  const page = read("src/components/topic/topic-page-client.tsx");
+  const action = read("src/app/actions.ts");
+  assert.match(page, /if \(initialTopic\.analysis\)/);
+  assert.match(page, /initialTopic\.practiceStatus === "completed" \|\|[\s\S]*?handleAutoSubmit\(initialTopic\)/);
+  assert.match(action, /A completed status without an analysis is an[\s\S]*?interrupted legacy lock/);
+});
