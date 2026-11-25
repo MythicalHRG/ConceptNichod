@@ -83,7 +83,6 @@ function AuthParamsHandler({
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
   const [user, setUser] = useState<AuthUser | null>(null);
   const userRef = useRef<AuthUser | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
@@ -198,9 +197,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     announceAuthChange("login");
     // A different account may have different private server-rendered data.
     // Navigate and refresh so no prior account route/cache remains visible.
-    router.replace("/dashboard");
-    router.refresh();
-  }, [router]);
+    window.location.replace("/dashboard");
+  }, []);
 
   const logout = useCallback(async () => {
     hasLocalAuthChange.current = true;
@@ -215,10 +213,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setAuthModalOpen(true);
       announceAuthChange("logout");
       // Never leave a logged-out user on a previously rendered private page.
-      router.replace("/?login=true");
-      router.refresh();
+      window.location.replace("/?login=true");
     }
-  }, [router]);
+  }, []);
 
   const safeSetAuthModalOpen = useCallback((open: boolean) => {
     setAuthModalOpen(open);
