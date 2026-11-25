@@ -29,24 +29,72 @@ const { sanitizeIp, getClientIp } = ipModule;
 test("Challenger 1.1: Forged signature on valid UUID is strictly rejected", () => {
   const validUuid = "12345678-abcd-ef01-2345-6789abcdef01";
   const signed = createSignedSessionCookie(validUuid);
-  const [uuid, sig] = signed.split(".");
+  const [uuid, version, expiry, sig] = signed.split(".");
 
   // 1. Bit flip in signature
   const flippedSig = (sig[0] === "0" ? "1" : "0") + sig.slice(1);
-  assert.strictEqual(verifySessionCookie(`${uuid}.${flippedSig}`), null, "Flipped signature bit must return null");
+  assert.strictEqual(verifySessionCookie(`${uuid}.${version}.${expiry}.${flippedSig}`), null, "Flipped signature bit must return null");
 
   // 2. Completely randomized 64-char hex signature
   const randomSig = crypto.randomBytes(32).toString("hex");
-  assert.strictEqual(verifySessionCookie(`${uuid}.${randomSig}`), null, "Random signature must return null");
+  assert.strictEqual(verifySessionCookie(`${uuid}.${version}.${expiry}.${randomSig}`), null, "Random signature must return null");
 
   // 3. Truncated signature (32 chars instead of 64)
-  assert.strictEqual(verifySessionCookie(`${uuid}.${sig.slice(0, 32)}`), null, "Truncated signature must return null");
+  assert.strictEqual(verifySessionCookie(`${uuid}.${version}.${expiry}.${sig.slice(0, 32)}`), null, "Truncated signature must return null");
 
   // 4. Overlong signature (65 chars)
-  assert.strictEqual(verifySessionCookie(`${uuid}.${sig}a`), null, "Overlong signature must return null");
+  assert.strictEqual(verifySessionCookie(`${uuid}.${version}.${expiry}.${sig}a`), null, "Overlong signature must return null");
 
   // 5. Signature with invalid characters
-  assert.strictEqual(verifySessionCookie(`${uuid}.${sig.slice(0, 60)}!@#$`), null, "Non-hex signature must return null");
+  assert.strictEqual(verifySessionCookie(`${uuid}.${version}.${expiry}.${sig.slice(0, 60)}!@#import test from "node:test";
+import assert from "node:assert/strict";
+import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+import ts from "typescript";
+
+import { createSignedSessionCookie, verifySessionCookie } from "../src/lib/session.ts";
+import {
+  checkRateLimit,
+  peekRateLimit,
+  recordFailedAttempt,
+  resetRateLimit
+} from "../src/lib/rate-limiter.ts";
+
+// Transpile src/lib/ip.ts for direct Node ESM execution with mock headers
+const ipTsSource = fs.readFileSync(path.resolve("src/lib/ip.ts"), "utf-8")
+  .replace(/^import\s+.*?;/m, "const headers = () => null;");
+const { outputText: ipJsSource } = ts.transpileModule(ipTsSource, {
+  compilerOptions: { module: ts.ModuleKind.ESNext }
+});
+const ipModule = await import("data:text/javascript," + encodeURIComponent(ipJsSource));
+const { sanitizeIp, getClientIp } = ipModule;
+
+// =====================================================================
+// CHALLENGE 1: Session Security & HMAC Verification Probes
+// =====================================================================
+
+test("Challenger 1.1: Forged signature on valid UUID is strictly rejected", () => {
+  const validUuid = "12345678-abcd-ef01-2345-6789abcdef01";
+  const signed = createSignedSessionCookie(validUuid);
+  const [uuid, version, expiry, sig] = signed.split(".");
+
+  // 1. Bit flip in signature
+  const flippedSig = (sig[0] === "0" ? "1" : "0") + sig.slice(1);
+  assert.strictEqual(verifySessionCookie(`${uuid}.${version}.${expiry}.${flippedSig}`), null, "Flipped signature bit must return null");
+
+  // 2. Completely randomized 64-char hex signature
+  const randomSig = crypto.randomBytes(32).toString("hex");
+  assert.strictEqual(verifySessionCookie(`${uuid}.${version}.${expiry}.${randomSig}`), null, "Random signature must return null");
+
+  // 3. Truncated signature (32 chars instead of 64)
+  assert.strictEqual(verifySessionCookie(`${uuid}.${version}.${expiry}.${sig.slice(0, 32)}`), null, "Truncated signature must return null");
+
+  // 4. Overlong signature (65 chars)
+  assert.strictEqual(verifySessionCookie(`${uuid}.${version}.${expiry}.${sig}a`), null, "Overlong signature must return null");
+
+  // 5. Signature with invalid characters
+  assert.strictEqual(), null, "Non-hex signature must return null");
 });
 
 test("Challenger 1.2: Cross-UUID signature replay attack is rejected", () => {
@@ -54,10 +102,10 @@ test("Challenger 1.2: Cross-UUID signature replay attack is rejected", () => {
   const attackerUuid = "99999999-8888-7777-6666-555555555555";
 
   const victimSigned = createSignedSessionCookie(victimUuid);
-  const [, victimSig] = victimSigned.split(".");
+  const [, victimVersion, victimExpiry, victimSig] = victimSigned.split(".");
 
   // Attacker tries to reuse victim's valid signature with their own UUID
-  const forgedCookie = `${attackerUuid}.${victimSig}`;
+  const forgedCookie = `${attackerUuid}.${victimVersion}.${victimExpiry}.${victimSig}`;
   assert.strictEqual(verifySessionCookie(forgedCookie), null, "Signature reuse across UUIDs must return null");
 });
 
