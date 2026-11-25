@@ -2,7 +2,7 @@
 
 import { cookies } from 'next/headers';
 import { callOpenRouter, parseJsonResponse } from '@/lib/openrouter';
-import { verifySessionCookie } from '@/lib/session';
+import { getVerifiedSessionUuid } from "@/lib/session-auth";
 import { checkDistributedRateLimit } from '@/lib/distributed-rate-limiter';
 import { assertActiveNonBlacklistedUser } from '@/lib/ai-flow-auth';
 import { escapePromptText } from '@/lib/prompt-safety';
@@ -74,7 +74,7 @@ function sanitizeStringArray(value: unknown, maxItems: number, maxLen: number): 
 export async function analyzeAnswersFlow(input: AnalyzeAnswersInput): Promise<{ analysis: FinalAnalysisOutput }> {
   // Authentication check to prevent unauthenticated bot AI-scraping and token draining
   const rawSession = (await cookies()).get('user_session')?.value;
-  const sessionUuid = verifySessionCookie(rawSession);
+  const sessionUuid = await getVerifiedSessionUuid(rawSession);
   if (!sessionUuid) {
     throw new Error('Please log in to generate an analysis.');
   }
