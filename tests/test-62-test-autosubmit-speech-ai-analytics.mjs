@@ -158,3 +158,16 @@ test("question critique scores are kept only when the model actually returns a v
   assert.match(flow, /scoreOutOf10: Math\.round\(q\.scoreOutOf10 \* 10\) \/ 10/);
   assert.doesNotMatch(flow, /scoreOutOf10:[\s\S]{0,220}: 0/);
 });
+
+test("Concept Mirror maps Fluff/Filler chart labels to the real measured percentage", () => {
+  const flow = read("src/ai/flows/analyze-concept-explanation.ts");
+  assert.match(flow, /\/fluff\|filler\/i\.test\(p\.name\)/);
+});
+
+test("single written-test reports do not request or render a longitudinal progression chart", () => {
+  const flow = read("src/ai/flows/analyze-answers.ts");
+  const display = read("src/components/topic/final-analysis-display.tsx");
+  assert.doesNotMatch(flow, /Adaptive Mastery Progression Curve|Stage 1: Recall|Stage 5: Peak Mastery/);
+  assert.match(display, /const availableTypes = \["bar", "pie", "histo", "radar"\]/);
+  assert.doesNotMatch(display, /const availableTypes = \[[^\]]*"polynomial"/);
+});
