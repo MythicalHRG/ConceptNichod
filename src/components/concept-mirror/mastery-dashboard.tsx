@@ -198,7 +198,9 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
               </h4>
               <div className="flex items-center gap-1.5">
                 <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${
-                  fluffPercent > 35
+                  fluffPercent === null
+                    ? "bg-muted text-muted-foreground border-border"
+                    : fluffPercent > 35
                     ? "bg-destructive/10 text-destructive border-destructive/30"
                     : fluffPercent > 15
                     ? "bg-amber-500/10 text-amber-500 border-amber-500/30"
