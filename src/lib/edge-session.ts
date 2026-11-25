@@ -47,7 +47,7 @@ export async function verifyEdgeSessionCookie(cookieValue?: string | null): Prom
   const parts = cookieValue.trim().split(".");
   if (parts.length === 3) {
     const [uuid, versionText, signature] = parts;
-    if (!UUID_REGEX.test(uuid) || !/^(0|[1-9]\\d*)$/.test(versionText) || !/^[a-f0-9]{64}$/i.test(signature)) return null;
+    if (!UUID_REGEX.test(uuid) || !/^(0|[1-9]\d*)$/.test(versionText) || !/^[a-f0-9]{64}$/i.test(signature)) return null;
     const version = Number(versionText);
     if (!Number.isSafeInteger(version) || version < 0) return null;
     const key = await getVerificationKey(getSessionSecret());
