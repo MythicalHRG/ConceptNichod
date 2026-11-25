@@ -109,7 +109,7 @@ export function PracticeAndAnalysisSection({
           )
         )
         .catch((error) => console.warn("Practice progress autosave failed:", error));
-    }, 4000);
+    }, 1500);
 
     return () => clearTimeout(timeout);
   }, [topic.id, writtenAnswers, spokenAnswers, finalSummarySpeech, finalAnalysis, isAnalyzing, isSubmitted]);
