@@ -8,7 +8,7 @@ import User from "@/models/User";
 import Blacklist from "@/models/Blacklist";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { verifySessionCookie } from "@/lib/session";
+import { getVerifiedSessionUuid } from "@/lib/session-auth";
 import { ensurePlatformOwnerRole, isPlatformOwner } from "@/lib/owner-access";
 import { normalizeEmail } from "@/lib/email-utils";
 import { Card, CardContent } from "@/components/ui/card";
@@ -29,7 +29,7 @@ function formatDob(dobStr?: string | null) {
 
 export default async function DashboardPage() {
   const rawSession = (await cookies()).get("user_session")?.value;
-  const sessionUuid = verifySessionCookie(rawSession);
+  const sessionUuid = await getVerifiedSessionUuid(rawSession);
   if (!sessionUuid) {
     redirect("/?login=true");
   }
