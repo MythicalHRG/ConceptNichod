@@ -17,7 +17,7 @@ function getSessionSecret(): string {
   }
   return "local-development-only-session-secret-not-for-production";
 }
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;\nconst SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 export function createSignedSessionCookie(uuid: string, sessionVersion = 0): string {
   if (!uuid || typeof uuid !== "string") throw new Error("UUID is required to create a session cookie.");
