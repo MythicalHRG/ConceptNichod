@@ -36,8 +36,8 @@ function normalizePentagonRadarData(items: Array<{ metric: string; score: number
     unique.push({ metric: label.length > 18 ? label.slice(0, 16) + "…" : label, score: Math.max(0, Math.min(100, Math.round(item.score))) });
     if (unique.length === 5) break;
   }
-  // Never invent radar dimensions when the examiner returned fewer verified metrics.
-  return unique;
+  // Fewer than three real dimensions cannot form a trustworthy radar shape.
+  return unique.length >= 3 ? unique : [];
 }
 
 export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDisplayProps) {
