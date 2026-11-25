@@ -72,3 +72,12 @@ test("password changes rotate the current session and revoke previous session ve
   assert.match(auth, /\$inc: \{ sessionVersion: 1 \}/);
   assert.match(auth, /createSignedSessionCookie\(user\.uuid, nextSessionVersion\)/);
 });
+
+test("account changes invalidate stale private UI in other browser tabs", () => {
+  const auth = read("src/components/auth/auth-context.tsx");
+  assert.match(auth, /BroadcastChannel\(AUTH_SYNC_CHANNEL\)/);
+  assert.match(auth, /window\.addEventListener\("storage", onStorage\)/);
+  assert.match(auth, /window\.location\.replace\(message\.type === "logout" \? "\/\?login=true" : "\/dashboard"\)/);
+  assert.match(auth, /announceAuthChange\("login"\)/);
+  assert.match(auth, /announceAuthChange\("logout"\)/);
+});
