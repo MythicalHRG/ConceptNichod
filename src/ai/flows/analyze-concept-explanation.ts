@@ -100,6 +100,7 @@ export async function analyzeConceptExplanation(input: AnalyzeConceptExplanation
 
   const prompt = `You are a strict, world-class professor and oral defense examiner analyzing a student's verbal explanation of a concept.
 Provide a detailed mastery report based on their transcribed explanation with comprehensive multi-chart visual analytics.
+A single oral defense is one observation, not a longitudinal learning curve. Do not invent phase-by-phase learning progression; polynomial_chart_data MUST be an empty array.
 
 Concept Name (untrusted label): <untrusted_concept_name>${promptConceptName}</untrusted_concept_name>
 Student Level (untrusted label): <untrusted_class_level>${promptClassLevel}</untrusted_class_level>
@@ -182,13 +183,7 @@ Respond with ONLY a valid JSON object (no markdown, pure JSON):
     {"name": "Application", "score": <0-100>},
     {"name": "Edge Cases", "score": <0-100>}
   ],
-  "polynomial_chart_data": [
-    {"step": "Initial Recall", "score": <0-100>},
-    {"step": "Concept Framing", "score": <0-100>},
-    {"step": "Analytical Nuance", "score": <0-100>},
-    {"step": "Synthesis & Proof", "score": <0-100>},
-    {"step": "Final Mastery", "score": <0-100>}
-  ],
+  "polynomial_chart_data": [],
   "detected_mistakes": [
     {
       "title": "<Concise title of specific mistake / conceptual slip>",
@@ -256,10 +251,8 @@ CRITICAL: pie_chart_data values MUST sum to exactly 100.`;
     ? reportedBarChartData
     : radarChartData.map((item) => ({ name: item.metric, score: item.score }));
 
-  let polynomialChartData = (Array.isArray(rawOutput.polynomial_chart_data) ? rawOutput.polynomial_chart_data : [])
-    .filter((item) => item && typeof item.step === "string" && item.step.trim().length > 0 && item.step.trim().length <= 80 && Number.isFinite(item.score))
-    .slice(0, 10)
-    .map((item) => ({ step: item.step.trim(), score: Math.max(0, Math.min(100, Math.round(item.score))) }));
+  // One oral response cannot establish a longitudinal learning curve.
+  const polynomialChartData: { step: string; score: number }[] = [];
 
   const feedbackSummary =
     typeof rawOutput.feedback_summary === "string" && rawOutput.feedback_summary.trim()
