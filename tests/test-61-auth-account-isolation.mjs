@@ -44,3 +44,31 @@ test("topic mutation actions enforce authenticated ownership in database filters
   assert.match(actions, /Topic\.findOneAndUpdate\(\s*\{ _id: topicId, userId: sessionUuid \}/);
   assert.match(actions, /Topic\.findOne\(\{ _id: topicId, userId: sessionUuid \}\)/);
 });
+
+test("private server entry points validate session version against the database", () => {
+  const helper = read("src/lib/session-auth.ts");
+  const signer = read("src/lib/session.ts");
+  assert.match(helper, /getSessionVersionFromCookie/);
+  assert.match(helper, /User\.findOne\(\{ uuid \}\)\.select\("sessionVersion"\)/);
+  assert.match(helper, /effectiveTokenVersion === currentVersion/);
+  assert.match(signer, /SESSION_TTL_SECONDS/);
+  assert.match(signer, /expiresAt <= Math\.floor\(Date\.now\(\) \/ 1000\)/);
+  for (const path of [
+    "src/app/actions.ts",
+    "src/app/actions/auth.ts",
+    "src/app/actions/mistakes.ts",
+    "src/app/actions/study-groups.ts",
+    "src/app/dashboard/page.tsx",
+    "src/app/dashboard/layout.tsx",
+    "src/app/dashboard/topic/[topicId]/page.tsx",
+  ]) {
+    assert.match(read(path), /getVerifiedSessionUuid/ , `Missing DB-backed session validation in ${path}`);
+    assert.doesNotMatch(read(path), /verifySessionCookie\(/, `Legacy verification bypass remains in ${path}`);
+  }
+});
+
+test("password changes rotate the current session and revoke previous session versions", () => {
+  const auth = read("src/app/actions/auth.ts");
+  assert.match(auth, /\$inc: \{ sessionVersion: 1 \}/);
+  assert.match(auth, /createSignedSessionCookie\(user\.uuid, nextSessionVersion\)/);
+});
