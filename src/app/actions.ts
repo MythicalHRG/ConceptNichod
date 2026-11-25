@@ -25,9 +25,8 @@ export async function generateContentAction(topicId: string, topicName: string, 
 
   await assertActiveNonBlacklistedUser(sessionUuid);
 
-  const topicDoc = await Topic.findById(topicId);
-  if (!topicDoc) throw new Error("Topic not found");
-  if (topicDoc.userId !== sessionUuid) throw new Error("Unauthorized");
+  const topicDoc = await Topic.findOne({ _id: topicId, userId: sessionUuid });
+  if (!topicDoc) throw new Error("Topic not found or access denied.");
 
   const subject = topicDoc.subject || "Unknown";
   const chapter = topicDoc.chapter || "Unknown";
@@ -146,7 +145,7 @@ export async function runFinalAnalysisAction(
   );
 
   if (!lockedTopic) {
-    const refreshed = await Topic.findById(topicId);
+    const refreshed = await Topic.findOne({ _id: topicId, userId: sessionUuid });
     if (refreshed?.analysis) {
       return { analysis: refreshed.analysis };
     }
