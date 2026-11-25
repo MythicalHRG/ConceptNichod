@@ -85,3 +85,20 @@ test("profile KPI cards show no assessment as unavailable, not a zero-percent sc
   assert.match(profile, /mirrorData\.totalSessions > 0/);
   assert.doesNotMatch(profile, /data\.averageScore \|\| 0/);
 });
+
+test("single Concept Mirror responses cannot generate a synthetic longitudinal learning curve", () => {
+  const flow = read("src/ai/flows/analyze-concept-explanation.ts");
+  const ui = read("src/components/concept-mirror/mastery-dashboard.tsx");
+  assert.match(flow, /"polynomial_chart_data": \[\]/);
+  assert.match(flow, /polynomialChartData: \{ step: string; score: number \}\[\] = \[\]/);
+  assert.match(ui, /const safePolyData: \{ step: string; score: number \}\[\] = \[\]/);
+  assert.match(ui, /A single explanation cannot form a learning curve/);
+  assert.doesNotMatch(ui, /report\.polynomial_chart_data\.filter/);
+});
+
+test("profile AI receives null for unassessed written and oral scores, never zero", () => {
+  const source = read("src/app/actions/profile-ai.ts");
+  assert.match(source, /writtenAverageScore: hasWrittenAssessments \? profileData\.averageScore : null/);
+  assert.match(source, /averageOralScore: hasOralAssessments \? profileData\.conceptMirror\?\.averageScore : null/);
+  assert.match(source, /Treat null score fields and empty assessment distributions as not assessed/);
+});
