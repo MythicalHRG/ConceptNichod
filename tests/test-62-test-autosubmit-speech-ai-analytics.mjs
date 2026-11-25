@@ -23,7 +23,7 @@ test("reload of an active or already-opened test auto-submits persisted answers"
   assert.match(page, /title: "Session Auto-Submitted"/);
   assert.doesNotMatch(page, /title: "Session Restored"/);
   assert.match(page, /currentTopic\.savedFinalSummarySpeech\?\.trim\(\)/);
-  assert.match(page, /initialSessionCheckDoneRef\.current/);
+  assert.match(page, /initialSessionCheckedTopicRef\.current/);
 });
 
 test("active test answers and final oral summary are autosaved to the owner-scoped topic", () => {
