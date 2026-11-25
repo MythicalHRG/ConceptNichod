@@ -60,3 +60,28 @@ test("written-test analytics never manufacture chart dimensions or authorship co
   assert.match(display, /No authorship estimate is available/);
   assert.match(display, /hasAuthenticityReport/);
 });
+
+test("Concept Mirror marks missing fluff and overall scores as unassessed", () => {
+  const flow = read("src/ai/flows/analyze-concept-explanation.ts");
+  const ui = read("src/components/concept-mirror/mastery-dashboard.tsx");
+  assert.match(flow, /fluffPercentage = fluffItem \\? fluffItem\\.value : null/);
+  assert.match(ui, /fluffPercent === null \\? "—" :/);
+  assert.match(ui, /Fewer than three verified performance dimensions/);
+  assert.match(ui, /Overall score not returned/);
+  assert.doesNotMatch(ui, /avgClarity|: avgClarity/);
+});
+
+test("written-test radar charts require enough real metrics and authenticity is never inferred from the total", () => {
+  const display = read("src/components/topic/final-analysis-display.tsx");
+  assert.match(display, /return unique\\.length >= 3 \\? unique : \\[\\]/);
+  assert.match(display, /No authorship estimate is available/);
+  assert.doesNotMatch(display, /safeOverallScore >= 40|isNatural \\? 88|baseScore \\* 1\\.05/);
+});
+
+test("profile KPI cards show no assessment as unavailable, not a zero-percent score", () => {
+  const profile = read("src/components/profile/user-analytics.tsx");
+  assert.match(profile, /hasWrittenAssessmentData/);
+  assert.match(profile, /No completed written assessments yet/);
+  assert.match(profile, /mirrorData\\.totalSessions > 0/);
+  assert.doesNotMatch(profile, /data\\.averageScore \\|\\| 0/);
+});
