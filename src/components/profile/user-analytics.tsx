@@ -57,48 +57,37 @@ function buildProfilePentagonData(
   data: AnalyticsData,
   mirrorData: NonNullable<AnalyticsData["conceptMirror"]>
 ): Array<{ metric: string; score: number }> {
-  const merged: Array<{ metric: string; score: number }> = [];
+  const measured: Array<{ metric: string; score: number }> = [];
   const seen = new Set<string>();
 
   const pushMetric = (rawName: string, rawScore: number) => {
     const clean = (rawName || "").trim();
     const key = clean.toLowerCase();
-    if (!clean || seen.has(key) || merged.length >= 5) return;
+    if (!clean || seen.has(key) || measured.length >= 5) return;
+    if (!Number.isFinite(rawScore)) return;
     seen.add(key);
-    merged.push({
+    measured.push({
       metric: clean.length > 16 ? clean.slice(0, 14) + "…" : clean,
       score: clampScore(rawScore),
     });
   };
 
-  for (const s of Array.isArray(mirrorData.skillAverages) ? mirrorData.skillAverages : []) {
-    pushMetric(s.name, s.score);
+  // Prefer measured dimensions from completed oral and written assessments.
+  for (const skill of Array.isArray(mirrorData.skillAverages) ? mirrorData.skillAverages : []) {
+    pushMetric(skill.name, skill.score);
   }
-  for (const s of Array.isArray(data.skillAverages) ? data.skillAverages : []) {
-    pushMetric(s.name, s.score);
-  }
-
-  const writtenAvg = clampScore(data.averageScore ?? 0);
-  const oralAvg = clampScore(mirrorData.averageScore ?? 0);
-  const primaryAvg = oralAvg > 0 && writtenAvg > 0
-    ? Math.round((oralAvg + writtenAvg) / 2)
-    : Math.max(oralAvg, writtenAvg);
-  const activityScore = clampScore((data.totalTopics + mirrorData.totalSessions) * 12);
-
-  const fallbackAxes: Array<{ metric: string; score: number }> = [
-    { metric: "Clarity", score: oralAvg || primaryAvg },
-    { metric: "Accuracy", score: writtenAvg || primaryAvg },
-    { metric: "Depth", score: primaryAvg },
-    { metric: "Consistency", score: activityScore },
-    { metric: "Articulation", score: oralAvg || Math.round(writtenAvg * 0.9) },
-  ];
-
-  for (const axis of fallbackAxes) {
-    if (merged.length >= 5) break;
-    pushMetric(axis.metric, axis.score);
+  for (const skill of Array.isArray(data.skillAverages) ? data.skillAverages : []) {
+    pushMetric(skill.name, skill.score);
   }
 
-  return merged;
+  // If a detailed skill breakdown is unavailable, use actual assessment averages.
+  // Session counts are never converted into invented performance scores.
+  const hasWrittenScores = Array.isArray(data.scoreDistribution) &&
+    data.scoreDistribution.some((bucket) => Number.isFinite(bucket.value) && bucket.value > 0);
+  if (hasWrittenScores) pushMetric("Written Average", data.averageScore ?? 0);
+  if (mirrorData.totalSessions > 0) pushMetric("Oral Average", mirrorData.averageScore ?? 0);
+
+  return measured;
 }
 
 export function UserAnalytics({ data }: { data: AnalyticsData }) {
@@ -149,7 +138,7 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
     [data, mirrorData]
   );
 
-  const hasAnyRadarScore = pentagonData.some((item) => item.score > 0);
+  const hasRadarData = pentagonData.length > 0;
 
   const formatDuration = (seconds: number) => {
     const safe = Number.isFinite(seconds) && seconds > 0 ? Math.floor(seconds) : 0;
@@ -362,12 +351,12 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
             <div className="min-w-0">
               <CardTitle className="text-base sm:text-lg font-bold flex items-center gap-2">
                 <Compass className="w-5 h-5 text-amber-500 shrink-0" />
-                <span>5-Axis Mastery Pentagon Radar</span>
+                <span>Verified Mastery Dimensions</span>
               </CardTitle>
               <CardDescription className="text-xs mt-0.5">
-                {hasAnyRadarScore
-                  ? "Multi-dimensional profile combat web across written mastery, oral clarity, and study consistency."
-                  : "Complete practice tests or Concept Mirror oral defenses to expand your pentagon mastery web."}
+                {hasRadarData
+                  ? "Measured skill scores from completed written assessments and Concept Mirror sessions."
+                  : "Complete a scored practice test or Concept Mirror session to populate measured performance metrics."}
               </CardDescription>
             </div>
             <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30 shrink-0">
@@ -377,7 +366,7 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
         </CardHeader>
         <CardContent className="p-3 sm:p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-1 gap-3 items-center">
           <div className="w-full h-[250px] sm:h-[270px] flex items-center justify-center">
-            {hasMounted && (
+            {hasMounted && hasRadarData ? (
               <ResponsiveContainer width="100%" height="100%">
                 <RadarChart
                   cx="50%"
@@ -430,6 +419,10 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
                   />
                 </RadarChart>
               </ResponsiveContainer>
+            ) : (
+              <div className="px-4 text-center text-sm text-muted-foreground">
+                No measured performance dimensions are available yet.
+              </div>
             )}
           </div>
 
