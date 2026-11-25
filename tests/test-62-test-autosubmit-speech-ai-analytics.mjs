@@ -52,3 +52,11 @@ test("profile radar only plots recorded assessment dimensions, not activity-coun
   assert.match(analytics, /No measured performance dimensions are available yet/);
   assert.doesNotMatch(analytics, /activityScore|fallbackAxes/);
 });
+
+test("written-test analytics never manufacture chart dimensions or authorship confidence", () => {
+  const display = read("src/components/topic/final-analysis-display.tsx");
+  assert.doesNotMatch(display, /DEFAULT_PENTAGON_AXES|defaultSuite|baseScore \* 1\.05|naturalScore \? 88|safeOverallScore >= 40/);
+  assert.match(display, /No verified performance charts were returned/);
+  assert.match(display, /No authorship estimate is available/);
+  assert.match(display, /hasAuthenticityReport/);
+});
