@@ -19,7 +19,7 @@ test("LaTeX repair restores corrupted commands and leaves unmatched dollar prose
 
 test("Profile AI authenticates, checks blacklist/rate limits, and uses public-only escaped prompt data", () => {
   const source = read("src/app/actions/profile-ai.ts");
-  assert.match(source, /verifySessionCookie\(sessionCookie\)/);
+  assert.match(source, /getVerifiedSessionUuid\(sessionCookie\)/);
   assert.match(source, /assertActiveNonBlacklistedUser\(sessionUuid\)/);
   assert.match(source, /checkDistributedRateLimit\(/);
   assert.match(source, /getPublicProfileData\(cleanUsername\)/);
