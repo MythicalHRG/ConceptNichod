@@ -89,15 +89,14 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
 
   const auth = analysis.authenticityReport;
   const rawOverallScore = analysis.overallScore;
-  const safeOverallScore = Number.isFinite(rawOverallScore)
-    ? Math.max(0, Math.min(100, Number(rawOverallScore)))
-    : 50;
-  const isNatural = auth?.isNatural ?? (safeOverallScore >= 40);
+  const hasOverallScore = typeof rawOverallScore === "number" && Number.isFinite(rawOverallScore) && rawOverallScore >= 0 && rawOverallScore <= 100;
+  const safeOverallScore = hasOverallScore ? Math.max(0, Math.min(100, rawOverallScore)) : 0;
   const rawNaturalScore = auth?.naturalConfidenceScore;
-  const naturalScore = Number.isFinite(rawNaturalScore)
-    ? Math.max(0, Math.min(100, Number(rawNaturalScore)))
-    : (isNatural ? 88 : 25);
-  const verdict = auth?.verdict || (isNatural ? "natural_human" : "suspicious_synthetic");
+  const hasAuthenticityReport = Boolean(auth && typeof auth.isNatural === "boolean" &&
+    ["natural_human", "suspicious_synthetic", "nonsense_or_filler", "blended"].includes(auth.verdict) &&
+    typeof rawNaturalScore === "number" && Number.isFinite(rawNaturalScore) && rawNaturalScore >= 0 && rawNaturalScore <= 100);
+  const naturalScore = hasAuthenticityReport ? Math.round(rawNaturalScore as number) : null;
+  const verdict = hasAuthenticityReport && auth ? auth.verdict : "unavailable";
 
   const areasToFocus = Array.isArray(analysis.areasToFocus) ? analysis.areasToFocus : [];
   const areasToImprove = Array.isArray(analysis.areasToImprove) ? analysis.areasToImprove : [];
@@ -133,7 +132,7 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
               {analysis.overallScore !== undefined && (
                 <div className="text-right bg-background/80 px-4 py-2 rounded-xl border border-primary/20 shadow-sm">
                   <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Overall Score</p>
-                  <p className="text-3xl font-black text-primary">{safeOverallScore}/100</p>
+                  <p className="text-3xl font-black text-primary">{hasOverallScore ? `${safeOverallScore}/100` : "—"}</p>
                 </div>
               )}
             </div>
@@ -168,7 +167,7 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
               <div className="min-w-0">
                 <CardTitle className="text-lg font-bold break-words">Linguistic Authenticity & Authorship Verification</CardTitle>
                 <CardDescription className="text-xs">
-                  AI forensics inspecting natural student reasoning versus synthetic/ChatGPT patterns
+                  AI authorship estimate, when returned by the examiner
                 </CardDescription>
               </div>
             </div>
@@ -192,9 +191,7 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
             <LatexRenderer
               content={
                 auth?.assessmentDetails ||
-                (isNatural
-                  ? "Answers exhibit authentic student syntax, natural cognitive hesitations, and genuine concept assimilation without artificial ChatGPT boilerplate."
-                  : "Stylistic analysis detected elevated formal uniformity and robotic cadence characteristic of synthetic language models. Please express reasoning in your own spontaneous words.")
+                "The authenticity detector did not return a verified assessment for this test. No authorship estimate is available."
               }
             />
           </div>
@@ -358,7 +355,7 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
       </Card>
 
       {/* Visual Analytics, Charts & Graphs: Every single chart is a DIFFERENT type */}
-      {hasMounted && charts.length > 0 && (
+      {hasMounted && charts.length > 0 ? (
         <div className="space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-border/60 pb-3">
             <div className="flex items-center gap-2">
@@ -366,7 +363,7 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
               <h3 className="text-xl font-bold font-headline">Multi-Dimensional Performance Analytics</h3>
             </div>
             <span className="text-xs text-muted-foreground bg-muted px-2.5 py-1 rounded-full font-medium">
-              5 Distinct Visual Graph Models
+              {charts.length} verified chart{charts.length === 1 ? "" : "s"}
             </span>
           </div>
 
@@ -595,7 +592,13 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
             ))}
           </div>
         </div>
-      )}
+      ) : hasMounted ? (
+        <Card className="border-dashed">
+          <CardContent className="py-8 text-center text-sm text-muted-foreground">
+            No verified performance charts were returned for this test. The overall score and written feedback remain available above; charts will not be estimated from the total score.
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }
