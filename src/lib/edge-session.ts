@@ -12,7 +12,9 @@ function getSessionSecret(): string {
     }
     return configured;
   }
-  if (process.env.NODE_ENV === "production") throw new Error("SESSION_SECRET or ENCRYPTION_SECRET_KEY must be configured with a strong random secret in production.");
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("SESSION_SECRET or ENCRYPTION_SECRET_KEY must be configured with a strong random secret in production.");
+  }
   return "local-development-only-session-secret-not-for-production";
 }
 
@@ -39,81 +41,34 @@ function getVerificationKey(secret: string): Promise<CryptoKey> {
   return cachedKeyPromise;
 }
 
-/** Edge-runtime equivalent of verifySessionCookie; validates signature and expiry. */
+/** Edge verifier for the versioned, expiring session token format. */
 export async function verifyEdgeSessionCookie(cookieValue?: string | null): Promise<string | null> {
   if (!cookieValue || typeof cookieValue !== "string") return null;
   const parts = cookieValue.trim().split(".");
-
-  if (parts.length === 4) {
-    const [uuid, versionText, expiryText, signature] = parts;
-    if (!UUID_REGEX.test(uuid) || !/^(0|[1-9]\d*)$/.test(versionText) ||
-        !/^(0|[1-9]\d*)$/.test(expiryText) || !/^[a-f0-9]{64}$/i.test(signature)) return null;
-    const version = Number(versionText);
-    const expiresAt = Number(expiryText);
-    if (!Number.isSafeInteger(version) || version < 0 || !Number.isSafeInteger(expiresAt) ||
-        expiresAt <= Math.floor(Date.now() / 1000)) return null;
-    const key = await getVerificationKey(getSessionSecret());
-    const signatureBytes = new Uint8Array(signature.match(/.{2}/g)!.map((byte) => Number.parseInt(byte, 16)));
-    const valid = await globalThis.crypto.subtle.verify(
-      "HMAC", key, signatureBytes, new TextEncoder().encode(`${uuid}.${version}.${expiresAt}`)
-    );
-    return valid ? uuid : null;
+  if (parts.length !== 4) {
+    const trimmed = cookieValue.trim();
+    if (process.env.NODE_ENV !== "production" && process.env.STRICT_SESSION_SIGNING !== "true" && UUID_REGEX.test(trimmed)) {
+      return trimmed;
+    }
+    return null;
   }
 
-  // Rolling migration support for old tokens; server-side sessionVersion checks still apply.
-  if (parts.length === 3) {
-    const [uuid, versionText, signature] = parts;
-    if (!UUID_REGEX.test(uuid) || !/^(0|[1-9]\d*)$/.test(versionText) || !/^[a-f0-9]{64}$/i.test(signature)) return null;
-    const version = Number(versionText);
-    if (!Number.isSafeInteger(version) || version < 0) return null;
-    const key = await getVerificationKey(getSessionSecret());
-    const signatureBytes = new Uint8Array(signature.match(/.{2}/g)!.map((byte) => Number.parseInt(byte, 16)));
-    const valid = await globalThis.crypto.subtle.verify(
-      "HMAC", key, signatureBytes, new TextEncoder().encode(`${uuid}.${version}`)
-    );
-    return valid ? uuid : null;
-  }
+  const [uuid, versionText, expiryText, signature] = parts;
+  if (!UUID_REGEX.test(uuid) || !/^(0|[1-9]\d*)$/.test(versionText) ||
+      !/^(0|[1-9]\d*)$/.test(expiryText) || !/^[a-f0-9]{64}$/i.test(signature)) return null;
 
-  const trimmed = cookieValue.trim();
-  if (parts.length === 2) {
-    const [uuid, signature] = parts;
-    if (!UUID_REGEX.test(uuid) || !/^[a-f0-9]{64}$/i.test(signature)) return null;
-    const key = await getVerificationKey(getSessionSecret());
-    const signatureBytes = new Uint8Array(signature.match(/.{2}/g)!.map((byte) => Number.parseInt(byte, 16)));
-    const valid = await globalThis.crypto.subtle.verify("HMAC", key, signatureBytes, new TextEncoder().encode(uuid));
-    if (valid) return uuid;
-  }
+  const version = Number(versionText);
+  const expiresAt = Number(expiryText);
+  if (!Number.isSafeInteger(version) || version < 0 || !Number.isSafeInteger(expiresAt) ||
+      expiresAt <= Math.floor(Date.now() / 1000)) return null;
 
-  if (process.env.NODE_ENV !== "production" && process.env.STRICT_SESSION_SIGNING !== "true" && UUID_REGEX.test(trimmed)) return trimmed;
-  return null;
-}export function getSessionVersionFromCookie(cookieValue?: string | null): number | null {
-  if (!cookieValue || typeof cookieValue !== "string") return null;
-  const parts = cookieValue.trim().split(".");
-  if (parts.length !== 4 || !UUID_REGEX.test(parts[0]) || !/^(0|[1-9]\\d*)$/.test(parts[1]) ||
-      !/^(0|[1-9]\\d*)$/.test(parts[2]) || !/^[a-f0-9]{64}$/i.test(parts[3])) return null;
-  const version = Number(parts[1]);
-  return Number.isSafeInteger(version) && version >= 0 ? version : null;
-}
-
-export function verifySessionCookie(cookieValue?: string | null): string | null {
-  if (!cookieValue || typeof cookieValue !== "string") return null;
-  const trimmed = cookieValue.trim();
-  const parts = trimmed.split(".");
-  if (parts.length === 4) {
-    const [uuid, versionText, expiryText, signature] = parts;
-    if (!UUID_REGEX.test(uuid) || !/^(0|[1-9]\\d*)$/.test(versionText) ||
-        !/^(0|[1-9]\\d*)$/.test(expiryText) || !/^[a-f0-9]{64}$/i.test(signature)) return null;
-    const version = Number(versionText);
-    const expiresAt = Number(expiryText);
-    if (!Number.isSafeInteger(version) || version < 0 || !Number.isSafeInteger(expiresAt) ||
-        expiresAt <= Math.floor(Date.now() / 1000)) return null;
-    const expected = crypto.createHmac("sha256", getSessionSecret())
-      .update(`${uuid}.${version}.${expiresAt}`)
-      .digest();
-    const supplied = Buffer.from(signature, "hex");
-    return supplied.length === expected.length && crypto.timingSafeEqual(supplied, expected) ? uuid : null;
-  }
-  // Only local development may accept the historical unsigned UUID fixture.
-  if (process.env.NODE_ENV !== "production" && process.env.STRICT_SESSION_SIGNING !== "true" && UUID_REGEX.test(trimmed)) return trimmed;
-  return null;
+  const key = await getVerificationKey(getSessionSecret());
+  const signatureBytes = new Uint8Array(signature.match(/.{2}/g)!.map((byte) => Number.parseInt(byte, 16)));
+  const valid = await globalThis.crypto.subtle.verify(
+    "HMAC",
+    key,
+    signatureBytes,
+    new TextEncoder().encode(`${uuid}.${version}.${expiresAt}`)
+  );
+  return valid ? uuid : null;
 }
