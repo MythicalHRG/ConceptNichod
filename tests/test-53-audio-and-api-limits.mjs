@@ -74,3 +74,14 @@ test("synchronous speech start and resume failures reset the recorder and displa
   assert.match(source, /Failed to resume speech recognition:[\s\S]*?setIsRecording\(false\)[\s\S]*?setErrorMessage\(getSpeechStartErrorMessage\(error\)\)/);
   assert.match(source, /Failed to start speech recognition:[\s\S]*?setIsConnecting\(false\)[\s\S]*?setErrorMessage\(getSpeechStartErrorMessage\(error\)\)/);
 });
+
+test("OpenRouter retries model and key fallbacks when valid JSON misses a required schema", () => {
+  const client = fs.readFileSync("src/lib/openrouter.ts", "utf8");
+  const written = fs.readFileSync("src/ai/flows/analyze-answers.ts", "utf8");
+  const mirror = fs.readFileSync("src/ai/flows/analyze-concept-explanation.ts", "utf8");
+  assert.match(client, /validateJson\?: \(value: unknown\) => boolean/);
+  assert.match(client, /if \(validateJson && !validateJson\(parsedJson\)\)/);
+  assert.match(client, /did not match the required report schema[\s\S]*?continue/);
+  assert.match(written, /output\.overallScore >= 0[\s\S]*?output\.performanceSummary/);
+  assert.match(mirror, /Array\.isArray\(output\.radar_chart_data\)[\s\S]*?Array\.isArray\(output\.pie_chart_data\)/);
+});
