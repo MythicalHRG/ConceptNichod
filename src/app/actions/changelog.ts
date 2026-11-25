@@ -7,7 +7,7 @@ import { cookies } from "next/headers";
 import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
 import Changelog, { type IChangelog } from "@/models/Changelog";
-import { verifySessionCookie } from "@/lib/session";
+import { getVerifiedSessionUuid } from "@/lib/session-auth";
 
 const ALLOWED_CATEGORIES = new Set<IChangelog["category"]>([
   "Major Update",
@@ -34,7 +34,7 @@ function parseReleaseDate(raw: string): Date {
 async function verifyOwner() {
   await dbConnect();
   const rawSession = (await cookies()).get("user_session")?.value;
-  const sessionUuid = verifySessionCookie(rawSession);
+  const sessionUuid = await getVerifiedSessionUuid(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
 
   const fetchedUser = await User.findOne({ uuid: sessionUuid })
@@ -51,7 +51,7 @@ export async function checkIsAdminAction(): Promise<boolean> {
   try {
     await dbConnect();
     const rawSession = (await cookies()).get("user_session")?.value;
-    const sessionUuid = verifySessionCookie(rawSession);
+    const sessionUuid = await getVerifiedSessionUuid(rawSession);
     if (!sessionUuid) return false;
     const fetchedUser = await User.findOne({ uuid: sessionUuid })
       .select("uuid username email role")
