@@ -22,7 +22,7 @@ import { redirect } from "next/navigation";
 import User from "@/models/User";
 import Blacklist from "@/models/Blacklist";
 import { ensurePlatformOwnerRole, isPlatformOwner } from "@/lib/owner-access";
-import { verifySessionCookie } from "@/lib/session";
+import { getVerifiedSessionUuid } from "@/lib/session-auth";
 import { normalizeEmail } from "@/lib/email-utils";
 
 export default async function DashboardLayout({
@@ -31,7 +31,7 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const rawSession = (await cookies()).get("user_session")?.value;
-  const userId = verifySessionCookie(rawSession);
+  const userId = await getVerifiedSessionUuid(rawSession);
   if (!userId) {
     redirect("/?login=true");
   }
