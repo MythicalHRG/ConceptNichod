@@ -54,9 +54,10 @@ test("Challenger 1.2: Cross-UUID signature replay attack is rejected", () => {
 test("Challenger 1.3: Foreign secret HMAC generation is rejected", () => {
   const uuid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
   const fakeSecret = "adversarial-attacker-secret-key-salt";
-  const fakeSig = crypto.createHmac("sha256", fakeSecret).update(uuid).digest("hex");
+  const expiry = Math.floor(Date.now() / 1000) + 3600;
+  const fakeSig = crypto.createHmac("sha256", fakeSecret).update(`${uuid}.0.${expiry}`).digest("hex");
 
-  assert.strictEqual(verifySessionCookie(`${uuid}.${fakeSig}`), null, "Foreign secret signature must return null");
+  assert.strictEqual(verifySessionCookie(`${uuid}.0.${expiry}.${fakeSig}`), null, "Foreign secret signature must return null");
 });
 
 test("Challenger 1.4: Malformed, punctuated, and injection cookie values fail closed", () => {
