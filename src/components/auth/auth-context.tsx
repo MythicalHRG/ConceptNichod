@@ -94,6 +94,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     userRef.current = user;
   }, [user]);
+  useEffect(() => {
+    let channel: BroadcastChannel | null = null;
+    let lastHandledNonce = 0;
+
+    const handleAuthChange = (message: { type?: string; nonce?: number } | null | undefined) => {
+      if (!message || (message.type !== "login" && message.type !== "logout") ||
+          typeof message.nonce !== "number" || message.nonce <= lastHandledNonce) return;
+      lastHandledNonce = message.nonce;
+      hasLocalAuthChange.current = true;
+      userRef.current = null;
+      setUser(null);
+      setIsAuthReady(false);
+      setAuthModalOpen(false);
+      window.location.replace(message.type === "logout" ? "/?login=true" : "/dashboard");
+    };
+
+    try {
+      channel = new BroadcastChannel(AUTH_SYNC_CHANNEL);
+      channel.onmessage = (event) => handleAuthChange(event.data);
+    } catch {}
+
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== AUTH_SYNC_STORAGE_KEY || !event.newValue) return;
+      try {
+        handleAuthChange(JSON.parse(event.newValue));
+      } catch {}
+    };
+    window.addEventListener("storage", onStorage);
+
+    return () => {
+      channel?.close();
+      window.removeEventListener("storage", onStorage);
+    };
+  }, []);
+
 
   useEffect(() => {
     let active = true;
@@ -160,6 +195,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(newUser);
     setIsAuthReady(true);
     setAuthModalOpen(false);
+    announceAuthChange("login");
     // A different account may have different private server-rendered data.
     // Navigate and refresh so no prior account route/cache remains visible.
     router.replace("/dashboard");
@@ -177,6 +213,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null);
       setIsAuthReady(true);
       setAuthModalOpen(true);
+      announceAuthChange("logout");
       // Never leave a logged-out user on a previously rendered private page.
       router.replace("/?login=true");
       router.refresh();
