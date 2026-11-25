@@ -94,16 +94,22 @@ export async function runFinalAnalysisAction(
   await dbConnect();
   await assertActiveNonBlacklistedUser(sessionUuid);
 
-  const topicDoc = await Topic.findById(topicId);
-  if (!topicDoc) throw new Error("Topic not found");
-  if (topicDoc.userId !== sessionUuid) throw new Error("Unauthorized");
+  const topicDoc = await Topic.findOne({ _id: topicId, userId: sessionUuid });
+  if (!topicDoc) throw new Error("Topic not found or access denied.");
 
-  // Guard against re-submission if practice session has already been completed
-  if (topicDoc.practiceStatus === 'completed') {
-    if (topicDoc.analysis) {
-      return { analysis: topicDoc.analysis };
-    }
-    throw new Error("Practice session has already been completed.");
+  // A saved analysis is final. A completed status without an analysis is an
+  // interrupted legacy lock and is safe to recover through the lease below.
+  if (topicDoc.analysis) {
+    return { analysis: topicDoc.analysis };
+  }
+
+  const analysisLeaseStaleBefore = new Date(Date.now() - 120_000);
+  if (
+    topicDoc.practiceStatus === "analyzing" &&
+    topicDoc.analysisStartedAt &&
+    topicDoc.analysisStartedAt > analysisLeaseStaleBefore
+  ) {
+    throw new Error("Your answers are still being analyzed. This page will refresh automatically when the report is ready.");
   }
 
   // Load authoritative topic metadata from database to prevent prompt injection
@@ -139,18 +145,27 @@ export async function runFinalAnalysisAction(
     answer: ans.answer.trim(),
   }));
 
-  // Atomic lock against concurrent duplicate submissions
+  // Atomic 2-minute lease prevents concurrent model calls while allowing
+  // a reloaded test to recover if the previous request never finished.
   const lockedTopic = await Topic.findOneAndUpdate(
-    { _id: topicId, userId: sessionUuid, practiceStatus: { $ne: 'completed' } },
-    { $set: { practiceStatus: 'completed' } }
+    {
+      _id: topicId,
+      userId: sessionUuid,
+      analysis: { $exists: false },
+      $or: [
+        { practiceStatus: { $ne: "analyzing" } },
+        { analysisStartedAt: { $lt: analysisLeaseStaleBefore } },
+        { analysisStartedAt: { $exists: false } },
+      ],
+    },
+    { $set: { practiceStatus: "analyzing", analysisStartedAt: new Date() } },
+    { new: true }
   );
 
   if (!lockedTopic) {
-    const refreshed = await Topic.findById(topicId);
-    if (refreshed?.analysis) {
-      return { analysis: refreshed.analysis };
-    }
-    throw new Error("Practice session evaluation is already in progress or completed.");
+    const refreshed = await Topic.findOne({ _id: topicId, userId: sessionUuid }).lean();
+    if (refreshed?.analysis) return { analysis: refreshed.analysis };
+    throw new Error("Your answers are still being analyzed. This page will refresh automatically when the report is ready.");
   }
 
   try {
@@ -168,9 +183,11 @@ export async function runFinalAnalysisAction(
       {
         $set: {
           analysis: result.analysis,
-          practiceStatus: 'completed',
+          practiceStatus: "completed",
         },
-      }
+        $unset: { analysisStartedAt: 1 },
+      },
+      { new: true }
     );
 
     revalidatePath(`/dashboard/topic/${topicId}`);
@@ -179,7 +196,7 @@ export async function runFinalAnalysisAction(
     // If analysis failed due to upstream network issue, revert status so student can retry
     await Topic.findOneAndUpdate(
       { _id: topicId, userId: sessionUuid, analysis: { $exists: false } },
-      { $set: { practiceStatus: 'in_progress' } }
+      { $set: { practiceStatus: "in_progress" }, $unset: { analysisStartedAt: 1 } }
     );
     throw error;
   }
