@@ -195,7 +195,6 @@ export function TopicPageClient({ topicId, initialTopic }: TopicPageClientProps)
 
   const handleTabChange = useCallback(
     (value: string) => {
-      setActiveTab(value);
       if (value === "practice" && !isPracticing) {
         setIsShaking(true);
 
@@ -218,7 +217,10 @@ export function TopicPageClient({ topicId, initialTopic }: TopicPageClientProps)
         // Persist the test start before rendering the live practice form.
         // A failed write means the test must not begin without reload protection.
         markSummaryViewedAction(topicId)
-          .then(() => setIsPracticing(true))
+          .then(() => {
+            setIsPracticing(true);
+            setActiveTab("practice");
+          })
           .catch((error) => {
             setActiveTab("summary");
             setIsPracticing(false);
@@ -235,7 +237,9 @@ export function TopicPageClient({ topicId, initialTopic }: TopicPageClientProps)
 
         if (shakeTimerRef.current) clearTimeout(shakeTimerRef.current);
         shakeTimerRef.current = setTimeout(() => setIsShaking(false), 820);
+        return;
       }
+      setActiveTab(value);
     },
     [isPracticing, topicId, toast]
   );
