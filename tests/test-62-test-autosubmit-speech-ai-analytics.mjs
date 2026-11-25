@@ -137,3 +137,24 @@ test("legacy completed-without-analysis sessions are auto-submitted instead of s
   assert.match(page, /initialTopic\.practiceStatus === "completed" \|\|[\s\S]*?handleAutoSubmit\(initialTopic\)/);
   assert.match(action, /A completed status without an analysis is an[\s\S]*?interrupted legacy lock/);
 });
+
+test("written assessment output never invents the total score or an authenticity verdict", () => {
+  const flow = read("src/ai/flows/analyze-answers.ts");
+  const ui = read("src/components/topic/final-analysis-display.tsx");
+  assert.match(flow, /rawAnalysis\.overallScore < 0/);
+  assert.match(flow, /rawAnalysis\.overallScore > 100/);
+  assert.match(flow, /AI report did not contain a valid overall score/);
+  assert.match(flow, /let authenticityReport: AuthenticityReport \| undefined/);
+  assert.match(flow, /hasValidAuthenticityReport/);
+  assert.doesNotMatch(flow, /isLowScore \? 35 : 85|: 20;/);
+  assert.match(ui, /verdict === "unavailable" && "Not assessed"/);
+  assert.match(ui, /No authorship estimate is available/);
+});
+
+test("question critique scores are kept only when the model actually returns a valid score", () => {
+  const flow = read("src/ai/flows/analyze-answers.ts");
+  assert.match(flow, /q\.scoreOutOf10 >= 0/);
+  assert.match(flow, /q\.scoreOutOf10 <= 10/);
+  assert.match(flow, /scoreOutOf10: Math\.round\(q\.scoreOutOf10 \* 10\) \/ 10/);
+  assert.doesNotMatch(flow, /scoreOutOf10:[\s\S]{0,220}: 0/);
+});
