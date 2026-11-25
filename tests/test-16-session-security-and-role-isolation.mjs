@@ -63,8 +63,9 @@ test("Tareeka 16: Cross-UUID tampering (valid signature applied to different UUI
 test("Tareeka 16: Signature generated with different secret key is rejected", () => {
   const uuid = "44444444-4444-4444-4444-444444444444";
   const foreignSecret = "unauthorized-external-attacker-secret-key-999";
-  const forgedSig = crypto.createHmac("sha256", foreignSecret).update(uuid).digest("hex");
-  const forgedCookie = `${uuid}.${forgedSig}`;
+  const expiry = Math.floor(Date.now() / 1000) + 3600;
+  const forgedSig = crypto.createHmac("sha256", foreignSecret).update(`${uuid}.0.${expiry}`).digest("hex");
+  const forgedCookie = `${uuid}.0.${expiry}.${forgedSig}`;
 
   const result = verifySessionCookie(forgedCookie);
   assert.strictEqual(result, null, "Signature with foreign secret must be rejected");
