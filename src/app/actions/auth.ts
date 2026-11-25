@@ -8,7 +8,8 @@ import Blacklist from "@/models/Blacklist";
 import { hashPassword, comparePassword } from "@/lib/encryption";
 import crypto from "crypto";
 import { getClientIp } from "@/lib/ip";
-import { createSignedSessionCookie, verifySessionCookie } from "@/lib/session";
+import { createSignedSessionCookie } from "@/lib/session";
+import { getVerifiedSessionUuid } from "@/lib/session-auth";
 import {
   checkDistributedRateLimit,
   resetDistributedRateLimit,
@@ -442,7 +443,7 @@ export async function loginAction(formData: FormData) {
 export async function logoutAction() {
     try {
         const rawSession = (await cookies()).get("user_session")?.value;
-        const sessionUuid = verifySessionCookie(rawSession);
+        const sessionUuid = await getVerifiedSessionUuid(rawSession);
         if (sessionUuid) {
             await dbConnect();
             await User.updateOne({ uuid: sessionUuid }, { $inc: { sessionVersion: 1 } }).catch(() => {});
@@ -455,7 +456,7 @@ export async function logoutAction() {
 export async function meAction() {
     try {
         const rawSession = (await cookies()).get("user_session")?.value;
-        const sessionUuid = verifySessionCookie(rawSession);
+        const sessionUuid = await getVerifiedSessionUuid(rawSession);
         if (!sessionUuid) return { user: null };
 
         await dbConnect();
@@ -489,7 +490,7 @@ export async function updateProfileAction(formData: FormData) {
     }
     await dbConnect();
     const rawSession = (await cookies()).get("user_session")?.value;
-    const sessionUuid = verifySessionCookie(rawSession);
+    const sessionUuid = await getVerifiedSessionUuid(rawSession);
     if (!sessionUuid) throw new Error("Not authenticated");
 
     const rateCheck = await checkDistributedRateLimit(`profile-update:${sessionUuid}`, 20, 15 * 60 * 1000);
@@ -629,7 +630,7 @@ export async function updateProfileAction(formData: FormData) {
 export async function requestEmailChangeOtpAction(newEmail: string, currentPassword: string) {
     await dbConnect();
     const rawSession = (await cookies()).get("user_session")?.value;
-    const sessionUuid = verifySessionCookie(rawSession);
+    const sessionUuid = await getVerifiedSessionUuid(rawSession);
     if (!sessionUuid) throw new Error("Not authenticated");
 
     const currentUser = await User.findOne({ uuid: sessionUuid }).select("+password");
@@ -754,7 +755,7 @@ export async function requestEmailChangeOtpAction(newEmail: string, currentPassw
 export async function confirmEmailChangeAction(newEmail: string, otp: string) {
     await dbConnect();
     const rawSession = (await cookies()).get("user_session")?.value;
-    const sessionUuid = verifySessionCookie(rawSession);
+    const sessionUuid = await getVerifiedSessionUuid(rawSession);
     if (!sessionUuid) throw new Error("Not authenticated");
 
     const currentUser = await User.findOne({ uuid: sessionUuid }).select("uuid username email role").lean();
@@ -917,7 +918,7 @@ export async function changePasswordAction(formData: FormData) {
     }
     await dbConnect();
     const rawSession = (await cookies()).get("user_session")?.value;
-    const sessionId = verifySessionCookie(rawSession);
+    const sessionId = await getVerifiedSessionUuid(rawSession);
     if (!sessionId) throw new Error("Not authenticated");
 
     const rawCurrentVal = formData.get("currentPassword");
@@ -960,7 +961,7 @@ export async function changePasswordAction(formData: FormData) {
 export async function requestDeleteAccountOtpAction(currentPassword: string) {
     await dbConnect();
     const rawSession = (await cookies()).get("user_session")?.value;
-    const sessionUuid = verifySessionCookie(rawSession);
+    const sessionUuid = await getVerifiedSessionUuid(rawSession);
     if (!sessionUuid) throw new Error("Authentication required.");
 
     const user = await User.findOne({ uuid: sessionUuid }).select("+password");
@@ -1069,7 +1070,7 @@ export async function deleteAccountAction(formData: FormData) {
     }
     await dbConnect();
     const rawSession = (await cookies()).get("user_session")?.value;
-    const sessionId = verifySessionCookie(rawSession);
+    const sessionId = await getVerifiedSessionUuid(rawSession);
     if (!sessionId) throw new Error("Not authenticated");
 
     const readStr = (key: string) => {
