@@ -6,7 +6,7 @@ import User from "@/models/User";
 import ConceptMirror from "@/models/ConceptMirror";
 import Topic from "@/models/Topic";
 import StudyStreak from "@/models/StudyStreak";
-import { verifySessionCookie } from "@/lib/session";
+import { getVerifiedSessionUuid } from "@/lib/session-auth";
 import { getIstDateString, getYesterdayIstDateString } from "@/lib/streak";
 
 export interface TrajectoryPoint {
@@ -42,7 +42,7 @@ export async function getLeaderboardDataAction(
 ) {
   await dbConnect();
   const rawSession = (await cookies()).get("user_session")?.value;
-  const currentUuid = verifySessionCookie(rawSession);
+  const currentUuid = await getVerifiedSessionUuid(rawSession);
 
   const safeTimeframe: "all" | "week" | "month" =
     timeframe === "week" || timeframe === "month" ? timeframe : "all";
