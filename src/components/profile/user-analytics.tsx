@@ -50,8 +50,8 @@ function clampScore(val: unknown): number {
 }
 
 /**
- * Always builds a crisp 5-axis BGMI-style Pentagon Radar dataset for any profile
- * (never collapses into a 1D straight line, and remains visible even for newer users).
+ * Builds the profile radar from measured oral and written assessment dimensions.
+ * Empty profiles intentionally render an empty state instead of synthetic scores.
  */
 function buildProfilePentagonData(
   data: AnalyticsData,
@@ -169,14 +169,12 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
             <div className="text-3xl font-extrabold text-primary">
               {mirrorData.totalSessions > 0
                 ? `${mirrorData.averageScore}%`
-                : data.averageScore
-                ? `${data.averageScore}%`
-                : '0%'}
+                : '—'}
             </div>
             <p className="text-xs text-muted-foreground mt-1 font-medium">
               {mirrorData.totalSessions > 0
                 ? `${mirrorData.totalSessions} oral defense sessions`
-                : 'Verbal delivery & clarity'}
+                : 'No oral defense sessions yet'}
             </p>
           </CardContent>
         </Card>
