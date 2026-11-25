@@ -4,7 +4,7 @@ import dbConnect from "@/lib/mongoose";
 import Topic from "@/models/Topic";
 import User from "@/models/User";
 import Blacklist from "@/models/Blacklist";
-import { verifySessionCookie } from "@/lib/session";
+import { getVerifiedSessionUuid } from "@/lib/session-auth";
 import { checkDistributedRateLimit } from "@/lib/distributed-rate-limiter";
 import { normalizeEmail } from "@/lib/email-utils";
 
@@ -42,7 +42,7 @@ export async function assertActiveNonBlacklistedUser(sessionUuid: string): Promi
 /** Server-only guard for directly invokable AI topic-generation actions. */
 export async function requireOwnedTopicGenerationAccess(topicId: unknown): Promise<string> {
   const rawSession = (await cookies()).get("user_session")?.value;
-  const sessionUuid = verifySessionCookie(rawSession);
+  const sessionUuid = await getVerifiedSessionUuid(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
 
   if (typeof topicId !== "string" || !mongoose.isValidObjectId(topicId)) {
