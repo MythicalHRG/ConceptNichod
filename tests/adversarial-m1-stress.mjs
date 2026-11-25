@@ -318,10 +318,10 @@ test("Challenger 5.1: Aspirants Connect search strictly redacts user UUID from r
   const aspirantsFilePath = path.resolve("src/app/actions/aspirants.ts");
   const content = fs.readFileSync(aspirantsFilePath, "utf-8");
 
-  // In searchAspirantsAction, verify session is verified using verifySessionCookie
+  // In searchAspirantsAction, verify session is validated against the database session version
   assert.ok(
-    content.includes("verifySessionCookie"),
-    "searchAspirantsAction must use verifySessionCookie"
+    content.includes("getVerifiedSessionUuid"),
+    "searchAspirantsAction must use database-backed session validation"
   );
 
   // In the return mapping, verify uuid is NOT in the mapped fields
