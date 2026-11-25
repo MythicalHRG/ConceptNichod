@@ -32,7 +32,7 @@ test("active test answers and final oral summary are autosaved to the owner-scop
   const model = read("src/models/Topic.ts");
   assert.match(practice, /savedFinalSummarySpeech \|\| ""/);
   assert.match(practice, /updateTopicProgressAction\([\s\S]*?finalSummarySpeech/);
-  assert.match(practice, /\}, 4000\)/);
+  assert.match(practice, /\}, 1500\)/);
   assert.match(actions, /savedFinalSummarySpeech: string = ""/);
   assert.match(actions, /savedFinalSummarySpeech,/);
   assert.match(model, /savedFinalSummarySpeech: \{ type: String, default: "", maxlength: 5000 \}/);
@@ -83,5 +83,5 @@ test("profile KPI cards show no assessment as unavailable, not a zero-percent sc
   assert.match(profile, /hasWrittenAssessmentData/);
   assert.match(profile, /No completed written assessments yet/);
   assert.match(profile, /mirrorData\.totalSessions > 0/);
-  assert.doesNotMatch(profile, /data\\.averageScore \\|\\| 0/);
+  assert.doesNotMatch(profile, /data\.averageScore \|\| 0/);
 });
