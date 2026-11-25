@@ -22,7 +22,7 @@ import DirectMessage from "@/models/DirectMessage";
 import Donor from "@/models/Donor";
 import DonationTransaction from "@/models/DonationTransaction";
 import StudyGroup from "@/models/StudyGroup";
-import { verifySessionCookie } from "@/lib/session";
+import { getVerifiedSessionUuid } from "@/lib/session-auth";
 import { normalizeEmail } from "@/lib/email-utils";
 import { sanitizeIp } from "@/lib/ip";
 
@@ -52,7 +52,7 @@ function buildCanonicalEmailFilter(email: string): Record<string, unknown> {
 async function verifyOwner() {
   await dbConnect();
   const rawSession = (await cookies()).get("user_session")?.value;
-  const sessionUuid = verifySessionCookie(rawSession);
+  const sessionUuid = await getVerifiedSessionUuid(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
 
   const fetchedUser = await User.findOne({ uuid: sessionUuid })
