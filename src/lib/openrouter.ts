@@ -155,6 +155,18 @@ export async function callOpenRouter(
           continue;
         }
 
+        // In structured-output mode, a successful HTTP response is not
+        // enough: malformed model JSON must fall through to the next model/key.
+        if (jsonMode) {
+          try {
+            parseJsonResponse<unknown>(content);
+          } catch {
+            lastError = new Error(`OpenRouter model ${currentModel} returned malformed JSON.`);
+            console.warn(lastError.message);
+            continue;
+          }
+        }
+
         // Success!
         currentKeyIndex = (keyIdx + 1) % keys.length;
         return content;
