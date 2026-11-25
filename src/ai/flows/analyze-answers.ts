@@ -254,9 +254,24 @@ Respond with ONLY a valid JSON object (no markdown fences, no surrounding prose)
 }`;
 
   try {
-    const raw = await callOpenRouter([
-      { role: 'user', content: prompt }
-    ], undefined, true);
+    const raw = await callOpenRouter(
+      [{ role: "user", content: prompt }],
+      undefined,
+      true,
+      (candidate) => {
+        if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return false;
+        const wrapped = (candidate as any).analysis;
+        const output = wrapped && typeof wrapped === "object" && !Array.isArray(wrapped)
+          ? wrapped
+          : candidate as any;
+        return typeof output.overallScore === "number" &&
+          Number.isFinite(output.overallScore) &&
+          output.overallScore >= 0 &&
+          output.overallScore <= 100 &&
+          typeof output.performanceSummary === "string" &&
+          Boolean(output.performanceSummary.trim());
+      }
+    );
 
     const parsed = parseJsonResponse<any>(raw);
     const rawAnalysis = parsed && typeof parsed === 'object' && parsed.analysis && typeof parsed.analysis === 'object' && !Array.isArray(parsed.analysis)
