@@ -11,7 +11,7 @@ import DonationSetting from "@/models/DonationSetting";
 import User from "@/models/User";
 import Blacklist from "@/models/Blacklist";
 import { cookies } from "next/headers";
-import { verifySessionCookie } from "@/lib/session";
+import { getVerifiedSessionUuid } from "@/lib/session-auth";
 import crypto from "crypto";
 import { syncDonationDonor } from "@/lib/donation-donor-sync.js";
 import { getClientIp } from "@/lib/ip";
@@ -112,7 +112,7 @@ function getSafeAdminError(error: unknown, fallback: string): string {
 
 async function requireOwnerSession() {
   await connectToDatabase();
-  const sessionUuid = verifySessionCookie((await cookies()).get("user_session")?.value);
+  const sessionUuid = await getVerifiedSessionUuid();
   if (!sessionUuid) throw new Error("Unauthorized: Please log in as Admin.");
   const fetchedAdminUser = await User.findOne({ uuid: sessionUuid }).select("uuid username email role").lean();
   const adminUser = fetchedAdminUser ? await ensurePlatformOwnerRole(fetchedAdminUser) : fetchedAdminUser;
@@ -253,7 +253,7 @@ export async function submitDonationTransaction(formData: {
       return { success: false, error: "Too many submissions from your network. Please wait 15 minutes before trying again." };
     }
 
-    const sessionUuid = verifySessionCookie((await cookies()).get("user_session")?.value);
+    const sessionUuid = await getVerifiedSessionUuid();
     let userId: string | null = null;
     let username: string | null = null;
     if (sessionUuid) {
@@ -949,7 +949,7 @@ export async function getPendingDonationsAdminAction() {
 
 export async function getCurrentUserDonationContextAction() {
   try {
-    const sessionUuid = verifySessionCookie((await cookies()).get("user_session")?.value);
+    const sessionUuid = await getVerifiedSessionUuid();
     if (!sessionUuid) return { success: false, username: null };
     await connectToDatabase();
     const user = await User.findOne({ uuid: sessionUuid }).select("username fullName").lean();
