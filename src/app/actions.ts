@@ -267,9 +267,11 @@ export async function markSummaryViewedAction(topicId: string) {
 
   await assertActiveNonBlacklistedUser(sessionUuid);
 
+  // Starting the practice tab is the durable start of the test. Mark it
+  // in_progress immediately so a reload can never silently resume an active test.
   const updated = await Topic.findOneAndUpdate(
-    { _id: topicId, userId: sessionUuid },
-    { $set: { summaryViewed: true } },
+    { _id: topicId, userId: sessionUuid, practiceStatus: { $ne: "completed" } },
+    { $set: { summaryViewed: true, practiceStatus: "in_progress" } },
     { new: true }
   ).select("_id").lean();
   if (!updated) throw new Error("Topic not found or access denied.");
@@ -281,7 +283,8 @@ export async function updateTopicProgressAction(
   topicId: string,
   status: 'in_progress' | 'completed',
   savedWrittenAnswers: string[],
-  savedSpokenAnswers: string[]
+  savedSpokenAnswers: string[],
+  savedFinalSummarySpeech: string = ""
 ) {
   await dbConnect();
   const rawSession = (await cookies()).get("user_session")?.value;
@@ -289,7 +292,8 @@ export async function updateTopicProgressAction(
   if (!sessionUuid) throw new Error("Not authenticated");
   if (typeof topicId !== "string" || !mongoose.isValidObjectId(topicId)) throw new Error("Invalid Topic ID");
   if (status !== "in_progress" && status !== "completed") throw new Error("Invalid practice status.");
-  if (!Array.isArray(savedWrittenAnswers) || !Array.isArray(savedSpokenAnswers)) {
+  if (!Array.isArray(savedWrittenAnswers) || !Array.isArray(savedSpokenAnswers) ||
+      typeof savedFinalSummarySpeech !== "string" || savedFinalSummarySpeech.length > 5000) {
     throw new Error("Invalid saved answers.");
   }
   const allAnswers = [...savedWrittenAnswers, ...savedSpokenAnswers];
@@ -318,6 +322,7 @@ export async function updateTopicProgressAction(
         practiceStatus: status,
         savedWrittenAnswers,
         savedSpokenAnswers,
+        savedFinalSummarySpeech,
       },
     },
     { new: true }
