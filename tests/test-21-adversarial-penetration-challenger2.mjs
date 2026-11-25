@@ -262,7 +262,7 @@ test("Tareeka 21.8: Static verification of /api/generate route handlers structur
     const content = fs.readFileSync(routePath, "utf-8");
 
     // Session auth check is at top
-    assert.ok(content.includes("verifySessionCookie"), `${route} must call verifySessionCookie`);
+    assert.ok(content.includes("getVerifiedSessionUuid"), `${route} must call database-backed session validation`);
     assert.ok(content.includes("status: 401"), `${route} must return 401 on unauthorized`);
 
     // Zod validation is performed
