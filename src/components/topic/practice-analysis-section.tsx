@@ -47,7 +47,7 @@ export function PracticeAndAnalysisSection({
   const [spokenAnswers, setSpokenAnswers] = useState<string[]>(() =>
     Array.from({ length: voiceQuestions.length }, (_, i) => topic.savedSpokenAnswers?.[i] || "")
   );
-  const [finalSummarySpeech, setFinalSummarySpeech] = useState<string>("");
+  const [finalSummarySpeech, setFinalSummarySpeech] = useState<string>(topic.savedFinalSummarySpeech || "");
   const [isSubmitted, setIsSubmitted] = useState(false);
 
   const totalSteps = questions.length + 1; // +1 for the final overall summary step
@@ -92,6 +92,28 @@ export function PracticeAndAnalysisSection({
     isSubmitted,
     topic.id,
   ]);
+
+  // Debounced server autosave keeps the active question and final oral summary
+  // available for the reload-triggered automatic submission path.
+  useEffect(() => {
+    if (!topic.id || finalAnalysis || isAnalyzing || isSubmitted) return;
+    const timeout = setTimeout(() => {
+      import("@/app/actions")
+        .then(({ updateTopicProgressAction }) =>
+          updateTopicProgressAction(
+            topic.id as string,
+            "in_progress",
+            writtenAnswers,
+            spokenAnswers,
+            finalSummarySpeech
+          )
+        )
+        .catch((error) => console.warn("Practice progress autosave failed:", error));
+    }, 4000);
+
+    return () => clearTimeout(timeout);
+  }, [topic.id, writtenAnswers, spokenAnswers, finalSummarySpeech, finalAnalysis, isAnalyzing, isSubmitted]);
+
 
   // Release the local submission lock when the parent analysis request fails.
   // The parent owns isAnalyzing and clears it in finally; without this reset,
@@ -155,7 +177,8 @@ export function PracticeAndAnalysisSection({
               state.topicId as string,
               "in_progress",
               state.writtenAnswers,
-              state.spokenAnswers
+              state.spokenAnswers,
+              state.finalSummarySpeech
             ).catch(() => {});
           })
           .catch(() => {});
@@ -378,7 +401,7 @@ export function PracticeAndAnalysisSection({
       // Save partial progress to DB for anti-cheating
       if (topic.id) {
         import("@/app/actions").then(({ updateTopicProgressAction }) => {
-          updateTopicProgressAction(topic.id as string, "in_progress", writtenAnswers, spokenAnswers).catch(console.error);
+          updateTopicProgressAction(topic.id as string, "in_progress", writtenAnswers, spokenAnswers, finalSummarySpeech).catch(console.error);
         });
       }
     }
