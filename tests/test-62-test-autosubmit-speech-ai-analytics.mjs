@@ -102,3 +102,13 @@ test("profile AI receives null for unassessed written and oral scores, never zer
   assert.match(source, /averageOralScore: hasOralAssessments \? profileData\.conceptMirror\?\.averageScore : null/);
   assert.match(source, /Treat null score fields and empty assessment distributions as not assessed/);
 });
+
+test("leaderboard excludes unscored topics and never invents topic durations", () => {
+  const leaderboard = read("src/app/actions/leaderboard.ts");
+  assert.match(leaderboard, /const rawTopicScore = event\.analysisScore/);
+  assert.match(leaderboard, /!Number\.isFinite\(rawTopicScore\)[\s\S]*?continue/);
+  assert.match(leaderboard, /Topic practice duration is not recorded/);
+  assert.match(leaderboard, /durationSeconds = 0/);
+  assert.doesNotMatch(leaderboard, /isCompleted \? 70|isInProgress \? 40|isCompleted \? 180 : 60/);
+  assert.doesNotMatch(leaderboard, /hasNonEmptyAnswer|hasAnswers:|practiceStatus: 1/);
+});
