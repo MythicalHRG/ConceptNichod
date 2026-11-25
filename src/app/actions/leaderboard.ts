@@ -83,27 +83,6 @@ export async function getLeaderboardDataAction(
   const activityMatch: Record<string, any> = { userId: { $in: userIds } };
   if (timeCutoff) activityMatch.createdAt = { $gte: timeCutoff };
 
-  const hasNonEmptyAnswer = (field: string) => ({
-    $gt: [
-      {
-        $size: {
-          $filter: {
-            input: { $cond: [{ $isArray: `$${field}` }, `$${field}`, []] },
-            as: "answer",
-            cond: {
-              $cond: [
-                { $eq: [{ $type: "$$answer" }, "string"] },
-                { $ne: [{ $trim: { input: "$$answer" } }, ""] },
-                false,
-              ],
-            },
-          },
-        },
-      },
-      0,
-    ],
-  });
-
   const activityPipeline: any[] = [
     { $match: activityMatch },
     {
@@ -130,13 +109,6 @@ export async function getLeaderboardDataAction(
               eventType: { $literal: "topic" },
               title: { $ifNull: ["$name", "Study topic"] },
               analysisScore: "$analysis.overallScore",
-              practiceStatus: 1,
-              hasAnswers: {
-                $or: [
-                  hasNonEmptyAnswer("savedWrittenAnswers"),
-                  hasNonEmptyAnswer("savedSpokenAnswers"),
-                ],
-              },
             },
           },
         ],
@@ -179,27 +151,17 @@ export async function getLeaderboardDataAction(
           ? Math.max(0, Math.min(86400, rawDuration))
           : 0;
       } else {
-        const topic = { analysis: { overallScore: event.analysisScore } };
-        const hasAnalysisScore = Boolean(topic.analysis && Number.isFinite(topic.analysis.overallScore));
-        const isCompleted = event.practiceStatus === "completed";
-        const isInProgress = event.practiceStatus === "in_progress";
-        const hasAnswers = event.hasAnswers === true;
-
-        if (!hasAnalysisScore && !isCompleted && (!isInProgress || !hasAnswers)) {
+        // Only a completed, actually evaluated Topic contributes a performance
+        // score. Completion state or saved answers are not evidence of mastery.
+        const rawTopicScore = event.analysisScore;
+        if (!Number.isFinite(rawTopicScore) || rawTopicScore < 0 || rawTopicScore > 100) {
           continue;
         }
+        score = Math.max(0, Math.min(100, rawTopicScore));
 
-        const rawTopicScore = hasAnalysisScore
-          ? event.analysisScore
-          : isCompleted
-            ? 70
-            : isInProgress
-              ? 40
-              : 0;
-        score = Number.isFinite(rawTopicScore)
-          ? Math.max(0, Math.min(100, rawTopicScore))
-          : 0;
-        durationSeconds = isCompleted ? 180 : 60;
+        // Topic practice duration is not recorded. Do not invent 60/180 seconds;
+        // only Concept Mirror contributes its measured recording duration.
+        durationSeconds = 0;
       }
 
       let summary = activitySummaryByUser.get(event.userId);
