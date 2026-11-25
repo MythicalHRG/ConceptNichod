@@ -68,7 +68,8 @@ function extractMessageContent(rawContent: unknown): string {
 export async function callOpenRouter(
   messages: OpenRouterMessage[],
   model: string = DEFAULT_MODEL,
-  jsonMode: boolean = false
+  jsonMode: boolean = false,
+  validateJson?: (value: unknown) => boolean
 ): Promise<string> {
   if (!Array.isArray(messages) || messages.length === 0) {
     throw new Error("At least one message is required to call OpenRouter.");
@@ -158,10 +159,16 @@ export async function callOpenRouter(
         // In structured-output mode, a successful HTTP response is not
         // enough: malformed model JSON must fall through to the next model/key.
         if (jsonMode) {
+          let parsedJson: unknown;
           try {
-            parseJsonResponse<unknown>(content);
+            parsedJson = parseJsonResponse<unknown>(content);
           } catch {
             lastError = new Error(`OpenRouter model ${currentModel} returned malformed JSON.`);
+            console.warn(lastError.message);
+            continue;
+          }
+          if (validateJson && !validateJson(parsedJson)) {
+            lastError = new Error(`OpenRouter model ${currentModel} returned JSON that did not match the required report schema.`);
             console.warn(lastError.message);
             continue;
           }
