@@ -25,7 +25,7 @@ export async function generateContentAction(topicId: string, topicName: string, 
 
   await assertActiveNonBlacklistedUser(sessionUuid);
 
-  const topicDoc = await Topic.findOne({ _id: topicId, userId: sessionUuid });
+  const topicDoc = await Topic.findOne({ _id: topicId, userId: sessionUuid }).lean();
   if (!topicDoc) throw new Error("Topic not found or access denied.");
 
   const subject = topicDoc.subject || "Unknown";
