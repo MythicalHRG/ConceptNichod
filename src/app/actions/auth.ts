@@ -427,7 +427,7 @@ export async function loginAction(formData: FormData) {
             console.error("Login metadata update failed:", metadataError);
         }
 
-        (await cookies()).set("user_session", createSignedSessionCookie(user.uuid), {
+        (await cookies()).set("user_session", createSignedSessionCookie(user.uuid, user.sessionVersion ?? 0), {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
             sameSite: "lax",
@@ -954,6 +954,14 @@ export async function changePasswordAction(formData: FormData) {
         { _id: user._id },
         { $set: { password: hashedNewPassword }, $inc: { sessionVersion: 1 } }
     );
+    const nextSessionVersion = (Number.isSafeInteger(user.sessionVersion) ? user.sessionVersion : 0) + 1;
+    (await cookies()).set("user_session", createSignedSessionCookie(user.uuid, nextSessionVersion), {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: 60 * 60 * 24 * 7,
+    });
 
     return { success: true };
 }
