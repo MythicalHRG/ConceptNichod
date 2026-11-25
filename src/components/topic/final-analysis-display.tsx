@@ -179,10 +179,10 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
                 ? "border-destructive/40 text-destructive bg-destructive/10"
                 : "border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/10"
             }`}>
-              {verdict === "natural_human" && `Authentic Natural Voice (${naturalScore}% Confidence)`}
-              {verdict === "suspicious_synthetic" && `Suspected AI/ChatGPT Generated (${100 - naturalScore}% AI Probability)`}
-              {verdict === "nonsense_or_filler" && `Low-Effort / Irrelevant Content Detected (${naturalScore}% Natural)`}
-              {verdict === "blended" && `Blended Natural & Structured Expression (${naturalScore}%)`}
+              {verdict === "natural_human" && `Authentic Natural Voice (${naturalScore ?? "—"}% Confidence)`}
+              {verdict === "suspicious_synthetic" && `Suspected AI/ChatGPT Generated (${100 - (naturalScore ?? 0)}% AI Probability)`}
+              {verdict === "nonsense_or_filler" && `Low-Effort / Irrelevant Content Detected (${naturalScore ?? "—"}% Natural)`}
+              {verdict === "blended" && `Blended Natural & Structured Expression (${naturalScore ?? "—"}%)`}
             </Badge>
           </div>
         </CardHeader>
