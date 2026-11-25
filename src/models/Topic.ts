@@ -14,6 +14,7 @@ export interface ITopic extends Document {
   practiceStatus?: 'not_started' | 'in_progress' | 'completed';
   savedWrittenAnswers?: string[];
   savedSpokenAnswers?: string[];
+  savedFinalSummarySpeech?: string;
   createdAt: Date;
 }
 
@@ -31,6 +32,7 @@ const TopicSchema: Schema<ITopic> = new Schema({
   practiceStatus: { type: String, enum: ['not_started', 'in_progress', 'completed'], default: 'not_started' },
   savedWrittenAnswers: { type: [String], default: [] },
   savedSpokenAnswers: { type: [String], default: [] },
+  savedFinalSummarySpeech: { type: String, default: "", maxlength: 5000 },
   createdAt: { type: Date, default: Date.now }
 });
 
