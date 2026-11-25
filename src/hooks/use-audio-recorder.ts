@@ -7,6 +7,26 @@ import { useState, useRef, useEffect, useCallback } from 'react';
  * Browser-native Web Speech API with bounded reconnects, reset, and lock/abort defense
  */
 
+function getSpeechStartErrorMessage(error: unknown): string {
+  const name = error && typeof error === "object" && "name" in error
+    ? String((error as { name?: unknown }).name || "")
+    : "";
+
+  switch (name) {
+    case "NotAllowedError":
+    case "SecurityError":
+      return "The browser blocked microphone access. Allow microphone permission for this site, then try again.";
+    case "NotSupportedError":
+      return "This browser does not provide a speech-recognition service. Try a current version of Chrome or Edge.";
+    case "InvalidStateError":
+      return "The speech service is already active or changing state. Press Stop, wait a moment, then try again.";
+    case "AbortError":
+      return "The browser interrupted speech recognition before it could start. Try again.";
+    default:
+      return "Speech recognition could not start. Check microphone permission and your connection, then try again.";
+  }
+}
+
 export interface AudioRecorderState {
   isRecording: boolean;
   isPaused: boolean;
@@ -223,11 +243,22 @@ export function useAudioRecorder(): AudioRecorderState {
 
     try {
       recognition.start();
-    } catch (e: any) {
-      console.error('Failed to start recognition:', e);
-      setIsConnecting(false);
+    } catch (error) {
+      console.warn("Failed to start speech recognition:", error);
       isIntentActiveRef.current = false;
-      setErrorMessage('Could not initialize microphone. Please check permissions.');
+      isPausedRef.current = false;
+      setIsRecording(false);
+      setIsPaused(false);
+      setIsConnecting(false);
+      setErrorMessage(getSpeechStartErrorMessage(error));
+      if (recognitionRef.current === recognition) {
+        recognitionRef.current = null;
+        recognition.onstart = null;
+        recognition.onresult = null;
+        recognition.onerror = null;
+        recognition.onend = null;
+      }
+      try { recognition.abort?.(); } catch {}
     }
   }, [isSupported, initRecognition]);
 
@@ -286,9 +317,22 @@ export function useAudioRecorder(): AudioRecorderState {
     recognitionRef.current = recognition;
     try {
       recognition.start();
-    } catch (e) {
-      console.error('Failed to resume recognition:', e);
+    } catch (error) {
+      console.warn("Failed to resume speech recognition:", error);
+      isIntentActiveRef.current = false;
+      isPausedRef.current = false;
+      setIsRecording(false);
+      setIsPaused(false);
       setIsConnecting(false);
+      setErrorMessage(getSpeechStartErrorMessage(error));
+      if (recognitionRef.current === recognition) {
+        recognitionRef.current = null;
+        recognition.onstart = null;
+        recognition.onresult = null;
+        recognition.onerror = null;
+        recognition.onend = null;
+      }
+      try { recognition.abort?.(); } catch {}
     }
   }, [initRecognition]);
 
