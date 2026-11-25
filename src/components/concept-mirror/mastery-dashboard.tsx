@@ -54,14 +54,8 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
     ? reportedBarData
     : safeRadarData.map((item) => ({ name: item.metric, score: item.score }));
 
-  const safePolyData = Array.isArray(report.polynomial_chart_data)
-    ? report.polynomial_chart_data.filter((item) =>
-        item && typeof item.step === "string" && Number.isFinite(item.score)
-      ).map((item) => ({
-        step: item.step,
-        score: Math.max(0, Math.min(100, Math.round(item.score))),
-      }))
-    : [];
+  // A single report is one observation, not a learning curve. Ignore model-created phase scores.
+  const safePolyData: { step: string; score: number }[] = [];
 
   const safePieData = Array.isArray(report.pie_chart_data) ? report.pie_chart_data : [];
 
@@ -118,7 +112,7 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
             <div className="p-3 rounded-xl border border-primary/30 bg-primary/5 flex flex-col justify-center text-center sm:text-right shadow-xs col-span-2 sm:col-span-1">
               <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground block">Mastery Score</span>
               <span className="text-2xl sm:text-3xl font-extrabold text-primary">{masteryScore === null ? "—" : `${masteryScore}%`}</span>
-              <span className="text-[10px] text-muted-foreground">{hasMasteryScore ? "AI-reported score" : "Overall score not returned"}</span>
+              <span className="text-[10px] text-muted-foreground">{hasMasteryScore ? "Average of verified dimensions" : "Overall score not returned"}</span>
             </div>
           </div>
         </div>
@@ -287,7 +281,7 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
               </h4>
               <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-muted text-muted-foreground">Polynomial Spline</span>
             </div>
-            <p className="text-xs text-muted-foreground mb-4">Progression curve from recall to final concept synthesis.</p>
+            <p className="text-xs text-muted-foreground mb-4">Progress across multiple dated sessions; one explanation cannot establish a trend.</p>
             <div className="h-[280px] w-full">
               {safePolyData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
@@ -321,7 +315,7 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
               </ResponsiveContainer>
               ) : (
                 <div className="h-full flex items-center justify-center rounded-lg border border-dashed text-center text-sm text-muted-foreground p-4">
-                  No reliable phase-by-phase curve was returned for this single explanation.
+                  A single explanation cannot form a learning curve. Complete more scored sessions to build a chronological progress trend.
                 </div>
               )}
             </div>
