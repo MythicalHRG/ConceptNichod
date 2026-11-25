@@ -65,12 +65,11 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
 
   const safePieData = Array.isArray(report.pie_chart_data) ? report.pie_chart_data : [];
 
-  const avgClarity = safeRadarData.length > 0
-    ? Math.round(safeRadarData.reduce((acc, curr) => acc + curr.score, 0) / safeRadarData.length)
-    : 0;
-  const masteryScore = Number.isFinite(report.overallScore)
+  const hasMasteryScore = typeof report.overallScore === "number" &&
+    Number.isFinite(report.overallScore) && report.overallScore >= 0 && report.overallScore <= 100;
+  const masteryScore = hasMasteryScore
     ? Math.max(0, Math.min(100, Math.round(report.overallScore as number)))
-    : avgClarity;
+    : null;
 
   const fluffItem = safePieData.find(item => item.name?.toLowerCase() === 'fluff');
   const rawFluffPercent = report.fluffPercentage ?? (fluffItem ? fluffItem.value : null);
@@ -118,8 +117,8 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
             </div>
             <div className="p-3 rounded-xl border border-primary/30 bg-primary/5 flex flex-col justify-center text-center sm:text-right shadow-xs col-span-2 sm:col-span-1">
               <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground block">Mastery Score</span>
-              <span className="text-2xl sm:text-3xl font-extrabold text-primary">{masteryScore}%</span>
-              <span className="text-[10px] text-muted-foreground">Rigorous AI score</span>
+              <span className="text-2xl sm:text-3xl font-extrabold text-primary">{masteryScore === null ? "—" : `${masteryScore}%`}</span>
+              <span className="text-[10px] text-muted-foreground">{hasMasteryScore ? "AI-reported score" : "Overall score not returned"}</span>
             </div>
           </div>
         </div>
