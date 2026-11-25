@@ -201,9 +201,19 @@ CRITICAL: pie_chart_data values MUST sum to exactly 100.`;
 
   let rawOutput: MasteryReportOutput;
   try {
-    const raw = await callOpenRouter([
-      { role: 'user', content: prompt },
-    ], undefined, true);
+    const raw = await callOpenRouter(
+      [{ role: "user", content: prompt }],
+      undefined,
+      true,
+      (candidate) => {
+        if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return false;
+        const output = candidate as any;
+        return Array.isArray(output.radar_chart_data) &&
+          Array.isArray(output.pie_chart_data) &&
+          typeof output.feedback_summary === "string" &&
+          Boolean(output.feedback_summary.trim());
+      }
+    );
     rawOutput = parseJsonResponse<MasteryReportOutput>(raw);
   } catch (err) {
     console.error("analyzeConceptExplanation AI error:", err);
