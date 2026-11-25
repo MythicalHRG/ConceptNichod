@@ -28,7 +28,7 @@ export type MasteryReportOutput = {
   polynomial_chart_data?: { step: string; score: number }[];
   overallScore?: number;
   durationSeconds?: number;
-  fluffPercentage?: number;
+  fluffPercentage?: number | null;
   detected_mistakes?: DetectedMistake[];
 };
 
@@ -292,7 +292,7 @@ CRITICAL: pie_chart_data values MUST sum to exactly 100.`;
     radarChartData.reduce((s, r) => s + r.score, 0) / radarChartData.length
   );
   const fluffItem = pieChartData.find((p) => p.name.toLowerCase() === 'fluff');
-  const fluffPercentage = fluffItem ? fluffItem.value : 0;
+  const fluffPercentage = fluffItem ? fluffItem.value : null;
 
   const output: MasteryReportOutput = {
     feedback_summary: feedbackSummary,
