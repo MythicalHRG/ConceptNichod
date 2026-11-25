@@ -147,6 +147,7 @@ export async function runFinalAnalysisAction(
 
   // Atomic 2-minute lease prevents concurrent model calls while allowing
   // a reloaded test to recover if the previous request never finished.
+  const analysisLeaseStartedAt = new Date();
   const lockedTopic = await Topic.findOneAndUpdate(
     {
       _id: topicId,
@@ -158,7 +159,7 @@ export async function runFinalAnalysisAction(
         { analysisStartedAt: { $exists: false } },
       ],
     },
-    { $set: { practiceStatus: "analyzing", analysisStartedAt: new Date() } },
+    { $set: { practiceStatus: "analyzing", analysisStartedAt: analysisLeaseStartedAt } },
     { new: true }
   );
 
@@ -178,8 +179,8 @@ export async function runFinalAnalysisAction(
       spokenAnswers: safeSpokenAnswers,
     });
 
-    await Topic.findOneAndUpdate(
-      { _id: topicId, userId: sessionUuid },
+    const savedAnalysis = await Topic.findOneAndUpdate(
+      { _id: topicId, userId: sessionUuid, analysisStartedAt: analysisLeaseStartedAt, analysis: { $exists: false } },
       {
         $set: {
           analysis: result.analysis,
@@ -190,12 +191,18 @@ export async function runFinalAnalysisAction(
       { new: true }
     );
 
+    if (!savedAnalysis) {
+      const latest = await Topic.findOne({ _id: topicId, userId: sessionUuid }).lean();
+      if (latest?.analysis) return { analysis: latest.analysis };
+      throw new Error("This analysis request lost its session lease. Reload the report and retry.");
+    }
+
     revalidatePath(`/dashboard/topic/${topicId}`);
     return result;
   } catch (error) {
     // If analysis failed due to upstream network issue, revert status so student can retry
     await Topic.findOneAndUpdate(
-      { _id: topicId, userId: sessionUuid, analysis: { $exists: false } },
+      { _id: topicId, userId: sessionUuid, analysisStartedAt: analysisLeaseStartedAt, analysis: { $exists: false } },
       { $set: { practiceStatus: "in_progress" }, $unset: { analysisStartedAt: 1 } }
     );
     throw error;
