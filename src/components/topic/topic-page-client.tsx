@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { markSummaryViewedAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,14 +23,16 @@ type TopicPageClientProps = {
 };
 
 export function TopicPageClient({ topicId, initialTopic }: TopicPageClientProps) {
+  const router = useRouter();
   const [topic, setTopic] = useState<Topic>(initialTopic);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [finalAnalysis, setFinalAnalysis] = useState<FinalAnalysisOutput | null>(topic.analysis || null);
 
   const initialShouldBePractice =
+    Boolean(initialTopic.analysis) ||
     initialTopic.practiceStatus === "completed" ||
-    initialTopic.analysis ||
+    initialTopic.practiceStatus === "analyzing" ||
     initialTopic.practiceStatus === "in_progress" ||
     initialTopic.summaryViewed;
 
@@ -171,15 +174,58 @@ export function TopicPageClient({ topicId, initialTopic }: TopicPageClientProps)
     initialSessionCheckedTopicRef.current = topicId;
     autoSubmitStartedRef.current = false;
 
-    if (initialTopic.practiceStatus === "completed" || initialTopic.analysis) {
+    if (initialTopic.analysis) {
       setActiveTab("practice");
       setIsPracticing(true);
-    } else if (initialTopic.practiceStatus === "in_progress" || initialTopic.summaryViewed) {
+    } else if (initialTopic.practiceStatus === "analyzing") {
+      setActiveTab("practice");
+      setIsPracticing(true);
+      toast({
+        title: "Finishing Your Analysis",
+        description: "Your saved answers are being evaluated. This page will check for the report automatically.",
+      });
+    } else if (
+      initialTopic.practiceStatus === "completed" ||
+      initialTopic.practiceStatus === "in_progress" ||
+      initialTopic.summaryViewed
+    ) {
+      // A legacy completed status without an analysis is an interrupted submit.
       setActiveTab("practice");
       setIsPracticing(true);
       handleAutoSubmit(initialTopic);
     }
-  }, [initialTopic, handleAutoSubmit]);
+  }, [initialTopic, handleAutoSubmit, toast]);
+
+  // Refresh while a server-side analysis lease is active. If the server request
+  // died during navigation, retry automatically as soon as the 2-minute lease
+  // expires; the server action then atomically grants the stale lease to retry.
+  useEffect(() => {
+    if (initialTopic.practiceStatus !== "analyzing" || initialTopic.analysis) return;
+
+    const startedAt = initialTopic.analysisStartedAt
+      ? new Date(initialTopic.analysisStartedAt).getTime()
+      : 0;
+    const elapsed = Number.isFinite(startedAt) ? Date.now() - startedAt : 120_000;
+    const remaining = Math.max(0, 120_000 - elapsed);
+
+    const pollTimer = setInterval(() => router.refresh(), 5_000);
+    const recoveryTimer = setTimeout(() => {
+      autoSubmitStartedRef.current = false;
+      handleAutoSubmit({ ...initialTopic, practiceStatus: "in_progress" });
+    }, remaining + 250);
+
+    return () => {
+      clearInterval(pollTimer);
+      clearTimeout(recoveryTimer);
+    };
+  }, [
+    topicId,
+    initialTopic.practiceStatus,
+    initialTopic.analysisStartedAt,
+    initialTopic.analysis,
+    handleAutoSubmit,
+    router,
+  ]);
 
   useEffect(() => {
     if (typeof document !== "undefined") {
