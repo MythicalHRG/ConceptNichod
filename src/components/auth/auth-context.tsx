@@ -31,6 +31,21 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AUTH_SYNC_CHANNEL = "conceptnichod-auth-sync";
+const AUTH_SYNC_STORAGE_KEY = "conceptnichod-auth-event";
+
+function announceAuthChange(type: "login" | "logout") {
+  const message = { type, nonce: Date.now() };
+  try {
+    const channel = new BroadcastChannel(AUTH_SYNC_CHANNEL);
+    channel.postMessage(message);
+    channel.close();
+  } catch {}
+  try {
+    window.localStorage.setItem(AUTH_SYNC_STORAGE_KEY, JSON.stringify(message));
+  } catch {}
+}
+
 
 function AuthParamsHandler({
   setAuthModalOpen,
