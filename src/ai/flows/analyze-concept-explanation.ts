@@ -248,10 +248,13 @@ CRITICAL: pie_chart_data values MUST sum to exactly 100.`;
 
   const pieChartData = normalizePercentagesTo100(rawPieChartData);
 
-  let barChartData = (Array.isArray(rawOutput.bar_chart_data) ? rawOutput.bar_chart_data : [])
+  const reportedBarChartData = (Array.isArray(rawOutput.bar_chart_data) ? rawOutput.bar_chart_data : [])
     .filter((item) => item && typeof item.name === "string" && item.name.trim().length > 0 && item.name.trim().length <= 80 && Number.isFinite(item.score))
     .slice(0, 10)
     .map((item) => ({ name: item.name.trim(), score: Math.max(0, Math.min(100, Math.round(item.score))) }));
+  const barChartData = reportedBarChartData.length > 0
+    ? reportedBarChartData
+    : radarChartData.map((item) => ({ name: item.metric, score: item.score }));
 
   let polynomialChartData = (Array.isArray(rawOutput.polynomial_chart_data) ? rawOutput.polynomial_chart_data : [])
     .filter((item) => item && typeof item.step === "string" && item.step.trim().length > 0 && item.step.trim().length <= 80 && Number.isFinite(item.score))
@@ -306,16 +309,7 @@ CRITICAL: pie_chart_data values MUST sum to exactly 100.`;
     ? output.feedback_summary.slice(0, 10000)
     : "Feedback could not be generated reliably. Please retry your oral defense analysis.";
 
-  // When the model omits the structural bar chart, reuse the same verified
-  // dimension scores rather than inventing synthetic sub-scores.
-  if (output.bar_chart_data.length === 0) {
-    output.bar_chart_data = radarChartData.map((item) => ({
-      name: item.metric,
-      score: item.score,
-    }));
-  }
-
-  // A single oral defense is not a longitudinal learning curve. If the model
+  // Missing structural chart fields use only the measured radar dimensions.\n\n  // A single oral defense is not a longitudinal learning curve. If the model
   // does not return a defensible phase breakdown, leave the curve empty.
   // The UI renders an explicit no-data state instead of fabricated progress.
 
