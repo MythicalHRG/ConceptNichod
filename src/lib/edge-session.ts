@@ -44,14 +44,24 @@ function getVerificationKey(secret: string): Promise<CryptoKey> {
 /** Edge-runtime equivalent of verifySessionCookie; uses Web Crypto, not Node crypto. */
 export async function verifyEdgeSessionCookie(cookieValue?: string | null): Promise<string | null> {
   if (!cookieValue || typeof cookieValue !== "string") return null;
+  const parts = cookieValue.trim().split(".");
+  if (parts.length === 3) {
+    const [uuid, versionText, signature] = parts;
+    if (!UUID_REGEX.test(uuid) || !/^(0|[1-9]\\d*)$/.test(versionText) || !/^[a-f0-9]{64}$/i.test(signature)) return null;
+    const version = Number(versionText);
+    if (!Number.isSafeInteger(version) || version < 0) return null;
+    const key = await getVerificationKey(getSessionSecret());
+    const signatureBytes = new Uint8Array(signature.match(/.{2}/g)!.map((byte) => Number.parseInt(byte, 16)));
+    const valid = await globalThis.crypto.subtle.verify("HMAC", key, signatureBytes, new TextEncoder().encode(`${uuid}.${version}`));
+    return valid ? uuid : null;
+  }
   const trimmed = cookieValue.trim();
   const dotIndex = trimmed.lastIndexOf(".");
   if (dotIndex > 0) {
     const uuid = trimmed.slice(0, dotIndex);
     const signature = trimmed.slice(dotIndex + 1);
     if (UUID_REGEX.test(uuid) && /^[a-f0-9]{64}$/i.test(signature)) {
-      const secret = getSessionSecret();
-      const key = await getVerificationKey(secret);
+      const key = await getVerificationKey(getSessionSecret());
       const signatureBytes = new Uint8Array(signature.match(/.{2}/g)!.map((byte) => Number.parseInt(byte, 16)));
       const valid = await globalThis.crypto.subtle.verify("HMAC", key, signatureBytes, new TextEncoder().encode(uuid));
       if (valid) return uuid;
