@@ -152,6 +152,8 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
             ? "bg-emerald-500"
             : verdict === "suspicious_synthetic"
             ? "bg-destructive"
+            : verdict === "unavailable"
+            ? "bg-muted-foreground/30"
             : "bg-amber-500"
         }`} />
         <CardHeader className="pb-3">
@@ -177,12 +179,15 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
                 ? "border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10"
                 : verdict === "suspicious_synthetic"
                 ? "border-destructive/40 text-destructive bg-destructive/10"
+                : verdict === "unavailable"
+                ? "border-border text-muted-foreground bg-muted"
                 : "border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/10"
             }`}>
               {verdict === "natural_human" && `Authentic Natural Voice (${naturalScore ?? "—"}% Confidence)`}
               {verdict === "suspicious_synthetic" && `Suspected AI/ChatGPT Generated (${100 - (naturalScore ?? 0)}% AI Probability)`}
               {verdict === "nonsense_or_filler" && `Low-Effort / Irrelevant Content Detected (${naturalScore ?? "—"}% Natural)`}
               {verdict === "blended" && `Blended Natural & Structured Expression (${naturalScore ?? "—"}%)`}
+              {verdict === "unavailable" && "Not assessed"}
             </Badge>
           </div>
         </CardHeader>
