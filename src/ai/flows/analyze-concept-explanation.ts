@@ -284,7 +284,7 @@ CRITICAL: pie_chart_data values MUST sum to exactly 100.`;
   const overallScore = Math.round(
     radarChartData.reduce((s, r) => s + r.score, 0) / radarChartData.length
   );
-  const fluffItem = pieChartData.find((p) => p.name.toLowerCase() === 'fluff');
+  const fluffItem = pieChartData.find((p) => /fluff|filler/i.test(p.name));
   const fluffPercentage = fluffItem ? fluffItem.value : null;
 
   const output: MasteryReportOutput = {
