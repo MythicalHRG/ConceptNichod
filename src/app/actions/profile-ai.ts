@@ -3,7 +3,7 @@
 import { cookies } from "next/headers";
 import { getPublicProfileData } from "@/app/actions/profile";
 import { callOpenRouter, DEFAULT_MODEL, type OpenRouterMessage } from "@/lib/openrouter";
-import { verifySessionCookie } from "@/lib/session";
+import { getVerifiedSessionUuid } from "@/lib/session-auth";
 import { assertActiveNonBlacklistedUser } from "@/lib/ai-flow-auth";
 import { checkDistributedRateLimit } from "@/lib/distributed-rate-limiter";
 import { getClientIp } from "@/lib/ip";
@@ -28,7 +28,7 @@ export async function askAboutProfileAction(input: {
 }): Promise<{ answer: string }> {
   const cookieStore = await cookies();
   const sessionCookie = cookieStore.get("user_session")?.value;
-  const sessionUuid = verifySessionCookie(sessionCookie);
+  const sessionUuid = await getVerifiedSessionUuid(sessionCookie);
 
   if (!sessionUuid) {
     throw new Error("Please sign in to ask AI questions about this profile.");
