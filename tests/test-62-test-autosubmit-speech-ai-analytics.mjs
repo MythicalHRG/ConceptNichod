@@ -19,7 +19,7 @@ test("starting a practice session is persisted as in-progress before questions r
 
 test("reload of an active or already-opened test auto-submits persisted answers", () => {
   const page = read("src/components/topic/topic-page-client.tsx");
-  assert.match(page, /initialTopic\.practiceStatus === "in_progress" \|\| initialTopic\.summaryViewed/);
+  assert.match(page, /initialTopic\.practiceStatus === "completed" \|\|[\s\S]*?initialTopic\.practiceStatus === "in_progress" \|\|[\s\S]*?initialTopic\.summaryViewed/);
   assert.match(page, /title: "Session Auto-Submitted"/);
   assert.doesNotMatch(page, /title: "Session Restored"/);
   assert.match(page, /currentTopic\.savedFinalSummarySpeech\?\.trim\(\)/);
