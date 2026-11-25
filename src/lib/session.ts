@@ -32,7 +32,7 @@ export function getSessionVersionFromCookie(cookieValue?: string | null): number
   if (!cookieValue || typeof cookieValue !== "string") return null;
   const parts = cookieValue.trim().split(".");
   if (parts.length === 2 && UUID_REGEX.test(parts[0]) && /^[a-f0-9]{64}$/i.test(parts[1])) return 0;
-  if (parts.length !== 3 || !UUID_REGEX.test(parts[0]) || !/^(0|[1-9]\\d*)$/.test(parts[1]) || !/^[a-f0-9]{64}$/i.test(parts[2])) return null;
+  if (parts.length !== 3 || !UUID_REGEX.test(parts[0]) || !/^(0|[1-9]\d*)$/.test(parts[1]) || !/^[a-f0-9]{64}$/i.test(parts[2])) return null;
   const version = Number(parts[1]);
   return Number.isSafeInteger(version) && version >= 0 ? version : null;
 }
@@ -43,7 +43,7 @@ export function verifySessionCookie(cookieValue?: string | null): string | null 
   const parts = trimmed.split(".");
   if (parts.length === 3) {
     const [uuid, versionText, signature] = parts;
-    if (!UUID_REGEX.test(uuid) || !/^(0|[1-9]\\d*)$/.test(versionText) || !/^[a-f0-9]{64}$/i.test(signature)) return null;
+    if (!UUID_REGEX.test(uuid) || !/^(0|[1-9]\d*)$/.test(versionText) || !/^[a-f0-9]{64}$/i.test(signature)) return null;
     const version = Number(versionText);
     if (!Number.isSafeInteger(version) || version < 0) return null;
     const expectedBuf = crypto.createHmac("sha256", getSessionSecret()).update(`${uuid}.${version}`).digest();
