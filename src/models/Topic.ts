@@ -11,7 +11,8 @@ export interface ITopic extends Document {
   questions?: { type: string; question: string }[];
   analysis?: any;
   summaryViewed?: boolean;
-  practiceStatus?: 'not_started' | 'in_progress' | 'completed';
+  practiceStatus?: 'not_started' | 'in_progress' | 'analyzing' | 'completed';
+  analysisStartedAt?: Date;
   savedWrittenAnswers?: string[];
   savedSpokenAnswers?: string[];
   savedFinalSummarySpeech?: string;
@@ -29,7 +30,8 @@ const TopicSchema: Schema<ITopic> = new Schema({
   questions: { type: [Schema.Types.Mixed], required: false },
   analysis: { type: Schema.Types.Mixed, required: false },
   summaryViewed: { type: Boolean, default: false },
-  practiceStatus: { type: String, enum: ['not_started', 'in_progress', 'completed'], default: 'not_started' },
+  practiceStatus: { type: String, enum: ['not_started', 'in_progress', 'analyzing', 'completed'], default: 'not_started' },
+  analysisStartedAt: { type: Date, required: false },
   savedWrittenAnswers: { type: [String], default: [] },
   savedSpokenAnswers: { type: [String], default: [] },
   savedFinalSummarySpeech: { type: String, default: "", maxlength: 5000 },
