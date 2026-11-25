@@ -93,9 +93,8 @@ export async function runFinalAnalysisAction(
   await dbConnect();
   await assertActiveNonBlacklistedUser(sessionUuid);
 
-  const topicDoc = await Topic.findById(topicId);
-  if (!topicDoc) throw new Error("Topic not found");
-  if (topicDoc.userId !== sessionUuid) throw new Error("Unauthorized");
+  const topicDoc = await Topic.findOne({ _id: topicId, userId: sessionUuid });
+  if (!topicDoc) throw new Error("Topic not found or access denied.");
 
   // Guard against re-submission if practice session has already been completed
   if (topicDoc.practiceStatus === 'completed') {
