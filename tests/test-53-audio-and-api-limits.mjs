@@ -64,3 +64,13 @@ test("Concept Mirror report charts do not fabricate missing scores", () => {
   assert.match(ui, /A single explanation cannot form a learning curve/);
   assert.match(ui, /const safePolyData: \{ step: string; score: number \}\[\] = \[\]/);
 });
+
+test("synchronous speech start and resume failures reset the recorder and display actionable errors", () => {
+  const source = fs.readFileSync("src/hooks/use-audio-recorder.ts", "utf8");
+  assert.match(source, /function getSpeechStartErrorMessage/);
+  for (const errorName of ["NotAllowedError", "SecurityError", "NotSupportedError", "InvalidStateError", "AbortError"]) {
+    assert.ok(source.includes(`case "${errorName}"`), `Missing speech startup error mapping: ${errorName}`);
+  }
+  assert.match(source, /Failed to resume speech recognition:[\s\S]*?setIsRecording\(false\)[\s\S]*?setErrorMessage\(getSpeechStartErrorMessage\(error\)\)/);
+  assert.match(source, /Failed to start speech recognition:[\s\S]*?setIsConnecting\(false\)[\s\S]*?setErrorMessage\(getSpeechStartErrorMessage\(error\)\)/);
+});
