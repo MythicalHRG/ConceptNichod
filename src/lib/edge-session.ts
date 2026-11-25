@@ -86,4 +86,34 @@ export async function verifyEdgeSessionCookie(cookieValue?: string | null): Prom
 
   if (process.env.NODE_ENV !== "production" && process.env.STRICT_SESSION_SIGNING !== "true" && UUID_REGEX.test(trimmed)) return trimmed;
   return null;
+}export function getSessionVersionFromCookie(cookieValue?: string | null): number | null {
+  if (!cookieValue || typeof cookieValue !== "string") return null;
+  const parts = cookieValue.trim().split(".");
+  if (parts.length !== 4 || !UUID_REGEX.test(parts[0]) || !/^(0|[1-9]\\d*)$/.test(parts[1]) ||
+      !/^(0|[1-9]\\d*)$/.test(parts[2]) || !/^[a-f0-9]{64}$/i.test(parts[3])) return null;
+  const version = Number(parts[1]);
+  return Number.isSafeInteger(version) && version >= 0 ? version : null;
+}
+
+export function verifySessionCookie(cookieValue?: string | null): string | null {
+  if (!cookieValue || typeof cookieValue !== "string") return null;
+  const trimmed = cookieValue.trim();
+  const parts = trimmed.split(".");
+  if (parts.length === 4) {
+    const [uuid, versionText, expiryText, signature] = parts;
+    if (!UUID_REGEX.test(uuid) || !/^(0|[1-9]\\d*)$/.test(versionText) ||
+        !/^(0|[1-9]\\d*)$/.test(expiryText) || !/^[a-f0-9]{64}$/i.test(signature)) return null;
+    const version = Number(versionText);
+    const expiresAt = Number(expiryText);
+    if (!Number.isSafeInteger(version) || version < 0 || !Number.isSafeInteger(expiresAt) ||
+        expiresAt <= Math.floor(Date.now() / 1000)) return null;
+    const expected = crypto.createHmac("sha256", getSessionSecret())
+      .update(`${uuid}.${version}.${expiresAt}`)
+      .digest();
+    const supplied = Buffer.from(signature, "hex");
+    return supplied.length === expected.length && crypto.timingSafeEqual(supplied, expected) ? uuid : null;
+  }
+  // Only local development may accept the historical unsigned UUID fixture.
+  if (process.env.NODE_ENV !== "production" && process.env.STRICT_SESSION_SIGNING !== "true" && UUID_REGEX.test(trimmed)) return trimmed;
+  return null;
 }
