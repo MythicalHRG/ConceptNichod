@@ -15,6 +15,7 @@ export type Topic = {
   summaryViewed?: boolean;
   savedWrittenAnswers?: string[];
   savedSpokenAnswers?: string[];
+  savedFinalSummarySpeech?: string;
   createdAt: Date;
 };
 
