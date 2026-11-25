@@ -6,7 +6,7 @@ import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
 import EmailBroadcast from "@/models/EmailBroadcast";
 import nodemailer from "nodemailer";
-import { verifySessionCookie } from "@/lib/session";
+import { getVerifiedSessionUuid } from "@/lib/session-auth";
 import { checkDistributedRateLimit } from "@/lib/distributed-rate-limiter";
 
 function escapeHtml(str: string): string {
@@ -21,7 +21,7 @@ function escapeHtml(str: string): string {
 async function verifyOwner() {
   await dbConnect();
   const rawSession = (await cookies()).get("user_session")?.value;
-  const sessionUuid = verifySessionCookie(rawSession);
+  const sessionUuid = await getVerifiedSessionUuid(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
 
   const fetchedUser = await User.findOne({ uuid: sessionUuid })
