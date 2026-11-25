@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 
 /**
  * use-audio-recorder.ts
- * Browser-native Web Speech API with Pause/Resume, Reset, Chime, and Lock/Abort defense
+ * Browser-native Web Speech API with bounded reconnects, reset, and lock/abort defense
  */
 
 export interface AudioRecorderState {
