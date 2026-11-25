@@ -249,14 +249,29 @@ Respond with ONLY a valid JSON object (no markdown fences, no surrounding prose)
         "idealDerivationOrAnswer": "<ideal complete rigorous solution with LaTeX $$...$$ equations>"
       }
     ],
-    "chartsData": "[{\"type\":\"bar\",\"title\":\"Cognitive Competencies\",\"data\":[{\"name\":\"Comprehension\",\"score\":<number>},{\"name\":\"Expression\",\"score\":<number>},{\"name\":\"Critical Thinking\",\"score\":<number>},{\"name\":\"Application\",\"score\":<number>}],\"config\":{\"score\":{\"label\":\"Score\",\"color\":\"hsl(var(--primary))\"}}},{\"type\":\"pie\",\"title\":\"Knowledge Composition\",\"data\":[{\"name\":\"Core Theory\",\"value\":<number>,\"fill\":\"#3b82f6\"},{\"name\":\"Applied Logic\",\"value\":<number>,\"fill\":\"#10b981\"},{\"name\":\"Fluff / Filler\",\"value\":<number>,\"fill\":\"#ef4444\"},{\"name\":\"Analytical Insights\",\"value\":<number>,\"fill\":\"#f59e0b\"}]},{\"type\":\"histo\",\"title\":\"Response Depth Frequency\",\"data\":[{\"name\":\"0-25% Recall\",\"score\":<number>},{\"name\":\"26-50% Foundational\",\"score\":<number>},{\"name\":\"51-75% Analytical\",\"score\":<number>},{\"name\":\"76-100% Comprehensive\",\"score\":<number>}],\"config\":{\"score\":{\"label\":\"Answers Count\",\"color\":\"#10b981\"}}},{\"type\":\"polynomial\",\"title\":\"Adaptive Mastery Progression Curve\",\"data\":[{\"step\":\"Stage 1: Recall\",\"score\":<number>},{\"step\":\"Stage 2: Conceptual\",\"score\":<number>},{\"step\":\"Stage 3: Application\",\"score\":<number>},{\"step\":\"Stage 4: Synthesis\",\"score\":<number>},{\"step\":\"Stage 5: Peak Mastery\",\"score\":<number>}]},{\"type\":\"radar\",\"title\":\"Delivery & Articulation Matrix\",\"data\":[{\"metric\":\"Clarity\",\"score\":<number>},{\"metric\":\"Conciseness\",\"score\":<number>},{\"metric\":\"Confidence\",\"score\":<number>},{\"metric\":\"Technical Precision\",\"score\":<number>},{\"metric\":\"Structure\",\"score\":<number>]}]"
+    "chartsData": "[{\"type\":\"bar\",\"title\":\"Cognitive Competencies\",\"data\":[{\"name\":\"Comprehension\",\"score\":<number>},{\"name\":\"Expression\",\"score\":<number>},{\"name\":\"Critical Thinking\",\"score\":<number>},{\"name\":\"Application\",\"score\":<number>}]},{\"type\":\"pie\",\"title\":\"Knowledge Composition\",\"data\":[{\"name\":\"Core Theory\",\"value\":<number>},{\"name\":\"Applied Logic\",\"value\":<number>},{\"name\":\"Fluff / Filler\",\"value\":<number>},{\"name\":\"Analytical Insights\",\"value\":<number>}]},{\"type\":\"histo\",\"title\":\"Response Depth Frequency\",\"data\":[{\"name\":\"0-25% Recall\",\"score\":<number>},{\"name\":\"26-50% Foundational\",\"score\":<number>},{\"name\":\"51-75% Analytical\",\"score\":<number>},{\"name\":\"76-100% Comprehensive\",\"score\":<number>}]},{\"type\":\"radar\",\"title\":\"Delivery & Articulation Matrix\",\"data\":[{\"metric\":\"Clarity\",\"score\":<number>},{\"metric\":\"Conciseness\",\"score\":<number>},{\"metric\":\"Confidence\",\"score\":<number>},{\"metric\":\"Technical Precision\",\"score\":<number>},{\"metric\":\"Structure\",\"score\":<number>}]}]"
   }
 }`;
 
   try {
-    const raw = await callOpenRouter([
-      { role: 'user', content: prompt }
-    ], undefined, true);
+    const raw = await callOpenRouter(
+      [{ role: "user", content: prompt }],
+      undefined,
+      true,
+      (candidate) => {
+        if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return false;
+        const wrapped = (candidate as any).analysis;
+        const output = wrapped && typeof wrapped === "object" && !Array.isArray(wrapped)
+          ? wrapped
+          : candidate as any;
+        return typeof output.overallScore === "number" &&
+          Number.isFinite(output.overallScore) &&
+          output.overallScore >= 0 &&
+          output.overallScore <= 100 &&
+          typeof output.performanceSummary === "string" &&
+          Boolean(output.performanceSummary.trim());
+      }
+    );
 
     const parsed = parseJsonResponse<any>(raw);
     const rawAnalysis = parsed && typeof parsed === 'object' && parsed.analysis && typeof parsed.analysis === 'object' && !Array.isArray(parsed.analysis)
@@ -266,15 +281,20 @@ Respond with ONLY a valid JSON object (no markdown fences, no surrounding prose)
       throw new Error('Failed to parse structured analysis from AI model.');
     }
 
-    const overallScore =
-      typeof rawAnalysis.overallScore === 'number' && Number.isFinite(rawAnalysis.overallScore)
-        ? Math.max(0, Math.min(100, Math.round(rawAnalysis.overallScore)))
-        : 20;
+    if (
+      typeof rawAnalysis.overallScore !== "number" ||
+      !Number.isFinite(rawAnalysis.overallScore) ||
+      rawAnalysis.overallScore < 0 ||
+      rawAnalysis.overallScore > 100
+    ) {
+      throw new Error("The AI report did not contain a valid overall score. Please retry the analysis.");
+    }
+    const overallScore = Math.round(rawAnalysis.overallScore);
 
-    const performanceSummary =
-      typeof rawAnalysis.performanceSummary === 'string' && rawAnalysis.performanceSummary.trim()
-        ? rawAnalysis.performanceSummary.trim().slice(0, 15000)
-        : 'Your answers have been analyzed across foundational concepts, analytical depth, and mathematical rigor.';
+    if (typeof rawAnalysis.performanceSummary !== "string" || !rawAnalysis.performanceSummary.trim()) {
+      throw new Error("The AI report did not contain its performance summary. Please retry the analysis.");
+    }
+    const performanceSummary = rawAnalysis.performanceSummary.trim().slice(0, 15000);
 
     const areasToFocus = sanitizeStringArray(rawAnalysis.areasToFocus, 10, 1000);
     const areasToImprove = sanitizeStringArray(rawAnalysis.areasToImprove, 10, 1000);
@@ -289,18 +309,24 @@ Respond with ONLY a valid JSON object (no markdown fences, no surrounding prose)
         )
       : [];
 
-    const isLowScore = overallScore < 30;
     const rawAuth = rawAnalysis.authenticityReport;
-    let authenticityReport: AuthenticityReport;
-    if (rawAuth && typeof rawAuth === 'object' && !Array.isArray(rawAuth)) {
-      const verdictCandidate = typeof rawAuth.verdict === 'string' ? rawAuth.verdict.trim() : '';
-      const verdict = (ALLOWED_VERDICTS.has(verdictCandidate)
-        ? verdictCandidate
-        : isLowScore ? 'nonsense_or_filler' : 'natural_human') as AuthenticityReport['verdict'];
-      const confidence =
-        typeof rawAuth.naturalConfidenceScore === 'number' && Number.isFinite(rawAuth.naturalConfidenceScore)
-          ? Math.max(0, Math.min(100, Math.round(rawAuth.naturalConfidenceScore)))
-          : isLowScore ? 35 : 85;
+    let authenticityReport: AuthenticityReport | undefined;
+    const verdictCandidate = rawAuth && typeof rawAuth === "object" && !Array.isArray(rawAuth) &&
+      typeof rawAuth.verdict === "string" ? rawAuth.verdict.trim() : "";
+    const hasValidAuthenticityReport = Boolean(
+      rawAuth &&
+      typeof rawAuth === "object" &&
+      !Array.isArray(rawAuth) &&
+      typeof rawAuth.isNatural === "boolean" &&
+      ALLOWED_VERDICTS.has(verdictCandidate) &&
+      typeof rawAuth.naturalConfidenceScore === "number" &&
+      Number.isFinite(rawAuth.naturalConfidenceScore) &&
+      rawAuth.naturalConfidenceScore >= 0 &&
+      rawAuth.naturalConfidenceScore <= 100
+    );
+    if (hasValidAuthenticityReport) {
+      const confidence = Math.round(rawAuth.naturalConfidenceScore);
+      const verdict = verdictCandidate as AuthenticityReport["verdict"];
       const flaggedAnswers = Array.isArray(rawAuth.flaggedAnswers)
         ? rawAuth.flaggedAnswers
             .filter((item: any) => item && typeof item.questionNumber === 'number' && Number.isSafeInteger(item.questionNumber) && item.questionNumber >= 1 && typeof item.reason === 'string' && item.reason.trim())
@@ -311,32 +337,28 @@ Respond with ONLY a valid JSON object (no markdown fences, no surrounding prose)
             }))
         : [];
       authenticityReport = {
-        isNatural: typeof rawAuth.isNatural === 'boolean' ? rawAuth.isNatural : !isLowScore,
+        isNatural: rawAuth.isNatural,
         naturalConfidenceScore: confidence,
         verdict,
         assessmentDetails:
-          typeof rawAuth.assessmentDetails === 'string' && rawAuth.assessmentDetails.trim()
+          typeof rawAuth.assessmentDetails === "string" && rawAuth.assessmentDetails.trim()
             ? rawAuth.assessmentDetails.trim().slice(0, 2000)
-            : isLowScore
-              ? 'Responses demonstrate low conceptual engagement or atypical phrasing. Focus on detailed, spontaneous explanations in your own words.'
-              : 'Linguistic cadence indicates authentic, organic student thought with genuine conceptual formulation.',
+            : "The authenticity detector returned a verdict without additional explanation.",
         flaggedAnswers,
-      };
-    } else {
-      authenticityReport = {
-        isNatural: !isLowScore,
-        naturalConfidenceScore: isLowScore ? 35 : 85,
-        verdict: isLowScore ? 'nonsense_or_filler' : 'natural_human',
-        assessmentDetails: isLowScore
-          ? 'Responses demonstrate low conceptual engagement or atypical phrasing. Focus on detailed, spontaneous explanations in your own words.'
-          : 'Linguistic cadence indicates authentic, organic student thought with genuine conceptual formulation.',
-        flaggedAnswers: [],
       };
     }
 
     const questionCritiques: QuestionCritique[] = Array.isArray(rawAnalysis.questionCritiques)
       ? rawAnalysis.questionCritiques
-          .filter((q: any) => q && typeof q === 'object' && !Array.isArray(q))
+          .filter((q: any) =>
+            q &&
+            typeof q === "object" &&
+            !Array.isArray(q) &&
+            typeof q.scoreOutOf10 === "number" &&
+            Number.isFinite(q.scoreOutOf10) &&
+            q.scoreOutOf10 >= 0 &&
+            q.scoreOutOf10 <= 10
+          )
           .slice(0, 21)
           .map((q: any, idx: number): QuestionCritique => ({
             questionNumber:
@@ -345,10 +367,7 @@ Respond with ONLY a valid JSON object (no markdown fences, no surrounding prose)
                 : idx + 1,
             questionText: typeof q.questionText === 'string' ? q.questionText.trim().slice(0, 1000) : `Question ${idx + 1}`,
             userAnswer: typeof q.userAnswer === 'string' ? q.userAnswer.trim().slice(0, 2000) : '',
-            scoreOutOf10:
-              typeof q.scoreOutOf10 === 'number' && Number.isFinite(q.scoreOutOf10)
-                ? Math.max(0, Math.min(10, Math.round(q.scoreOutOf10 * 10) / 10))
-                : 0,
+            scoreOutOf10: Math.round(q.scoreOutOf10 * 10) / 10,
             conceptualAccuracy:
               typeof q.conceptualAccuracy === 'string' && q.conceptualAccuracy.trim()
                 ? q.conceptualAccuracy.trim().slice(0, 2000)

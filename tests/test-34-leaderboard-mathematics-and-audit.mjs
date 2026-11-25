@@ -204,28 +204,22 @@ test('Tareeka 34.6: Declining performance cannot produce negative rankScore', ()
   assert.ok(score >= 0, 'Rank score must never be negative');
 });
 
-test('Tareeka 34.7: Empty in-progress topics without answers are strictly filtered', () => {
+test('Tareeka 34.7: Only topics with actual finite assessment scores contribute to leaderboard performance', () => {
   const sampleTopics = [
-    { name: 'Active Topic with Answers', practiceStatus: 'in_progress', savedWrittenAnswers: ['Answer to Q1'] },
+    { name: 'Scored Topic', analysis: { overallScore: 84 }, practiceStatus: 'completed', savedWrittenAnswers: ['Answer'] },
+    { name: 'Unscored Completed Topic', practiceStatus: 'completed' },
+    { name: 'In-progress Topic with Answers', practiceStatus: 'in_progress', savedWrittenAnswers: ['Answer to Q1'] },
     { name: 'Empty Draft Topic', practiceStatus: 'in_progress', savedWrittenAnswers: [] },
-    { name: 'Whitespace Only Draft', practiceStatus: 'in_progress', savedWrittenAnswers: ['   '] },
-    { name: 'Completed Topic', practiceStatus: 'completed' },
+    { name: 'Invalid Score Topic', analysis: { overallScore: 140 }, practiceStatus: 'completed' },
   ];
 
-  const filtered = sampleTopics.filter((topic) => {
-    const hasAnalysisScore = Boolean(topic.analysis && typeof topic.analysis.overallScore === 'number');
-    const isCompleted = topic.practiceStatus === 'completed';
-    const isInProgress = topic.practiceStatus === 'in_progress';
-    const hasAnswers =
-      (Array.isArray(topic.savedWrittenAnswers) &&
-        topic.savedWrittenAnswers.some((a) => a && a.trim().length > 0)) ||
-      (Array.isArray(topic.savedSpokenAnswers) &&
-        topic.savedSpokenAnswers.some((a) => a && a.trim().length > 0));
+  const measured = sampleTopics.filter((topic) =>
+    typeof topic.analysis?.overallScore === 'number' &&
+    Number.isFinite(topic.analysis.overallScore) &&
+    topic.analysis.overallScore >= 0 &&
+    topic.analysis.overallScore <= 100
+  );
 
-    return hasAnalysisScore || isCompleted || (isInProgress && hasAnswers);
-  });
-
-  assert.equal(filtered.length, 2, 'Only topics with actual answers or completion should pass');
-  assert.equal(filtered[0].name, 'Active Topic with Answers');
-  assert.equal(filtered[1].name, 'Completed Topic');
+  assert.equal(measured.length, 1, 'Only an actually evaluated topic should contribute to performance metrics');
+  assert.equal(measured[0].name, 'Scored Topic');
 });

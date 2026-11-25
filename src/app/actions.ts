@@ -94,16 +94,22 @@ export async function runFinalAnalysisAction(
   await dbConnect();
   await assertActiveNonBlacklistedUser(sessionUuid);
 
-  const topicDoc = await Topic.findById(topicId);
-  if (!topicDoc) throw new Error("Topic not found");
-  if (topicDoc.userId !== sessionUuid) throw new Error("Unauthorized");
+  const topicDoc = await Topic.findOne({ _id: topicId, userId: sessionUuid });
+  if (!topicDoc) throw new Error("Topic not found or access denied.");
 
-  // Guard against re-submission if practice session has already been completed
-  if (topicDoc.practiceStatus === 'completed') {
-    if (topicDoc.analysis) {
-      return { analysis: topicDoc.analysis };
-    }
-    throw new Error("Practice session has already been completed.");
+  // A saved analysis is final. A completed status without an analysis is an
+  // interrupted legacy lock and is safe to recover through the lease below.
+  if (topicDoc.analysis) {
+    return { analysis: topicDoc.analysis };
+  }
+
+  const analysisLeaseStaleBefore = new Date(Date.now() - 120_000);
+  if (
+    topicDoc.practiceStatus === "analyzing" &&
+    topicDoc.analysisStartedAt &&
+    topicDoc.analysisStartedAt > analysisLeaseStaleBefore
+  ) {
+    throw new Error("Your answers are still being analyzed. This page will refresh automatically when the report is ready.");
   }
 
   // Load authoritative topic metadata from database to prevent prompt injection
@@ -139,18 +145,28 @@ export async function runFinalAnalysisAction(
     answer: ans.answer.trim(),
   }));
 
-  // Atomic lock against concurrent duplicate submissions
+  // Atomic 2-minute lease prevents concurrent model calls while allowing
+  // a reloaded test to recover if the previous request never finished.
+  const analysisLeaseStartedAt = new Date();
   const lockedTopic = await Topic.findOneAndUpdate(
-    { _id: topicId, userId: sessionUuid, practiceStatus: { $ne: 'completed' } },
-    { $set: { practiceStatus: 'completed' } }
+    {
+      _id: topicId,
+      userId: sessionUuid,
+      analysis: { $exists: false },
+      $or: [
+        { practiceStatus: { $ne: "analyzing" } },
+        { analysisStartedAt: { $lt: analysisLeaseStaleBefore } },
+        { analysisStartedAt: { $exists: false } },
+      ],
+    },
+    { $set: { practiceStatus: "analyzing", analysisStartedAt: analysisLeaseStartedAt } },
+    { new: true }
   );
 
   if (!lockedTopic) {
-    const refreshed = await Topic.findById(topicId);
-    if (refreshed?.analysis) {
-      return { analysis: refreshed.analysis };
-    }
-    throw new Error("Practice session evaluation is already in progress or completed.");
+    const refreshed = await Topic.findOne({ _id: topicId, userId: sessionUuid }).lean();
+    if (refreshed?.analysis) return { analysis: refreshed.analysis };
+    throw new Error("Your answers are still being analyzed. This page will refresh automatically when the report is ready.");
   }
 
   try {
@@ -163,23 +179,31 @@ export async function runFinalAnalysisAction(
       spokenAnswers: safeSpokenAnswers,
     });
 
-    await Topic.findOneAndUpdate(
-      { _id: topicId, userId: sessionUuid },
+    const savedAnalysis = await Topic.findOneAndUpdate(
+      { _id: topicId, userId: sessionUuid, analysisStartedAt: analysisLeaseStartedAt, analysis: { $exists: false } },
       {
         $set: {
           analysis: result.analysis,
-          practiceStatus: 'completed',
+          practiceStatus: "completed",
         },
-      }
+        $unset: { analysisStartedAt: 1 },
+      },
+      { new: true }
     );
+
+    if (!savedAnalysis) {
+      const latest = await Topic.findOne({ _id: topicId, userId: sessionUuid }).lean();
+      if (latest?.analysis) return { analysis: latest.analysis };
+      throw new Error("This analysis request lost its session lease. Reload the report and retry.");
+    }
 
     revalidatePath(`/dashboard/topic/${topicId}`);
     return result;
   } catch (error) {
     // If analysis failed due to upstream network issue, revert status so student can retry
     await Topic.findOneAndUpdate(
-      { _id: topicId, userId: sessionUuid, analysis: { $exists: false } },
-      { $set: { practiceStatus: 'in_progress' } }
+      { _id: topicId, userId: sessionUuid, analysisStartedAt: analysisLeaseStartedAt, analysis: { $exists: false } },
+      { $set: { practiceStatus: "in_progress" }, $unset: { analysisStartedAt: 1 } }
     );
     throw error;
   }
@@ -267,9 +291,11 @@ export async function markSummaryViewedAction(topicId: string) {
 
   await assertActiveNonBlacklistedUser(sessionUuid);
 
+  // Starting the practice tab is the durable start of the test. Mark it
+  // in_progress immediately so a reload can never silently resume an active test.
   const updated = await Topic.findOneAndUpdate(
-    { _id: topicId, userId: sessionUuid },
-    { $set: { summaryViewed: true } },
+    { _id: topicId, userId: sessionUuid, practiceStatus: { $ne: "completed" } },
+    { $set: { summaryViewed: true, practiceStatus: "in_progress" } },
     { new: true }
   ).select("_id").lean();
   if (!updated) throw new Error("Topic not found or access denied.");
@@ -281,7 +307,8 @@ export async function updateTopicProgressAction(
   topicId: string,
   status: 'in_progress' | 'completed',
   savedWrittenAnswers: string[],
-  savedSpokenAnswers: string[]
+  savedSpokenAnswers: string[],
+  savedFinalSummarySpeech: string = ""
 ) {
   await dbConnect();
   const rawSession = (await cookies()).get("user_session")?.value;
@@ -289,7 +316,8 @@ export async function updateTopicProgressAction(
   if (!sessionUuid) throw new Error("Not authenticated");
   if (typeof topicId !== "string" || !mongoose.isValidObjectId(topicId)) throw new Error("Invalid Topic ID");
   if (status !== "in_progress" && status !== "completed") throw new Error("Invalid practice status.");
-  if (!Array.isArray(savedWrittenAnswers) || !Array.isArray(savedSpokenAnswers)) {
+  if (!Array.isArray(savedWrittenAnswers) || !Array.isArray(savedSpokenAnswers) ||
+      typeof savedFinalSummarySpeech !== "string" || savedFinalSummarySpeech.length > 5000) {
     throw new Error("Invalid saved answers.");
   }
   const allAnswers = [...savedWrittenAnswers, ...savedSpokenAnswers];
@@ -318,6 +346,7 @@ export async function updateTopicProgressAction(
         practiceStatus: status,
         savedWrittenAnswers,
         savedSpokenAnswers,
+        savedFinalSummarySpeech,
       },
     },
     { new: true }

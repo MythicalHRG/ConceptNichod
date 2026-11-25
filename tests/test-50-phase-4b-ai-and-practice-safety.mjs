@@ -24,7 +24,9 @@ test("direct AI analysis flows validate bounded payloads and finite model metric
   assert.match(mirror, /Number\.isFinite\(item\.score\)/);
   assert.match(mirror, /Number\.isFinite\(item\.value\)/);
   assert.match(mirror, /Number\.isFinite\(item\.score\)/);
-  assert.match(mirror, /output\.polynomial_chart_data =/);
+  assert.match(mirror, /polynomial_chart_data: polynomialChartData/);
+  assert.match(mirror, /A single oral defense is not a longitudinal learning curve/);
+  assert.doesNotMatch(mirror, /Initial Recall.*Math\.max|overallScore \* 1\.08/);
   assert.match(mirror, /output\.feedback_summary = typeof output\.feedback_summary/);
 });
 

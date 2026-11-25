@@ -32,3 +32,56 @@ test("UPI submission action is protected against duplicate reference creation at
   assert.match(action, /error\?\.code === 11000/);
   assert.match(action, /checkDistributedRateLimit/);
 });
+
+test("microphone startup is silent and speech-recognition failures are classified", () => {
+  const source = fs.readFileSync("src/hooks/use-audio-recorder.ts", "utf8");
+  assert.doesNotMatch(source, /playMicReadyChime|sharedChimeCtx|AudioContext/);
+  for (const code of ["not-allowed", "service-not-allowed", "audio-capture", "language-not-supported"]) {
+    assert.ok(source.includes(`"${code}"`), `Missing speech error handling: ${code}`);
+  }
+  assert.match(source, /restartCountRef\.current > 5/);
+  assert.match(source, /setIsRecording\(true\);[\s\S]*?setIsConnecting\(true\);[\s\S]*?retryTimeoutRef\.current = setTimeout/);
+});
+
+test("AI analysis cannot permanently lock Concept Mirror recording after a failed request", () => {
+  const source = fs.readFileSync("src/components/concept-mirror/mastery-dashboard.tsx", "utf8");
+  assert.doesNotMatch(source, /lockAndAbort\(/);
+  assert.match(source, /if \(isRecording \|\| isConnecting\)/);
+  assert.match(source, /stopRecording\(\);[\s\S]*?setIsTopicLocked\(true\)/);
+});
+
+test("structured OpenRouter output is validated before a provider response is accepted", () => {
+  const source = fs.readFileSync("src/lib/openrouter.ts", "utf8");
+  assert.match(source, /if \(jsonMode\)[\s\S]*?parseJsonResponse<unknown>\(content\)/);
+  assert.match(source, /malformed JSON[\s\S]*?continue/);
+});
+
+test("Concept Mirror report charts do not fabricate missing scores", () => {
+  const flow = fs.readFileSync("src/ai/flows/analyze-concept-explanation.ts", "utf8");
+  const ui = fs.readFileSync("src/components/concept-mirror/mastery-dashboard.tsx", "utf8");
+  assert.doesNotMatch(flow, /overallScore \* 1\.04|overallScore \* 0\.92|Initial Recall.*score:/);
+  assert.doesNotMatch(ui, /Definitions", score: 82|Initial Recall", score: 65|fallbackBase \|\| axis\.score/);
+  assert.match(ui, /A single explanation cannot form a learning curve/);
+  assert.match(ui, /const safePolyData: \{ step: string; score: number \}\[\] = \[\]/);
+});
+
+test("synchronous speech start and resume failures reset the recorder and display actionable errors", () => {
+  const source = fs.readFileSync("src/hooks/use-audio-recorder.ts", "utf8");
+  assert.match(source, /function getSpeechStartErrorMessage/);
+  for (const errorName of ["NotAllowedError", "SecurityError", "NotSupportedError", "InvalidStateError", "AbortError"]) {
+    assert.ok(source.includes(`case "${errorName}"`), `Missing speech startup error mapping: ${errorName}`);
+  }
+  assert.match(source, /Failed to resume speech recognition:[\s\S]*?setIsRecording\(false\)[\s\S]*?setErrorMessage\(getSpeechStartErrorMessage\(error\)\)/);
+  assert.match(source, /Failed to start speech recognition:[\s\S]*?setIsConnecting\(false\)[\s\S]*?setErrorMessage\(getSpeechStartErrorMessage\(error\)\)/);
+});
+
+test("OpenRouter retries model and key fallbacks when valid JSON misses a required schema", () => {
+  const client = fs.readFileSync("src/lib/openrouter.ts", "utf8");
+  const written = fs.readFileSync("src/ai/flows/analyze-answers.ts", "utf8");
+  const mirror = fs.readFileSync("src/ai/flows/analyze-concept-explanation.ts", "utf8");
+  assert.match(client, /validateJson\?: \(value: unknown\) => boolean/);
+  assert.match(client, /if \(validateJson && !validateJson\(parsedJson\)\)/);
+  assert.match(client, /did not match the required report schema[\s\S]*?continue/);
+  assert.match(written, /output\.overallScore >= 0[\s\S]*?output\.performanceSummary/);
+  assert.match(mirror, /Array\.isArray\(output\.radar_chart_data\)[\s\S]*?Array\.isArray\(output\.pie_chart_data\)/);
+});

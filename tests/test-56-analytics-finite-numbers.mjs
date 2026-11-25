@@ -17,7 +17,10 @@ test("leaderboard filters invalid scores, durations, dates, and streak values be
   assert.match(source, /Number\.isFinite\(rawScore\)/);
   assert.match(source, /Number\.isFinite\(createdAt\.getTime\(\)\)/);
   assert.match(source, /Number\.isFinite\(rawDuration\)/);
-  assert.match(source, /Number\.isFinite\(topic\.analysis\.overallScore\)/);
+  assert.match(source, /Number\.isFinite\(rawTopicScore\)/);
+  assert.match(source, /rawTopicScore < 0 \|\| rawTopicScore > 100/);
+  assert.match(source, /Only a completed, actually evaluated Topic contributes a performance/);
+  assert.doesNotMatch(source, /isCompleted \? 70|isInProgress \? 40|isCompleted \? 180 : 60/);
   assert.match(source, /Number\.isFinite\(currentStreakValue\)/);
   assert.match(source, /Number\.isFinite\(longestStreakValue\)/);
 });

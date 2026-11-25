@@ -13,7 +13,7 @@ test("written-practice report clamps invalid overall and authenticity scores", (
 test("stored AI chart series are finite, range-bounded, and length-bounded before rendering", () => {
   const source = fs.readFileSync("src/components/topic/final-analysis-display.tsx", "utf8");
   assert.match(source, /rawList\.slice\(0, 25\)/);
-  assert.match(source, /c\.data\.slice\(0, 30\)/);
+  assert.match(source, /chart\.data\.slice\(0, 30\)/);
   assert.match(source, /Number\.isFinite\(item\.score\)/);
   assert.match(source, /Number\.isFinite\(item\.value\)/);
   assert.match(source, /Math\.max\(0, Math\.min\(100, item\.score\)\)/);

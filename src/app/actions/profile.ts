@@ -49,7 +49,7 @@ export async function getPublicProfileData(username: string) {
     { name: "81-100", min: 81, max: 100, count: 0 },
   ];
   const skillAggregator = new Map<string, { total: number; count: number }>();
-  const recentAnalyzedTopics: Array<{ name?: string; score: number }> = [];
+  const recentAnalyzedTopics: Array<{ name?: string; score: number; createdAt: Date }> = [];
 
   try {
     for await (const t of topicCursor) {
@@ -82,6 +82,7 @@ export async function getPublicProfileData(username: string) {
         recentAnalyzedTopics.push({
           name: typeof t.name === "string" ? t.name : undefined,
           score,
+          createdAt: new Date(t.createdAt),
         });
       }
 
@@ -139,17 +140,9 @@ export async function getPublicProfileData(username: string) {
     }))
     .sort((a, b) => b.score - a.score);
 
-  // The cursor is newest-first; reverse the bounded seven-point window for display.
-  const learningProgression = recentAnalyzedTopics
-    .reverse()
-    .map((t, idx) => ({
-      session: t.name
-        ? t.name.length > 14
-          ? t.name.slice(0, 12) + ".."
-          : t.name
-        : "Topic " + (idx + 1),
-      score: t.score,
-    }));
+  let learningProgression: { session: string; score: number }[] = [];
+
+  const recentMirrorProgression: Array<{ name?: string; score: number; createdAt: Date }> = [];
 
   let conceptMirrorAnalytics = {
     totalSessions: 0,
@@ -217,7 +210,14 @@ export async function getPublicProfileData(username: string) {
           });
         }
 
-        if (recentMirrorDocs.length < 7) recentMirrorDocs.push(doc);
+        if (recentMirrorDocs.length < 7) {
+          recentMirrorDocs.push(doc);
+          recentMirrorProgression.push({
+            name: typeof doc.conceptName === "string" ? doc.conceptName : undefined,
+            score: Math.max(0, Math.min(100, doc.overallScore)),
+            createdAt: new Date(doc.createdAt),
+          });
+        }
       }
     } finally {
       await mirrorCursor.close().catch(() => {});
@@ -232,21 +232,6 @@ export async function getPublicProfileData(username: string) {
         }))
         .sort((a, b) => b.score - a.score);
 
-      if (learningProgression.length === 0) {
-        recentMirrorDocs
-          .slice()
-          .reverse()
-          .forEach((m: any, idx: number) => {
-            learningProgression.push({
-              session: m.conceptName
-                ? m.conceptName.length > 14
-                  ? m.conceptName.slice(0, 12) + ".."
-                  : m.conceptName
-                : "Session " + (idx + 1),
-              score: typeof m.overallScore === "number" ? m.overallScore : 0,
-            });
-          });
-      }
 
       const recentSessions = recentMirrorDocs.slice(0, 6).map((doc: any) => ({
         id: doc._id?.toString() || "",
@@ -274,6 +259,26 @@ export async function getPublicProfileData(username: string) {
   } catch (err) {
     console.warn("Could not query ConceptMirror records:", err);
   }
+
+  // Combine recent written-topic and oral-defense scores into one chronological
+  // timeline so new Concept Mirror sessions are not hidden by older written tests.
+  const activityEvents = [
+    ...recentAnalyzedTopics.map((item) => ({ ...item, label: "Topic" })),
+    ...recentMirrorProgression.map((item) => ({ ...item, label: "Mirror" })),
+  ].filter((item) => Number.isFinite(item.createdAt.getTime()) && Number.isFinite(item.score))
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+    .slice(-12);
+
+  learningProgression = activityEvents.map((item, index) => {
+    const rawName = item.name?.trim();
+    const shortName = rawName
+      ? rawName.length > 12 ? rawName.slice(0, 10) + ".." : rawName
+      : item.label + " " + (index + 1);
+    return {
+      session: item.label + ": " + shortName,
+      score: Math.max(0, Math.min(100, item.score)),
+    };
+  });
 
   let badges: any[] = [];
   let topBadge: any = null;
