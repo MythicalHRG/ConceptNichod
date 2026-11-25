@@ -19,81 +19,58 @@ import { LatexRenderer } from '@/components/ui/latex-renderer';
 
 const PIE_CHART_COLORS = ['#0088FE', '#FFBB28', '#00C49F'];
 
-const DEFAULT_MIRROR_PENTAGON = [
-  { metric: "Clarity", score: 80 },
-  { metric: "Examples", score: 75 },
-  { metric: "Confidence", score: 85 },
-  { metric: "Terminology", score: 70 },
-  { metric: "Conciseness", score: 78 },
-];
-
 function normalizeMirrorPentagon(
-  raw: Array<{ metric: string; score: number }> | undefined,
-  fallbackBase: number
+  raw: Array<{ metric: string; score: number }> | undefined
 ): Array<{ metric: string; score: number }> {
   const unique: Array<{ metric: string; score: number }> = [];
   const seen = new Set<string>();
 
   for (const item of Array.isArray(raw) ? raw : []) {
-    if (!item || typeof item.metric !== 'string') continue;
+    if (!item || typeof item.metric !== "string" || !Number.isFinite(item.score)) continue;
     const clean = item.metric.trim();
     const key = clean.toLowerCase();
     if (!clean || seen.has(key)) continue;
     seen.add(key);
-    const num = Number(item.score);
     unique.push({
       metric: clean.length > 16 ? clean.slice(0, 14) + "…" : clean,
-      score: Number.isFinite(num) ? Math.max(0, Math.min(100, Math.round(num))) : fallbackBase,
+      score: Math.max(0, Math.min(100, Math.round(item.score))),
     });
     if (unique.length === 5) break;
   }
 
-  for (const axis of DEFAULT_MIRROR_PENTAGON) {
-    if (unique.length >= 5) break;
-    if (!seen.has(axis.metric.toLowerCase())) {
-      seen.add(axis.metric.toLowerCase());
-      unique.push({
-        metric: axis.metric,
-        score: Math.max(0, Math.min(100, Math.round(fallbackBase || axis.score))),
-      });
-    }
-  }
-
+  // Never fill missing dimensions with invented scores.
   return unique;
 }
 
 const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOutput; conceptName: string }) => {
-  const fallbackScore =
-    typeof report.overallScore === 'number' && Number.isFinite(report.overallScore)
-      ? Math.max(0, Math.min(100, Math.round(report.overallScore)))
-      : 75;
+  const safeRadarData = normalizeMirrorPentagon(report.radar_chart_data);
 
-  const safeRadarData = normalizeMirrorPentagon(report.radar_chart_data, fallbackScore);
-
-  const safeBarData = Array.isArray(report.bar_chart_data) && report.bar_chart_data.length > 0
+  const reportedBarData = Array.isArray(report.bar_chart_data)
     ? report.bar_chart_data
-    : [
-        { name: "Definitions", score: 82 },
-        { name: "Core Principles", score: 78 },
-        { name: "Application", score: 72 },
-        { name: "Edge Cases", score: 68 }
-      ];
+        .filter((item) => item && typeof item.name === "string" && Number.isFinite(item.score))
+        .map((item) => ({ name: item.name, score: Math.max(0, Math.min(100, Math.round(item.score))) }))
+    : [];
+  const safeBarData = reportedBarData.length > 0
+    ? reportedBarData
+    : safeRadarData.map((item) => ({ name: item.metric, score: item.score }));
 
-  const safePolyData = Array.isArray(report.polynomial_chart_data) && report.polynomial_chart_data.length > 0
-    ? report.polynomial_chart_data
-    : [
-        { step: "Initial Recall", score: 65 },
-        { step: "Concept Framing", score: 74 },
-        { step: "Analytical Nuance", score: 80 },
-        { step: "Synthesis & Proof", score: 84 },
-        { step: "Final Mastery", score: 88 }
-      ];
+  const safePolyData = Array.isArray(report.polynomial_chart_data)
+    ? report.polynomial_chart_data.filter((item) =>
+        item && typeof item.step === "string" && Number.isFinite(item.score)
+      ).map((item) => ({
+        step: item.step,
+        score: Math.max(0, Math.min(100, Math.round(item.score))),
+      }))
+    : [];
 
   const safePieData = Array.isArray(report.pie_chart_data) ? report.pie_chart_data : [];
 
-  const avgClarity = Math.round(
-    safeRadarData.reduce((acc, curr) => acc + curr.score, 0) / safeRadarData.length
-  );
+  const avgClarity = safeRadarData.length > 0
+    ? Math.round(safeRadarData.reduce((acc, curr) => acc + curr.score, 0) / safeRadarData.length)
+    : 0;
+  const masteryScore = Number.isFinite(report.overallScore)
+    ? Math.max(0, Math.min(100, Math.round(report.overallScore as number)))
+    : avgClarity;
 
   const fluffItem = safePieData.find(item => item.name?.toLowerCase() === 'fluff');
   const fluffPercent = report.fluffPercentage ?? (fluffItem ? fluffItem.value : 0);
@@ -136,7 +113,7 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
             </div>
             <div className="p-3 rounded-xl border border-primary/30 bg-primary/5 flex flex-col justify-center text-center sm:text-right shadow-xs col-span-2 sm:col-span-1">
               <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground block">Mastery Score</span>
-              <span className="text-2xl sm:text-3xl font-extrabold text-primary">{report.overallScore || avgClarity}%</span>
+              <span className="text-2xl sm:text-3xl font-extrabold text-primary">{masteryScore}%</span>
               <span className="text-[10px] text-muted-foreground">Rigorous AI score</span>
             </div>
           </div>
@@ -300,6 +277,7 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
             </div>
             <p className="text-xs text-muted-foreground mb-4">Progression curve from recall to final concept synthesis.</p>
             <div className="h-[280px] w-full">
+              {safePolyData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={safePolyData} margin={{ top: 20, right: 20, left: -10, bottom: 25 }}>
                   <defs>
@@ -329,6 +307,11 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
                   <Area type="monotone" dataKey="score" stroke="#6366f1" strokeWidth={2.5} fillOpacity={1} fill="url(#cmPolyGrad)" />
                 </AreaChart>
               </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center rounded-lg border border-dashed text-center text-sm text-muted-foreground p-4">
+                  No reliable phase-by-phase curve was returned for this single explanation.
+                </div>
+              )}
             </div>
           </div>
         </div>
