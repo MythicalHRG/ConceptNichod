@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 function keepVerifiedChartTypes(rawList) {
-  const allowed = new Set(["bar", "pie", "histo", "polynomial", "radar"]);
+  const allowed = new Set(["bar", "pie", "histo", "radar"]);
   const seen = new Set();
   return rawList.filter((chart) => {
     if (!chart || typeof chart !== "object" || !allowed.has(chart.type) || seen.has(chart.type)) return false;
@@ -21,6 +21,7 @@ test("Tareeka 11: chart output keeps unique chart types that the examiner actual
     { type: "pie", title: "Pie 2 (Duplicate)", data: [{ name: "Core", value: 100 }] },
     { type: "unknown", title: "Unsupported", data: [{ name: "x", score: 90 }] },
     { type: "radar", title: "Empty radar", data: [] },
+    { type: "polynomial", title: "Synthetic single-test progression", data: [{ step: "Stage 1", score: 80 }] },
   ];
 
   const result = keepVerifiedChartTypes(duplicateInput);
