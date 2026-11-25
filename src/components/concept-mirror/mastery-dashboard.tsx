@@ -354,7 +354,6 @@ export function MasteryDashboard() {
     startRecording,
     stopRecording,
     resetTranscript,
-    lockAndAbort,
     isSupported,
   } = useAudioRecorder();
 
@@ -412,6 +411,10 @@ export function MasteryDashboard() {
 
   const handleAnalysis = async () => {
     if (isAnalyzing) return;
+    if (isRecording || isConnecting) {
+      toast({ variant: "destructive", title: "Finish Recording First", description: "Stop the microphone and wait for the transcript to settle before analyzing." });
+      return;
+    }
     const finalExplanation = transcript.trim();
 
     if (!conceptName.trim()) {
@@ -423,8 +426,9 @@ export function MasteryDashboard() {
       return;
     }
 
-    // Lock audio recorder and concept name input to prevent speech injection during analysis
-    lockAndAbort();
+    // The UI lock prevents new input while analyzing. Do not permanently lock
+    // the recorder: users must be able to retry or start a fresh Concept Mirror.
+    stopRecording();
     setIsTopicLocked(true);
     setIsAnalyzing(true);
     setAnalysisReport(null);
@@ -629,7 +633,7 @@ export function MasteryDashboard() {
       <CardFooter className="pt-2">
         <Button
           onClick={handleAnalysis}
-          disabled={!transcript.trim() || !conceptName.trim() || isAnalyzing}
+          disabled={!transcript.trim() || !conceptName.trim() || isAnalyzing || isRecording || isConnecting}
           className="w-full"
           size="lg"
         >
