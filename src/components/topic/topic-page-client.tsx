@@ -42,7 +42,7 @@ export function TopicPageClient({ topicId, initialTopic }: TopicPageClientProps)
   const [customTime, setCustomTime] = useState<string>("");
 
   const autoSubmitStartedRef = useRef(false);
-  const initialSessionCheckDoneRef = useRef(false);
+  const initialSessionCheckedTopicRef = useRef<string | null>(null);
   const shakeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { toast } = useToast();
 
@@ -167,8 +167,9 @@ export function TopicPageClient({ topicId, initialTopic }: TopicPageClientProps)
     setTopic(initialTopic);
     setFinalAnalysis(initialTopic.analysis || null);
 
-    if (initialSessionCheckDoneRef.current) return;
-    initialSessionCheckDoneRef.current = true;
+    if (initialSessionCheckedTopicRef.current === topicId) return;
+    initialSessionCheckedTopicRef.current = topicId;
+    autoSubmitStartedRef.current = false;
 
     if (initialTopic.practiceStatus === "completed" || initialTopic.analysis) {
       setActiveTab("practice");
