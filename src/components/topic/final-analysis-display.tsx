@@ -58,7 +58,7 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
         console.warn("Could not parse AI performance charts; using a no-data state:", error);
       }
     }
-    const availableTypes = ["bar", "pie", "histo", "polynomial", "radar"];
+    const availableTypes = ["bar", "pie", "histo", "radar"];
     const seenTypes = new Set<string>();
     const verifiedCharts: any[] = [];
     for (const chart of rawList.slice(0, 25)) {
