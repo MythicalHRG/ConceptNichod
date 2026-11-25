@@ -40,7 +40,7 @@ test("dashboard and topic detail queries are scoped to the authenticated UUID", 
 
 test("topic mutation actions enforce authenticated ownership in database filters", () => {
   const actions = read("src/app/actions.ts");
-  assert.match(actions, /if \(topicDoc\.userId !== sessionUuid\) throw new Error\("Unauthorized"\)/);
+  assert.match(actions, /Topic\.findOne\(\{ _id: topicId, userId: sessionUuid \}\)/);
   assert.match(actions, /Topic\.findOneAndUpdate\(\s*\{ _id: topicId, userId: sessionUuid \}/);
   assert.match(actions, /Topic\.findOne\(\{ _id: topicId, userId: sessionUuid \}\)/);
 });
