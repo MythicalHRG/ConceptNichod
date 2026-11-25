@@ -139,6 +139,8 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
   );
 
   const hasRadarData = pentagonData.length > 0;
+  const hasWrittenAssessmentData = Array.isArray(data.scoreDistribution) &&
+    data.scoreDistribution.some((bucket) => Number.isFinite(bucket.value) && bucket.value > 0);
 
   const formatDuration = (seconds: number) => {
     const safe = Number.isFinite(seconds) && seconds > 0 ? Math.floor(seconds) : 0;
@@ -200,9 +202,9 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
             <Trophy className="h-4 w-4 text-yellow-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{data.averageScore || 0}%</div>
+            <div className="text-2xl font-bold">{hasWrittenAssessmentData ? `${data.averageScore}%` : "—"}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              {mostStudiedSubject !== "N/A" ? `Top: ${mostStudiedSubject}` : 'Topic practice assessments'}
+              {hasWrittenAssessmentData ? (mostStudiedSubject !== "N/A" ? `Top: ${mostStudiedSubject}` : "Written topic assessments") : "No completed written assessments yet"}
             </p>
           </CardContent>
         </Card>
@@ -263,7 +265,7 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground font-medium">Average Oral Score</p>
-                <p className="text-xl font-extrabold text-emerald-500">{mirrorData.averageScore}%</p>
+                <p className="text-xl font-extrabold text-emerald-500">{mirrorData.totalSessions > 0 ? `${mirrorData.averageScore}%` : "—"}</p>
               </div>
             </div>
 
@@ -273,7 +275,7 @@ export function UserAnalytics({ data }: { data: AnalyticsData }) {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground font-medium">Time Explaining</p>
-                <p className="text-xl font-extrabold">{formatDuration(mirrorData.totalDurationSeconds)}</p>
+                <p className="text-xl font-extrabold">{mirrorData.totalSessions > 0 ? formatDuration(mirrorData.totalDurationSeconds) : "—"}</p>
               </div>
             </div>
           </div>
