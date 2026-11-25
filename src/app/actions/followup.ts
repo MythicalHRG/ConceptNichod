@@ -2,7 +2,7 @@
 
 import { cookies } from 'next/headers';
 import { callOpenRouter } from '@/lib/openrouter';
-import { verifySessionCookie } from '@/lib/session';
+import { getVerifiedSessionUuid } from "@/lib/session-auth";
 import { getClientIp } from '@/lib/ip';
 import { checkDistributedRateLimit } from '@/lib/distributed-rate-limiter';
 import { assertActiveNonBlacklistedUser } from '@/lib/ai-flow-auth';
@@ -29,7 +29,7 @@ const MAX_SUMMARY_CHARS = 4000;
 export async function askFollowUpAction(input: FollowUpInput): Promise<{ answer: string }> {
   // Authentication check to prevent unauthenticated bot AI-scraping and token draining
   const rawSession = (await cookies()).get('user_session')?.value;
-  const sessionUuid = verifySessionCookie(rawSession);
+  const sessionUuid = await getVerifiedSessionUuid(rawSession);
   if (!sessionUuid) {
     throw new Error('Please log in to ask follow-up questions.');
   }
