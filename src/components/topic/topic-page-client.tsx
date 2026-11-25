@@ -42,6 +42,7 @@ export function TopicPageClient({ topicId, initialTopic }: TopicPageClientProps)
   const [customTime, setCustomTime] = useState<string>("");
 
   const autoSubmitStartedRef = useRef(false);
+  const initialSessionCheckDoneRef = useRef(false);
   const shakeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { toast } = useToast();
 
@@ -128,7 +129,7 @@ export function TopicPageClient({ topicId, initialTopic }: TopicPageClientProps)
 
   const handleAutoSubmit = useCallback(
     async (currentTopic: Topic) => {
-      if (!currentTopic.questions || autoSubmitStartedRef.current) return;
+      if (!Array.isArray(currentTopic.questions) || currentTopic.questions.length === 0 || autoSubmitStartedRef.current) return;
       autoSubmitStartedRef.current = true;
 
       const numQuestions = currentTopic.questions.length;
@@ -143,11 +144,15 @@ export function TopicPageClient({ topicId, initialTopic }: TopicPageClientProps)
         question: q.question,
         answer: currentTopic.savedSpokenAnswers?.[i] || "Abandoned",
       }));
+      spokenAnswers.push({
+        question: "Overall Topic Summary (2-Minute Challenge)",
+        answer: currentTopic.savedFinalSummarySpeech?.trim() || "Abandoned",
+      });
 
       toast({
         variant: "destructive",
-        title: "Session Restored",
-        description: "You reloaded the page during a test. Your partial answers have been automatically submitted.",
+        title: "Session Auto-Submitted",
+        description: "The active test was submitted automatically after the page was reloaded. Unsaved answers are marked as unanswered.",
       });
 
       await handleFinalAnalysis(writtenAnswers, spokenAnswers, true, currentTopic);
@@ -155,22 +160,23 @@ export function TopicPageClient({ topicId, initialTopic }: TopicPageClientProps)
     [handleFinalAnalysis, toast]
   );
 
-  // If initialTopic changes via Server Component re-render
+  // Only the server state from the initial page load is used to detect an
+  // interrupted test. A later revalidation after markSummaryViewedAction must
+  // not mistake the current, newly-started test for a reload.
   useEffect(() => {
     setTopic(initialTopic);
     setFinalAnalysis(initialTopic.analysis || null);
 
-    // Anti-Cheating: Check practice status on reload
+    if (initialSessionCheckDoneRef.current) return;
+    initialSessionCheckDoneRef.current = true;
+
     if (initialTopic.practiceStatus === "completed" || initialTopic.analysis) {
       setActiveTab("practice");
       setIsPracticing(true);
-    } else if (initialTopic.practiceStatus === "in_progress") {
+    } else if (initialTopic.practiceStatus === "in_progress" || initialTopic.summaryViewed) {
       setActiveTab("practice");
       setIsPracticing(true);
       handleAutoSubmit(initialTopic);
-    } else if (initialTopic.summaryViewed) {
-      setActiveTab("practice");
-      setIsPracticing(true);
     }
   }, [initialTopic, handleAutoSubmit]);
 
@@ -191,7 +197,6 @@ export function TopicPageClient({ topicId, initialTopic }: TopicPageClientProps)
     (value: string) => {
       setActiveTab(value);
       if (value === "practice" && !isPracticing) {
-        setIsPracticing(true);
         setIsShaking(true);
 
         // Request Fullscreen (standard + WebKit)
@@ -210,31 +215,29 @@ export function TopicPageClient({ topicId, initialTopic }: TopicPageClientProps)
           }
         }
 
-        // Anti-Cheating: Mark summary as viewed so they can't go back on reload
-        markSummaryViewedAction(topicId).catch(console.error);
+        // Persist the test start before rendering the live practice form.
+        // A failed write means the test must not begin without reload protection.
+        markSummaryViewedAction(topicId)
+          .then(() => setIsPracticing(true))
+          .catch((error) => {
+            setActiveTab("summary");
+            setIsPracticing(false);
+            toast({
+              variant: "destructive",
+              title: "Could Not Start Test",
+              description: error?.message || "Your test session could not be secured. Please try again.",
+            });
+          });
 
         if (typeof window !== "undefined" && window.navigator.vibrate) {
           window.navigator.vibrate([100, 30, 100, 30, 100]);
-        }
-
-        if (typeof window !== "undefined" && "speechSynthesis" in window) {
-          try {
-            window.speechSynthesis.cancel();
-            const utterance = new SpeechSynthesisUtterance(
-              "You have moved to the Questions section. Now you have to answer the questions."
-            );
-            utterance.lang = "en-US";
-            window.speechSynthesis.speak(utterance);
-          } catch (e) {
-            console.error("Speech synthesis failed.", e);
-          }
         }
 
         if (shakeTimerRef.current) clearTimeout(shakeTimerRef.current);
         shakeTimerRef.current = setTimeout(() => setIsShaking(false), 820);
       }
     },
-    [isPracticing, topicId]
+    [isPracticing, topicId, toast]
   );
 
   useEffect(() => {
