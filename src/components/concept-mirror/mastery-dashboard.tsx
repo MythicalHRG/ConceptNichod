@@ -73,7 +73,10 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
     : avgClarity;
 
   const fluffItem = safePieData.find(item => item.name?.toLowerCase() === 'fluff');
-  const fluffPercent = report.fluffPercentage ?? (fluffItem ? fluffItem.value : 0);
+  const rawFluffPercent = report.fluffPercentage ?? (fluffItem ? fluffItem.value : null);
+  const fluffPercent = typeof rawFluffPercent === "number" && Number.isFinite(rawFluffPercent)
+    ? Math.max(0, Math.min(100, Math.round(rawFluffPercent)))
+    : null;
   const timeUtilized = report.durationSeconds ?? 0;
 
   return (
@@ -101,15 +104,17 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
             <div className="p-3 rounded-xl border bg-card/60 flex flex-col justify-center text-center sm:text-right shadow-xs">
               <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground block">Fluff Content</span>
               <span className={`text-xl sm:text-2xl font-extrabold ${
-                fluffPercent > 35
+                fluffPercent === null
+                  ? "text-muted-foreground"
+                  : fluffPercent > 35
                   ? "text-destructive"
                   : fluffPercent > 15
                   ? "text-amber-500"
                   : "text-emerald-500"
               }`}>
-                {fluffPercent}%
+                {fluffPercent === null ? "—" : `${fluffPercent}%`}
               </span>
-              <span className="text-[10px] text-muted-foreground">Detected ratio</span>
+              <span className="text-[10px] text-muted-foreground">{fluffPercent === null ? "Not assessed" : "Detected ratio"}</span>
             </div>
             <div className="p-3 rounded-xl border border-primary/30 bg-primary/5 flex flex-col justify-center text-center sm:text-right shadow-xs col-span-2 sm:col-span-1">
               <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground block">Mastery Score</span>
@@ -138,9 +143,10 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
               <h4 className="font-medium text-sm flex items-center gap-2">
                 <Compass className="w-4 h-4 text-amber-500" /> Delivery & Rigor Dimensions
               </h4>
-              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30">Pentagon Web</span>
+              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30">Verified dimensions</span>
             </div>
-            <p className="text-xs text-muted-foreground mb-4">5-axis pentagon spider web of verbal concept explanation.</p>
+            <p className="text-xs text-muted-foreground mb-4">Verified performance dimensions from this oral defense.</p>
+            {safeRadarData.length >= 3 ? (
             <div className="h-[280px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <RadarChart cx="50%" cy="50%" outerRadius="68%" margin={{ top: 14, right: 28, bottom: 14, left: 28 }} data={safeRadarData}>
@@ -177,6 +183,11 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
                 </RadarChart>
               </ResponsiveContainer>
             </div>
+            ) : (
+              <div className="h-[280px] flex items-center justify-center rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
+                Fewer than three verified performance dimensions were returned. A radar chart is not reliable for this report.
+              </div>
+            )}
           </div>
 
           {/* Chart 2: Pie / Donut Chart (Content Composition & Fluff Ratio) */}
@@ -193,7 +204,7 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
                     ? "bg-amber-500/10 text-amber-500 border-amber-500/30"
                     : "bg-emerald-500/10 text-emerald-500 border-emerald-500/30"
                 }`}>
-                  Fluff: {fluffPercent}%
+                  Fluff: {fluffPercent === null ? "Not assessed" : `${fluffPercent}%`}
                 </span>
                 <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-muted text-muted-foreground">Pie / Donut</span>
               </div>
