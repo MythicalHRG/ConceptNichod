@@ -61,5 +61,5 @@ test("Concept Mirror report charts do not fabricate missing scores", () => {
   const ui = fs.readFileSync("src/components/concept-mirror/mastery-dashboard.tsx", "utf8");
   assert.doesNotMatch(flow, /overallScore \* 1\.04|overallScore \* 0\.92|Initial Recall.*score:/);
   assert.doesNotMatch(ui, /Definitions", score: 82|Initial Recall", score: 65|fallbackBase \|\| axis\.score/);
-  assert.match(ui, /No reliable phase-by-phase curve/);
+  assert.match(ui, /A single explanation cannot form a learning curve/);\n  assert.match(ui, /const safePolyData: \{ step: string; score: number \}\[\] = \[\]/);
 });
