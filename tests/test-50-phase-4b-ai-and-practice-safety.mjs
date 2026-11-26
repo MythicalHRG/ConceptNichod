@@ -4,7 +4,7 @@ import fs from "node:fs";
 
 test("AI generation Server Actions authenticate users, enforce topic ownership, and rate limit", () => {
   const guard = fs.readFileSync("src/lib/ai-flow-auth.ts", "utf8");
-  assert.match(guard, /getVerifiedSessionUuid\(rawSession\)/);
+  assert.match(guard, /verifySessionCookie\(rawSession\)/);
   assert.match(guard, /mongoose\.isValidObjectId\(topicId\)/);
   assert.match(guard, /Topic\.findOne\(\{ _id: topicId, userId: sessionUuid \}\)/);
   assert.match(guard, /checkDistributedRateLimit\(`topic-ai-flow:\$\{sessionUuid\}`/);
@@ -24,7 +24,9 @@ test("direct AI analysis flows validate bounded payloads and finite model metric
   assert.match(mirror, /Number\.isFinite\(item\.score\)/);
   assert.match(mirror, /Number\.isFinite\(item\.value\)/);
   assert.match(mirror, /Number\.isFinite\(item\.score\)/);
-  assert.match(mirror, /output\.polynomial_chart_data =/);
+  assert.match(mirror, /polynomial_chart_data: polynomialChartData/);
+  assert.match(mirror, /A single oral defense is not a longitudinal learning curve/);
+  assert.doesNotMatch(mirror, /Initial Recall.*Math\.max|overallScore \* 1\.08/);
   assert.match(mirror, /output\.feedback_summary = typeof output\.feedback_summary/);
 });
 
