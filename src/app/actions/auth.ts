@@ -38,6 +38,31 @@ function escapeHtml(str: string): string {
     .replace(/'/g, "&#039;");
 }
 
+function getSafeRegistrationError(error: unknown): string {
+    const message = error instanceof Error ? error.message : "";
+    const safePrefixes = [
+        "Invalid registration payload.",
+        "Missing required fields",
+        "One or more registration fields exceed",
+        "Invalid email",
+        "Email address",
+        "Username must be",
+        "Usernames can only",
+        "This username",
+        "Password must be",
+        "Password cannot",
+        "Too many registration attempts",
+        "Access denied:",
+        "Email verification",
+        "A user with this username",
+        "Email is already registered.",
+        "Username availability could not be verified",
+    ];
+    return safePrefixes.some((prefix) => message.startsWith(prefix))
+        ? message.slice(0, 240)
+        : "Registration failed. Please check your details and try again.";
+}
+
 function timingSafeOtpEquals(expected: string, supplied: string): boolean {
   const a = crypto.createHash("sha256").update(expected, "utf8").digest();
   const b = crypto.createHash("sha256").update(supplied, "utf8").digest();
@@ -297,7 +322,8 @@ export async function registerAction(formData: FormData) {
         if (e?.code === 11000) {
             return { success: false, error: "This email or username is already registered." };
         }
-        return { success: false, error: e?.message || "Registration failed. Please try again." };
+        console.error("[registerAction] Registration failed (details withheld).", { errorType: e instanceof Error ? e.name : "UnknownError" });
+        return { success: false, error: getSafeRegistrationError(e) };
     }
 }
 
@@ -436,7 +462,8 @@ export async function loginAction(formData: FormData) {
         });
         return { success: true, user: serializeSafeUser(user) };
     } catch (e: any) {
-        return { success: false, error: e?.message || "Login failed. Please try again." };
+        console.error("[loginAction] Login failed (details withheld).", { errorType: e instanceof Error ? e.name : "UnknownError" });
+        return { success: false, error: "Login failed. Check your credentials and try again." };
     }
 }
 
