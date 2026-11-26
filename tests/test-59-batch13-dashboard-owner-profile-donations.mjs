@@ -48,7 +48,7 @@ test("Batch 13: all five profile graph cards share the six-column desktop grid",
   assert.ok(analytics.includes("md:col-span-2 xl:col-span-3"));
 });
 
-test("Batch 13: donations are permanently enabled and owner settings remain protected", () => {
+test("Batch 13: donation reads preserve owner settings without public-side mutations", () => {
   const model = read("src/models/DonationSetting.ts");
   const actions = read("src/app/actions/donation.ts");
   const panel = read("src/components/admin/admin-panel.tsx");
@@ -56,10 +56,11 @@ test("Batch 13: donations are permanently enabled and owner settings remain prot
   assert.ok(model.includes("isEnabled: { type: Boolean, default: true }"));
   assert.ok(actions.includes("export async function adminSetDonationsEnabledAction(enabled: boolean)"));
   assert.ok(actions.includes('typeof enabled !== "boolean"'));
-  assert.ok(actions.includes("verifySessionCookie"));
+  assert.ok(actions.includes("getVerifiedSessionUuid"));
   assert.ok(actions.includes("isPlatformOwner(adminUser)"));
   assert.ok(actions.includes("getCanonicalDonationSettings"));
-  assert.ok(actions.includes("isEnabled: true"));
+  assert.ok(actions.includes("settings?.isEnabled === true"));
+  assert.ok(actions.includes("saveCanonicalDonationSettings({ isEnabled: enabled"));
   assert.ok(!panel.includes("DISABLED (PAUSED)") && !panel.includes("handleToggleDonations") && !panel.includes("adminSetDonationsEnabledAction"));
   assert.ok(!panel.includes("<Switch checked={donationsEnabled}"));
   assert.ok(!reconciliation.includes("DISABLED (PAUSED)") && !reconciliation.includes("handleToggleDonations") && !reconciliation.includes("adminSetDonationsEnabledAction"));
