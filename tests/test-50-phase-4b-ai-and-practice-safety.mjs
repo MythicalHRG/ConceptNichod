@@ -4,7 +4,7 @@ import fs from "node:fs";
 
 test("AI generation Server Actions authenticate users, enforce topic ownership, and rate limit", () => {
   const guard = fs.readFileSync("src/lib/ai-flow-auth.ts", "utf8");
-  assert.match(guard, /verifySessionCookie\(rawSession\)/);
+  assert.match(guard, /getVerifiedSessionUuid\(rawSession\)/);
   assert.match(guard, /mongoose\.isValidObjectId\(topicId\)/);
   assert.match(guard, /Topic\.findOne\(\{ _id: topicId, userId: sessionUuid \}\)/);
   assert.match(guard, /checkDistributedRateLimit\(`topic-ai-flow:\$\{sessionUuid\}`/);
