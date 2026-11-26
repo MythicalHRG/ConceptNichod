@@ -7,6 +7,7 @@ export interface IUser extends Document {
   password: string;
   role: "user" | "owner";
   sessionVersion: number;
+  publicProfileEnabled?: boolean;
   bio?: string;
   fullName: string;
   gender: string;
@@ -32,6 +33,7 @@ const UserSchema: Schema<IUser> = new Schema({
   password: { type: String, required: true, select: false },
   role: { type: String, enum: ["user", "owner"], default: "user" },
   sessionVersion: { type: Number, default: 0, min: 0 },
+  publicProfileEnabled: { type: Boolean, default: false },
   bio: { type: String, default: "", trim: true, maxlength: 500 },
   fullName: { type: String, required: true, trim: true, maxlength: 120 },
   gender: { type: String, required: true, trim: true, maxlength: 40 },

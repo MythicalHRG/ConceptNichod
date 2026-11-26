@@ -32,34 +32,26 @@ const VALID_TIERS: PatronTier[] = ["LEGEND", "DIAMOND", "GOLD", "SILVER", "SUPPO
 const DEFAULT_DONATION_UPI_ID = "harsh.2525@ptaxis";
 
 /**
- * Resolve one deterministic settings record and heal legacy disabled rows.
- * A configured, valid recipient always outranks an empty/invalid legacy row.
+ * Read the canonical settings without mutating persisted admin configuration.
+ * Public requests must never enable donations or write a fallback recipient.
  */
-async function getCanonicalDonationSettings() {
+async function getCanonicalDonationSettings(): Promise<Record<string, any>> {
   await connectToDatabase();
   const records = await DonationSetting.find({}).sort({ updatedAt: -1, _id: -1 }).lean();
   const configured = records.find((record: any) => Boolean(normalizeVpa(record.upiId || "")));
   const canonical = configured || records[0] || null;
-  await DonationSetting.updateMany(
-    { isEnabled: { $ne: true } },
-    { $set: { isEnabled: true } }
-  );
-
-  // Do not leave the public payment flow blank when the database has no valid VPA.
-  // Admin can still replace this fallback through the existing UPI settings screen.
-  if (!configured) {
-    if (records.length > 0) {
-      await DonationSetting.updateMany({}, { $set: { upiId: DEFAULT_DONATION_UPI_ID, isEnabled: true } });
-    }
+  if (!canonical) {
     return {
-      ...(canonical || {}),
       upiId: DEFAULT_DONATION_UPI_ID,
-      payeeName: canonical?.payeeName || "ConceptNichod",
+      payeeName: "ConceptNichod",
       isEnabled: true,
     };
   }
-
-  return { ...canonical, isEnabled: true };
+  return {
+    ...canonical,
+    upiId: normalizeVpa(canonical.upiId || "") || "",
+    isEnabled: true,
+  };
 }
 
 async function saveCanonicalDonationSettings(values: Record<string, unknown>) {
@@ -68,9 +60,13 @@ async function saveCanonicalDonationSettings(values: Record<string, unknown>) {
   if (canonical?._id) {
     await DonationSetting.findByIdAndUpdate(canonical._id, { $set: update }, { new: true, runValidators: true });
   } else {
-    await DonationSetting.create(update);
+    await DonationSetting.create({
+      upiId: normalizeVpa(String(values.upiId || canonical?.upiId || DEFAULT_DONATION_UPI_ID)) || DEFAULT_DONATION_UPI_ID,
+      payeeName: String(values.payeeName || canonical?.payeeName || "ConceptNichod"),
+      ...update,
+    });
   }
-  // Keep every historical row in sync so a stale duplicate cannot resurface.
+  // Synchronize legacy duplicate rows only during an explicit owner action.
   await DonationSetting.updateMany({}, { $set: update });
   return getCanonicalDonationSettings();
 }
@@ -979,7 +975,10 @@ export async function adminSetDonationsEnabledAction(enabled: boolean) {
     throw new Error("A boolean donations-enabled value is required.");
   }
 
-  await saveCanonicalDonationSettings({ updatedBy: owner.username || "mythicalhrg" });
+  if (!enabled) {
+    return { success: false, error: "Donations are permanently enabled." };
+  }
+  await saveCanonicalDonationSettings({ isEnabled: true, updatedBy: owner.username || "mythicalhrg" });
 
   revalidatePath("/donate");
   revalidatePath("/dashboard/admin");

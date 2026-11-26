@@ -250,37 +250,16 @@ test("Challenger 3.2: Malformed headers and injection string sanitization", () =
   assert.strictEqual(sanitizeIp(12345), "127.0.0.1");
 });
 
-test("Challenger 3.3: Proxy header precedence and comma-separated client resolution", () => {
-  // 1. Cloudflare cf-connecting-ip takes precedence over x-forwarded-for
-  const cfHeaders = {
+test("Challenger 3.3: only Vercel-overwritten x-real-ip is trusted for client identity", () => {
+  assert.strictEqual(getClientIp({
     "cf-connecting-ip": "198.51.100.25",
     "x-forwarded-for": "203.0.113.50, 10.0.0.1",
     "x-real-ip": "10.0.0.2"
-  };
-  assert.strictEqual(getClientIp(cfHeaders), "198.51.100.25");
-
-  // 2. x-forwarded-for selects the leftmost untrusted client IP
-  const xffHeaders = {
-    "x-forwarded-for": "203.0.113.88, 172.16.0.5, 10.2.3.4",
-    "x-real-ip": "172.16.0.5"
-  };
-  assert.strictEqual(getClientIp(xffHeaders), "203.0.113.88");
-
-  // 3. x-forwarded-for with irregular spacing
-  const messyXff = {
-    "x-forwarded-for": "   192.0.2.44   , 10.0.0.1 "
-  };
-  assert.strictEqual(getClientIp(messyXff), "192.0.2.44");
-
-  // 4. Fallback to x-real-ip when no x-forwarded-for or cf-connecting-ip
-  const realIpOnly = {
-    "x-real-ip": "198.51.100.99"
-  };
-  assert.strictEqual(getClientIp(realIpOnly), "198.51.100.99");
-
-  // 5. Fallback to 127.0.0.1 when headers empty
+  }), "10.0.0.2");
+  assert.strictEqual(getClientIp({ "cf-connecting-ip": "198.51.100.25" }), "127.0.0.1");
+  assert.strictEqual(getClientIp({ "x-forwarded-for": "203.0.113.88, 10.0.0.1" }), "127.0.0.1");
+  assert.strictEqual(getClientIp({ "x-real-ip": "198.51.100.99" }), "198.51.100.99");
   assert.strictEqual(getClientIp({}), "127.0.0.1");
-  assert.strictEqual(getClientIp(null), "127.0.0.1");
 });
 
 // =====================================================================
@@ -290,9 +269,9 @@ test("Challenger 3.3: Proxy header precedence and comma-separated client resolut
 test("Challenger 4.1: Public profile data projection never leaks sensitive IP or timestamp fields", () => {
   const profileFilePath = path.resolve("src/app/actions/profile.ts");
   const content = fs.readFileSync(profileFilePath, "utf-8");
-  const publicUserQuery = content.slice(content.indexOf("export async function getPublicProfileData("), content.indexOf("if (!user)"));
+  const publicUserQuery = content.slice(content.indexOf("export async function getPublicProfileData("), content.indexOf("if (!user ||"));
   const allowedFields = ["username", "fullName", "classLevel", "examFocus", "city", "instagram", "snapchat", "bio"];
-  assert.ok(publicUserQuery.includes('.select("username fullName classLevel examFocus city instagram snapchat bio")'),
+  assert.ok(publicUserQuery.includes('.select("username fullName classLevel examFocus city instagram snapchat bio publicProfileEnabled")'),
     "Public profile must use a positive field allowlist");
 
   const mockDbUser = {

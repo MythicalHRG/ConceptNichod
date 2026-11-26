@@ -37,8 +37,8 @@ export const ourFileRouter = {
     })
     .onUploadComplete(async ({ metadata, file }) => {
       const fileUrl = file.ufsUrl || file.url;
-      console.log("Upload complete for Admin:", metadata.userId);
-      console.log("file url", fileUrl);
+      // UploadThing file URLs may grant direct access; never write them to logs.
+      console.info("Upload complete for Admin:", metadata.userId);
       return { uploadedBy: metadata.userId, fileUrl };
     }),
 } satisfies FileRouter;

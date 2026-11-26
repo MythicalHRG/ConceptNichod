@@ -8,6 +8,8 @@
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 export const DEFAULT_MODEL = "openrouter/free";
 const MAX_OPENROUTER_RESPONSE_BYTES = 500_000;
+const MAX_OPENROUTER_INPUT_CHARS = 80_000;
+const MAX_OPENROUTER_REQUEST_ATTEMPTS = 6;
 
 export interface OpenRouterMessage {
   role: "system" | "user" | "assistant";
@@ -68,10 +70,20 @@ function extractMessageContent(rawContent: unknown): string {
 export async function callOpenRouter(
   messages: OpenRouterMessage[],
   model: string = DEFAULT_MODEL,
-  jsonMode: boolean = false
+  jsonMode: boolean = false,
+  validateJson?: (value: unknown) => boolean,
+  maxOutputTokens: number = jsonMode ? 3072 : 2048
 ): Promise<string> {
   if (!Array.isArray(messages) || messages.length === 0) {
     throw new Error("At least one message is required to call OpenRouter.");
+  }
+
+  const inputChars = messages.reduce((total, message) => total + (typeof message.content === "string" ? message.content.length : 0), 0);
+  if (inputChars > MAX_OPENROUTER_INPUT_CHARS) {
+    throw new Error("OpenRouter input exceeded the configured character budget.");
+  }
+  if (!Number.isSafeInteger(maxOutputTokens) || maxOutputTokens < 1 || maxOutputTokens > 8192) {
+    throw new Error("OpenRouter output token budget must be between 1 and 8192.");
   }
 
   const keys = getOpenRouterKeys();
@@ -89,19 +101,22 @@ export async function callOpenRouter(
   let lastError: Error | null = null;
   const startIndex = currentKeyIndex % keys.length;
   const deadline = Date.now() + 60_000;
+  let requestAttempts = 0;
 
-  for (let attempt = 0; attempt < keys.length; attempt++) {
+  for (let attempt = 0; attempt < keys.length && requestAttempts < MAX_OPENROUTER_REQUEST_ATTEMPTS; attempt++) {
     if (Date.now() >= deadline) break;
     const keyIdx = (startIndex + attempt) % keys.length;
     const apiKey = keys[keyIdx];
 
     for (const currentModel of candidateModels) {
       const remainingMs = deadline - Date.now();
-      if (remainingMs <= 0) break;
+      if (remainingMs <= 0 || requestAttempts >= MAX_OPENROUTER_REQUEST_ATTEMPTS) break;
       try {
+        requestAttempts += 1;
         const body: Record<string, unknown> = {
           model: currentModel,
           messages,
+          max_tokens: maxOutputTokens,
         };
 
         if (jsonMode) {
@@ -121,13 +136,19 @@ export async function callOpenRouter(
         });
 
         if (!res.ok) {
-          const errorBody = (await res.text()).slice(0, 400);
-          console.warn(`OpenRouter key #${keyIdx + 1} with model ${currentModel} returned ${res.status}: ${errorBody}`);
+          console.warn(`OpenRouter request failed: status=${res.status}, model=${currentModel}, keyIndex=${keyIdx + 1}`);
           lastError = new Error(`OpenRouter request failed with status ${res.status}.`);
           if (res.status === 401 || res.status === 402 || res.status === 403) {
             break; // Key-level failure: move directly to the next API key
           }
-          continue; // Model-level or transient failure: try next candidate model
+          if (res.status === 413 || res.status === 422) {
+            throw new Error("OpenRouter rejected the request payload or output budget.");
+          }
+          // Retry only bounded transient failures and model-specific 400/404 responses.
+          if (res.status === 408 || res.status === 409 || res.status === 425 || res.status === 429 || res.status >= 500 || res.status === 400 || res.status === 404) {
+            continue;
+          }
+          throw new Error(`OpenRouter request was rejected with status ${res.status}.`);
         }
 
         const contentLength = Number(res.headers.get("content-length") || 0);
@@ -144,8 +165,8 @@ export async function callOpenRouter(
 
         const data = JSON.parse(rawText);
         if (data?.error) {
-          console.warn(`OpenRouter inner error on ${currentModel}:`, data.error);
-          lastError = new Error(`OpenRouter model ${currentModel} returned an inner error.`);
+          console.warn(`OpenRouter returned an upstream error for model ${currentModel}.`);
+          lastError = new Error(`OpenRouter model ${currentModel} returned an upstream error.`);
           continue;
         }
 
@@ -155,12 +176,30 @@ export async function callOpenRouter(
           continue;
         }
 
+        // In structured-output mode, a successful HTTP response is not
+        // enough: malformed model JSON must fall through to the next model/key.
+        if (jsonMode) {
+          let parsedJson: unknown;
+          try {
+            parsedJson = parseJsonResponse<unknown>(content);
+          } catch {
+            lastError = new Error(`OpenRouter model ${currentModel} returned malformed JSON.`);
+            console.warn(lastError.message);
+            continue;
+          }
+          if (validateJson && !validateJson(parsedJson)) {
+            lastError = new Error(`OpenRouter model ${currentModel} returned JSON that did not match the required report schema.`);
+            console.warn(lastError.message);
+            continue;
+          }
+        }
+
         // Success!
         currentKeyIndex = (keyIdx + 1) % keys.length;
         return content;
       } catch (err: any) {
         lastError = err instanceof Error ? err : new Error("OpenRouter request failed.");
-        console.warn(`Attempt with key #${keyIdx + 1} and model ${currentModel} failed:`, lastError.message);
+        console.warn(`OpenRouter attempt failed: keyIndex=${keyIdx + 1}, model=${currentModel}, errorType=${lastError.name}`);
       }
     }
   }
@@ -241,6 +280,6 @@ export function parseJsonResponse<T>(raw: string): T {
     if (parsedWide.ok) return parsedWide.value;
   }
 
-  console.warn("Failed to parse AI JSON response snippet:", text.slice(0, 200));
+  console.warn("Failed to parse structured JSON response from AI model.");
   throw new Error("Failed to parse structured JSON response from AI model.");
 }

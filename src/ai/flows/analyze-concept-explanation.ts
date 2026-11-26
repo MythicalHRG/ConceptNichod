@@ -28,7 +28,7 @@ export type MasteryReportOutput = {
   polynomial_chart_data?: { step: string; score: number }[];
   overallScore?: number;
   durationSeconds?: number;
-  fluffPercentage?: number;
+  fluffPercentage?: number | null;
   detected_mistakes?: DetectedMistake[];
 };
 
@@ -100,6 +100,7 @@ export async function analyzeConceptExplanation(input: AnalyzeConceptExplanation
 
   const prompt = `You are a strict, world-class professor and oral defense examiner analyzing a student's verbal explanation of a concept.
 Provide a detailed mastery report based on their transcribed explanation with comprehensive multi-chart visual analytics.
+A single oral defense is one observation, not a longitudinal learning curve. Do not invent phase-by-phase learning progression; polynomial_chart_data MUST be an empty array.
 
 Concept Name (untrusted label): <untrusted_concept_name>${promptConceptName}</untrusted_concept_name>
 Student Level (untrusted label): <untrusted_class_level>${promptClassLevel}</untrusted_class_level>
@@ -182,13 +183,7 @@ Respond with ONLY a valid JSON object (no markdown, pure JSON):
     {"name": "Application", "score": <0-100>},
     {"name": "Edge Cases", "score": <0-100>}
   ],
-  "polynomial_chart_data": [
-    {"step": "Initial Recall", "score": <0-100>},
-    {"step": "Concept Framing", "score": <0-100>},
-    {"step": "Analytical Nuance", "score": <0-100>},
-    {"step": "Synthesis & Proof", "score": <0-100>},
-    {"step": "Final Mastery", "score": <0-100>}
-  ],
+  "polynomial_chart_data": [],
   "detected_mistakes": [
     {
       "title": "<Concise title of specific mistake / conceptual slip>",
@@ -206,13 +201,36 @@ CRITICAL: pie_chart_data values MUST sum to exactly 100.`;
 
   let rawOutput: MasteryReportOutput;
   try {
-    const raw = await callOpenRouter([
-      { role: 'user', content: prompt },
-    ], undefined, true);
+    const raw = await callOpenRouter(
+      [{ role: "user", content: prompt }],
+      undefined,
+      true,
+      (candidate) => {
+        if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return false;
+        const output = candidate as any;
+        return Array.isArray(output.radar_chart_data) &&
+          Array.isArray(output.pie_chart_data) &&
+          typeof output.feedback_summary === "string" &&
+          Boolean(output.feedback_summary.trim());
+      }
+    );
     rawOutput = parseJsonResponse<MasteryReportOutput>(raw);
   } catch (err) {
     console.error("analyzeConceptExplanation AI error:", err);
-    throw new Error("Failed to generate mastery report. Please try again.");
+    const message = err instanceof Error ? err.message : "";
+    if (message.includes("No OpenRouter API key")) {
+      throw new Error("AI analysis is not configured on the server. Please contact the site administrator.");
+    }
+    if (/status 429|status 502|status 503|status 504/i.test(message)) {
+      throw new Error("The AI provider is temporarily busy or rate-limited. Wait briefly, then retry your analysis.");
+    }
+    if (/timeout|timed out|abort/i.test(message)) {
+      throw new Error("The AI request timed out. Check your connection and retry.");
+    }
+    if (/malformed JSON|structured JSON/i.test(message)) {
+      throw new Error("The AI provider returned an invalid report format after retrying. Please retry once.");
+    }
+    throw new Error("AI mastery analysis failed. Please retry. " + message.slice(0, 180));
   }
 
   if (!rawOutput || typeof rawOutput !== "object" || !Array.isArray(rawOutput.radar_chart_data) || !Array.isArray(rawOutput.pie_chart_data)) {
@@ -235,15 +253,16 @@ CRITICAL: pie_chart_data values MUST sum to exactly 100.`;
 
   const pieChartData = normalizePercentagesTo100(rawPieChartData);
 
-  let barChartData = (Array.isArray(rawOutput.bar_chart_data) ? rawOutput.bar_chart_data : [])
+  const reportedBarChartData = (Array.isArray(rawOutput.bar_chart_data) ? rawOutput.bar_chart_data : [])
     .filter((item) => item && typeof item.name === "string" && item.name.trim().length > 0 && item.name.trim().length <= 80 && Number.isFinite(item.score))
     .slice(0, 10)
     .map((item) => ({ name: item.name.trim(), score: Math.max(0, Math.min(100, Math.round(item.score))) }));
+  const barChartData = reportedBarChartData.length > 0
+    ? reportedBarChartData
+    : radarChartData.map((item) => ({ name: item.metric, score: item.score }));
 
-  let polynomialChartData = (Array.isArray(rawOutput.polynomial_chart_data) ? rawOutput.polynomial_chart_data : [])
-    .filter((item) => item && typeof item.step === "string" && item.step.trim().length > 0 && item.step.trim().length <= 80 && Number.isFinite(item.score))
-    .slice(0, 10)
-    .map((item) => ({ step: item.step.trim(), score: Math.max(0, Math.min(100, Math.round(item.score))) }));
+  // One oral response cannot establish a longitudinal learning curve.
+  const polynomialChartData: { step: string; score: number }[] = [];
 
   const feedbackSummary =
     typeof rawOutput.feedback_summary === "string" && rawOutput.feedback_summary.trim()
@@ -275,8 +294,8 @@ CRITICAL: pie_chart_data values MUST sum to exactly 100.`;
   const overallScore = Math.round(
     radarChartData.reduce((s, r) => s + r.score, 0) / radarChartData.length
   );
-  const fluffItem = pieChartData.find((p) => p.name.toLowerCase() === 'fluff');
-  const fluffPercentage = fluffItem ? fluffItem.value : 0;
+  const fluffItem = pieChartData.find((p) => /fluff|filler/i.test(p.name));
+  const fluffPercentage = fluffItem ? fluffItem.value : null;
 
   const output: MasteryReportOutput = {
     feedback_summary: feedbackSummary,
@@ -293,25 +312,9 @@ CRITICAL: pie_chart_data values MUST sum to exactly 100.`;
     ? output.feedback_summary.slice(0, 10000)
     : "Feedback could not be generated reliably. Please retry your oral defense analysis.";
 
-  // Fallback defaults if LLM omitted additional diverse charts
-  if (!output.bar_chart_data || output.bar_chart_data.length === 0) {
-    output.bar_chart_data = [
-      { name: "Definitions", score: Math.min(100, Math.round(overallScore * 1.04)) },
-      { name: "Core Principles", score: Math.round(overallScore) },
-      { name: "Application", score: Math.max(20, Math.round(overallScore * 0.92)) },
-      { name: "Edge Cases", score: Math.max(20, Math.round(overallScore * 0.85)) },
-    ];
-  }
-
-  if (!output.polynomial_chart_data || output.polynomial_chart_data.length === 0) {
-    output.polynomial_chart_data = [
-      { step: "Initial Recall", score: Math.max(15, Math.round(overallScore * 0.7)) },
-      { step: "Concept Framing", score: Math.max(25, Math.round(overallScore * 0.85)) },
-      { step: "Analytical Nuance", score: Math.min(100, Math.round(overallScore * 0.95)) },
-      { step: "Synthesis & Proof", score: Math.round(overallScore) },
-      { step: "Final Mastery", score: Math.min(100, Math.round(overallScore * 1.08)) },
-    ];
-  }
+  // Missing structural chart fields use only the measured radar dimensions.\n\n  // A single oral defense is not a longitudinal learning curve. If the model
+  // does not return a defensible phase breakdown, leave the curve empty.
+  // The UI renders an explicit no-data state instead of fabricated progress.
 
   // Persist session to MongoDB for public profile analytics and mastery tracking
   try {

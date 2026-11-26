@@ -23,7 +23,7 @@ import {
 } from "@/lib/owner-access";
 
 const SAFE_USER_PROJECTION =
-  "uuid username email role bio fullName gender dob classLevel examFocus city futureCollege snapchat instagram";
+  "uuid username email role bio fullName gender dob classLevel examFocus city futureCollege snapchat instagram publicProfileEnabled";
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -36,6 +36,31 @@ function escapeHtml(str: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+function getSafeRegistrationError(error: unknown): string {
+    const message = error instanceof Error ? error.message : "";
+    const safePrefixes = [
+        "Invalid registration payload.",
+        "Missing required fields",
+        "One or more registration fields exceed",
+        "Invalid email",
+        "Email address",
+        "Username must be",
+        "Usernames can only",
+        "This username",
+        "Password must be",
+        "Password cannot",
+        "Too many registration attempts",
+        "Access denied:",
+        "Email verification",
+        "A user with this username",
+        "Email is already registered.",
+        "Username availability could not be verified",
+    ];
+    return safePrefixes.some((prefix) => message.startsWith(prefix))
+        ? message.slice(0, 240)
+        : "Registration failed. Please check your details and try again.";
 }
 
 function timingSafeOtpEquals(expected: string, supplied: string): boolean {
@@ -78,6 +103,7 @@ function serializeSafeUser(user: any) {
     futureCollege: user.futureCollege,
     snapchat: user.snapchat,
     instagram: user.instagram,
+    publicProfileEnabled: user.publicProfileEnabled === true,
   };
 }
 
@@ -297,7 +323,8 @@ export async function registerAction(formData: FormData) {
         if (e?.code === 11000) {
             return { success: false, error: "This email or username is already registered." };
         }
-        return { success: false, error: e?.message || "Registration failed. Please try again." };
+        console.error("[registerAction] Registration failed (details withheld).", { errorType: e instanceof Error ? e.name : "UnknownError" });
+        return { success: false, error: getSafeRegistrationError(e) };
     }
 }
 
@@ -436,7 +463,8 @@ export async function loginAction(formData: FormData) {
         });
         return { success: true, user: serializeSafeUser(user) };
     } catch (e: any) {
-        return { success: false, error: e?.message || "Login failed. Please try again." };
+        console.error("[loginAction] Login failed (details withheld).", { errorType: e instanceof Error ? e.name : "UnknownError" });
+        return { success: false, error: "Login failed. Check your credentials and try again." };
     }
 }
 
@@ -519,8 +547,9 @@ export async function updateProfileAction(formData: FormData) {
     const futureCollege = readOptionalString("futureCollege");
     const snapchat = readOptionalString("snapchat");
     const instagram = readOptionalString("instagram");
+    const publicProfileEnabled = readOptionalString("publicProfileEnabled");
 
-    const updateData: Record<string, string> = {};
+    const updateData: Record<string, string | boolean> = {};
     let usernameChanged = false;
 
     if (username !== null && username.trim() !== "") {
@@ -587,6 +616,12 @@ export async function updateProfileAction(formData: FormData) {
         const trimmed = instagram.trim();
         if (trimmed.length > 80) throw new Error("Instagram handle cannot exceed 80 characters.");
         updateData.instagram = trimmed;
+    }
+    if (publicProfileEnabled !== null) {
+        if (publicProfileEnabled !== "true" && publicProfileEnabled !== "false") {
+            throw new Error("Invalid public profile visibility setting.");
+        }
+        updateData.publicProfileEnabled = publicProfileEnabled === "true";
     }
 
     try {

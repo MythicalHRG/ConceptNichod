@@ -23,37 +23,8 @@ function sanitizeIp(ip) {
 function getClientIp(customHeaders) {
   try {
     if (!customHeaders) return "127.0.0.1";
-
-    const getHeader = (name) => {
-      const val =
-        customHeaders[name.toLowerCase()] ||
-        customHeaders[name];
-      if (Array.isArray(val)) return val[0] || null;
-      return typeof val === "string" ? val : null;
-    };
-
-    // Cloudflare priority
-    const cfConnectingIp = getHeader("cf-connecting-ip");
-    if (cfConnectingIp) {
-      return sanitizeIp(cfConnectingIp);
-    }
-
-    // Standard reverse proxy header (leftmost client IP)
-    const forwardedFor = getHeader("x-forwarded-for");
-    if (forwardedFor) {
-      const first = forwardedFor.split(",")[0].trim();
-      if (first) {
-        return sanitizeIp(first);
-      }
-    }
-
-    // Nginx / general reverse proxy
-    const realIp = getHeader("x-real-ip");
-    if (realIp) {
-      return sanitizeIp(realIp);
-    }
-
-    return "127.0.0.1";
+    const realIp = customHeaders["x-real-ip"] || customHeaders["X-Real-Ip"];
+    return typeof realIp === "string" && realIp ? sanitizeIp(realIp) : "127.0.0.1";
   } catch {
     return "127.0.0.1";
   }
@@ -275,29 +246,15 @@ test("Tareeka 18: IP sanitization normalizes IPv6 localhost, strips IPv4 mapping
   assert.strictEqual(sanitizeIp(undefined), "127.0.0.1");
 });
 
-test("Tareeka 18: getClientIp respects Cloudflare and proxy header precedence", () => {
-  // 1. Cloudflare cf-connecting-ip takes highest precedence
-  const cfHeaders = {
+test("Tareeka 18: getClientIp trusts only the Vercel-overwritten x-real-ip header", () => {
+  const trusted = {
     "cf-connecting-ip": "1.1.1.1",
     "x-forwarded-for": "2.2.2.2, 3.3.3.3",
     "x-real-ip": "4.4.4.4"
   };
-  assert.strictEqual(getClientIp(cfHeaders), "1.1.1.1");
-
-  // 2. Standard x-forwarded-for uses leftmost client IP
-  const forwardedHeaders = {
-    "x-forwarded-for": "157.240.22.35, 10.0.0.1, 10.0.0.2",
-    "x-real-ip": "10.0.0.1"
-  };
-  assert.strictEqual(getClientIp(forwardedHeaders), "157.240.22.35");
-
-  // 3. Fallback to x-real-ip
-  const realIpHeaders = {
-    "x-real-ip": "142.250.190.46"
-  };
-  assert.strictEqual(getClientIp(realIpHeaders), "142.250.190.46");
-
-  // 4. Fallback to localhost when no headers provided
+  assert.strictEqual(getClientIp(trusted), "4.4.4.4");
+  assert.strictEqual(getClientIp({ "cf-connecting-ip": "1.1.1.1" }), "127.0.0.1");
+  assert.strictEqual(getClientIp({ "x-forwarded-for": "2.2.2.2" }), "127.0.0.1");
   assert.strictEqual(getClientIp({}), "127.0.0.1");
 });
 
@@ -342,7 +299,7 @@ test("Tareeka 18: Static verification - User.ts schema and profile.ts projection
   const profileContent = fs.readFileSync(profileActionPath, "utf-8");
 
   assert.ok(
-    profileContent.includes('.select("username fullName classLevel examFocus city instagram snapchat bio")'),
+    profileContent.includes('.select("username fullName classLevel examFocus city instagram snapchat bio publicProfileEnabled")'),
     "profile.ts must use a public-field allowlist that cannot expose IP or login timestamp fields"
   );
 

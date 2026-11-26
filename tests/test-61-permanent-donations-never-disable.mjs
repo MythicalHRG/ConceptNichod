@@ -28,12 +28,14 @@ test("61.2 public and admin donation readers always return enabled status", () =
   assert.doesNotMatch(actions, /Donations are currently paused|Donations are disabled/);
 });
 
-test("61.3 canonical settings prefer valid configured VPA and heal every disabled legacy row", () => {
+test("61.3 canonical settings prefer valid configured VPA and remain read-only", () => {
   const actions = read("src/app/actions/donation.ts");
   assert.ok(actions.includes('DonationSetting.find({}).sort({ updatedAt: -1, _id: -1 })'));
   assert.ok(actions.includes('records.find((record: any) => Boolean(normalizeVpa(record.upiId || "")))'));
-  assert.ok(actions.includes('isEnabled: { $ne: true }'));
-  assert.ok(actions.includes('await DonationSetting.updateMany({}, { $set: update })'));
+  const reader = actions.slice(actions.indexOf("async function getCanonicalDonationSettings"), actions.indexOf("async function saveCanonicalDonationSettings"));
+  const writer = actions.slice(actions.indexOf("async function saveCanonicalDonationSettings"), actions.indexOf("function createDonorStore"));
+  assert.doesNotMatch(reader, /updateMany|findByIdAndUpdate|create\(/);
+  assert.ok(writer.includes('await DonationSetting.updateMany({}, { $set: update })'));
 });
 
 test("61.4 Indian phone and dotted VPAs are accepted while placeholders and unsafe strings are rejected", () => {
