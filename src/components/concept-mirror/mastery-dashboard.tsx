@@ -19,84 +19,57 @@ import { LatexRenderer } from '@/components/ui/latex-renderer';
 
 const PIE_CHART_COLORS = ['#0088FE', '#FFBB28', '#00C49F'];
 
-const DEFAULT_MIRROR_PENTAGON = [
-  { metric: "Clarity", score: 80 },
-  { metric: "Examples", score: 75 },
-  { metric: "Confidence", score: 85 },
-  { metric: "Terminology", score: 70 },
-  { metric: "Conciseness", score: 78 },
-];
-
 function normalizeMirrorPentagon(
-  raw: Array<{ metric: string; score: number }> | undefined,
-  fallbackBase: number
+  raw: Array<{ metric: string; score: number }> | undefined
 ): Array<{ metric: string; score: number }> {
   const unique: Array<{ metric: string; score: number }> = [];
   const seen = new Set<string>();
 
   for (const item of Array.isArray(raw) ? raw : []) {
-    if (!item || typeof item.metric !== 'string') continue;
+    if (!item || typeof item.metric !== "string" || !Number.isFinite(item.score)) continue;
     const clean = item.metric.trim();
     const key = clean.toLowerCase();
     if (!clean || seen.has(key)) continue;
     seen.add(key);
-    const num = Number(item.score);
     unique.push({
       metric: clean.length > 16 ? clean.slice(0, 14) + "…" : clean,
-      score: Number.isFinite(num) ? Math.max(0, Math.min(100, Math.round(num))) : fallbackBase,
+      score: Math.max(0, Math.min(100, Math.round(item.score))),
     });
     if (unique.length === 5) break;
   }
 
-  for (const axis of DEFAULT_MIRROR_PENTAGON) {
-    if (unique.length >= 5) break;
-    if (!seen.has(axis.metric.toLowerCase())) {
-      seen.add(axis.metric.toLowerCase());
-      unique.push({
-        metric: axis.metric,
-        score: Math.max(0, Math.min(100, Math.round(fallbackBase || axis.score))),
-      });
-    }
-  }
-
+  // Never fill missing dimensions with invented scores.
   return unique;
 }
 
 const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOutput; conceptName: string }) => {
-  const fallbackScore =
-    typeof report.overallScore === 'number' && Number.isFinite(report.overallScore)
-      ? Math.max(0, Math.min(100, Math.round(report.overallScore)))
-      : 75;
+  const safeRadarData = normalizeMirrorPentagon(report.radar_chart_data);
 
-  const safeRadarData = normalizeMirrorPentagon(report.radar_chart_data, fallbackScore);
-
-  const safeBarData = Array.isArray(report.bar_chart_data) && report.bar_chart_data.length > 0
+  const reportedBarData = Array.isArray(report.bar_chart_data)
     ? report.bar_chart_data
-    : [
-        { name: "Definitions", score: 82 },
-        { name: "Core Principles", score: 78 },
-        { name: "Application", score: 72 },
-        { name: "Edge Cases", score: 68 }
-      ];
+        .filter((item) => item && typeof item.name === "string" && Number.isFinite(item.score))
+        .map((item) => ({ name: item.name, score: Math.max(0, Math.min(100, Math.round(item.score))) }))
+    : [];
+  const safeBarData = reportedBarData.length > 0
+    ? reportedBarData
+    : safeRadarData.map((item) => ({ name: item.metric, score: item.score }));
 
-  const safePolyData = Array.isArray(report.polynomial_chart_data) && report.polynomial_chart_data.length > 0
-    ? report.polynomial_chart_data
-    : [
-        { step: "Initial Recall", score: 65 },
-        { step: "Concept Framing", score: 74 },
-        { step: "Analytical Nuance", score: 80 },
-        { step: "Synthesis & Proof", score: 84 },
-        { step: "Final Mastery", score: 88 }
-      ];
+  // A single report is one observation, not a learning curve. Ignore model-created phase scores.
+  const safePolyData: { step: string; score: number }[] = [];
 
   const safePieData = Array.isArray(report.pie_chart_data) ? report.pie_chart_data : [];
 
-  const avgClarity = Math.round(
-    safeRadarData.reduce((acc, curr) => acc + curr.score, 0) / safeRadarData.length
-  );
+  const hasMasteryScore = typeof report.overallScore === "number" &&
+    Number.isFinite(report.overallScore) && report.overallScore >= 0 && report.overallScore <= 100;
+  const masteryScore = hasMasteryScore
+    ? Math.max(0, Math.min(100, Math.round(report.overallScore as number)))
+    : null;
 
   const fluffItem = safePieData.find(item => item.name?.toLowerCase() === 'fluff');
-  const fluffPercent = report.fluffPercentage ?? (fluffItem ? fluffItem.value : 0);
+  const rawFluffPercent = report.fluffPercentage ?? (fluffItem ? fluffItem.value : null);
+  const fluffPercent = typeof rawFluffPercent === "number" && Number.isFinite(rawFluffPercent)
+    ? Math.max(0, Math.min(100, Math.round(rawFluffPercent)))
+    : null;
   const timeUtilized = report.durationSeconds ?? 0;
 
   return (
@@ -124,20 +97,22 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
             <div className="p-3 rounded-xl border bg-card/60 flex flex-col justify-center text-center sm:text-right shadow-xs">
               <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground block">Fluff Content</span>
               <span className={`text-xl sm:text-2xl font-extrabold ${
-                fluffPercent > 35
+                fluffPercent === null
+                  ? "text-muted-foreground"
+                  : fluffPercent > 35
                   ? "text-destructive"
                   : fluffPercent > 15
                   ? "text-amber-500"
                   : "text-emerald-500"
               }`}>
-                {fluffPercent}%
+                {fluffPercent === null ? "—" : `${fluffPercent}%`}
               </span>
-              <span className="text-[10px] text-muted-foreground">Detected ratio</span>
+              <span className="text-[10px] text-muted-foreground">{fluffPercent === null ? "Not assessed" : "Detected ratio"}</span>
             </div>
             <div className="p-3 rounded-xl border border-primary/30 bg-primary/5 flex flex-col justify-center text-center sm:text-right shadow-xs col-span-2 sm:col-span-1">
               <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground block">Mastery Score</span>
-              <span className="text-2xl sm:text-3xl font-extrabold text-primary">{report.overallScore || avgClarity}%</span>
-              <span className="text-[10px] text-muted-foreground">Rigorous AI score</span>
+              <span className="text-2xl sm:text-3xl font-extrabold text-primary">{masteryScore === null ? "—" : `${masteryScore}%`}</span>
+              <span className="text-[10px] text-muted-foreground">{hasMasteryScore ? "Average of verified dimensions" : "Overall score not returned"}</span>
             </div>
           </div>
         </div>
@@ -161,9 +136,10 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
               <h4 className="font-medium text-sm flex items-center gap-2">
                 <Compass className="w-4 h-4 text-amber-500" /> Delivery & Rigor Dimensions
               </h4>
-              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30">Pentagon Web</span>
+              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30">Verified dimensions</span>
             </div>
-            <p className="text-xs text-muted-foreground mb-4">5-axis pentagon spider web of verbal concept explanation.</p>
+            <p className="text-xs text-muted-foreground mb-4">Verified performance dimensions from this oral defense.</p>
+            {safeRadarData.length >= 3 ? (
             <div className="h-[280px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <RadarChart cx="50%" cy="50%" outerRadius="68%" margin={{ top: 14, right: 28, bottom: 14, left: 28 }} data={safeRadarData}>
@@ -200,6 +176,11 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
                 </RadarChart>
               </ResponsiveContainer>
             </div>
+            ) : (
+              <div className="h-[280px] flex items-center justify-center rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
+                Fewer than three verified performance dimensions were returned. A radar chart is not reliable for this report.
+              </div>
+            )}
           </div>
 
           {/* Chart 2: Pie / Donut Chart (Content Composition & Fluff Ratio) */}
@@ -210,13 +191,15 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
               </h4>
               <div className="flex items-center gap-1.5">
                 <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${
-                  fluffPercent > 35
+                  fluffPercent === null
+                    ? "bg-muted text-muted-foreground border-border"
+                    : fluffPercent > 35
                     ? "bg-destructive/10 text-destructive border-destructive/30"
                     : fluffPercent > 15
                     ? "bg-amber-500/10 text-amber-500 border-amber-500/30"
                     : "bg-emerald-500/10 text-emerald-500 border-emerald-500/30"
                 }`}>
-                  Fluff: {fluffPercent}%
+                  Fluff: {fluffPercent === null ? "Not assessed" : `${fluffPercent}%`}
                 </span>
                 <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-muted text-muted-foreground">Pie / Donut</span>
               </div>
@@ -298,8 +281,9 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
               </h4>
               <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-muted text-muted-foreground">Polynomial Spline</span>
             </div>
-            <p className="text-xs text-muted-foreground mb-4">Progression curve from recall to final concept synthesis.</p>
+            <p className="text-xs text-muted-foreground mb-4">Progress across multiple dated sessions; one explanation cannot establish a trend.</p>
             <div className="h-[280px] w-full">
+              {safePolyData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={safePolyData} margin={{ top: 20, right: 20, left: -10, bottom: 25 }}>
                   <defs>
@@ -329,6 +313,11 @@ const MasteryReportDisplay = ({ report, conceptName }: { report: MasteryReportOu
                   <Area type="monotone" dataKey="score" stroke="#6366f1" strokeWidth={2.5} fillOpacity={1} fill="url(#cmPolyGrad)" />
                 </AreaChart>
               </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center rounded-lg border border-dashed text-center text-sm text-muted-foreground p-4">
+                  A single explanation cannot form a learning curve. Complete more scored sessions to build a chronological progress trend.
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -354,7 +343,6 @@ export function MasteryDashboard() {
     startRecording,
     stopRecording,
     resetTranscript,
-    lockAndAbort,
     isSupported,
   } = useAudioRecorder();
 
@@ -412,6 +400,10 @@ export function MasteryDashboard() {
 
   const handleAnalysis = async () => {
     if (isAnalyzing) return;
+    if (isRecording || isConnecting) {
+      toast({ variant: "destructive", title: "Finish Recording First", description: "Stop the microphone and wait for the transcript to settle before analyzing." });
+      return;
+    }
     const finalExplanation = transcript.trim();
 
     if (!conceptName.trim()) {
@@ -423,8 +415,9 @@ export function MasteryDashboard() {
       return;
     }
 
-    // Lock audio recorder and concept name input to prevent speech injection during analysis
-    lockAndAbort();
+    // The UI lock prevents new input while analyzing. Do not permanently lock
+    // the recorder: users must be able to retry or start a fresh Concept Mirror.
+    stopRecording();
     setIsTopicLocked(true);
     setIsAnalyzing(true);
     setAnalysisReport(null);
@@ -629,7 +622,7 @@ export function MasteryDashboard() {
       <CardFooter className="pt-2">
         <Button
           onClick={handleAnalysis}
-          disabled={!transcript.trim() || !conceptName.trim() || isAnalyzing}
+          disabled={!transcript.trim() || !conceptName.trim() || isAnalyzing || isRecording || isConnecting}
           className="w-full"
           size="lg"
         >
