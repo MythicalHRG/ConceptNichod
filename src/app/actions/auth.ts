@@ -23,7 +23,7 @@ import {
 } from "@/lib/owner-access";
 
 const SAFE_USER_PROJECTION =
-  "uuid username email role bio fullName gender dob classLevel examFocus city futureCollege snapchat instagram";
+  "uuid username email role bio fullName gender dob classLevel examFocus city futureCollege snapchat instagram publicProfileEnabled";
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -103,6 +103,7 @@ function serializeSafeUser(user: any) {
     futureCollege: user.futureCollege,
     snapchat: user.snapchat,
     instagram: user.instagram,
+    publicProfileEnabled: user.publicProfileEnabled === true,
   };
 }
 
@@ -546,8 +547,9 @@ export async function updateProfileAction(formData: FormData) {
     const futureCollege = readOptionalString("futureCollege");
     const snapchat = readOptionalString("snapchat");
     const instagram = readOptionalString("instagram");
+    const publicProfileEnabled = readOptionalString("publicProfileEnabled");
 
-    const updateData: Record<string, string> = {};
+    const updateData: Record<string, string | boolean> = {};
     let usernameChanged = false;
 
     if (username !== null && username.trim() !== "") {
@@ -614,6 +616,12 @@ export async function updateProfileAction(formData: FormData) {
         const trimmed = instagram.trim();
         if (trimmed.length > 80) throw new Error("Instagram handle cannot exceed 80 characters.");
         updateData.instagram = trimmed;
+    }
+    if (publicProfileEnabled !== null) {
+        if (publicProfileEnabled !== "true" && publicProfileEnabled !== "false") {
+            throw new Error("Invalid public profile visibility setting.");
+        }
+        updateData.publicProfileEnabled = publicProfileEnabled === "true";
     }
 
     try {
