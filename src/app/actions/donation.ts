@@ -61,8 +61,8 @@ async function saveCanonicalDonationSettings(values: Record<string, unknown>) {
     await DonationSetting.findByIdAndUpdate(canonical._id, { $set: update }, { new: true, runValidators: true });
   } else {
     await DonationSetting.create({
-      upiId: normalizeVpa(String(update.upiId || canonical?.upiId || DEFAULT_DONATION_UPI_ID)) || DEFAULT_DONATION_UPI_ID,
-      payeeName: String(update.payeeName || canonical?.payeeName || "ConceptNichod"),
+      upiId: normalizeVpa(String(values.upiId || canonical?.upiId || DEFAULT_DONATION_UPI_ID)) || DEFAULT_DONATION_UPI_ID,
+      payeeName: String(values.payeeName || canonical?.payeeName || "ConceptNichod"),
       ...update,
     });
   }
