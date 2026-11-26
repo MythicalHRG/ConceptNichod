@@ -18,6 +18,7 @@ export type AuthUser = {
   futureCollege?: string | null;
   snapchat?: string | null;
   instagram?: string | null;
+  publicProfileEnabled?: boolean;
 };
 
 interface AuthContextType {
