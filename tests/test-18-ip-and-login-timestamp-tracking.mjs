@@ -299,7 +299,7 @@ test("Tareeka 18: Static verification - User.ts schema and profile.ts projection
   const profileContent = fs.readFileSync(profileActionPath, "utf-8");
 
   assert.ok(
-    profileContent.includes('.select("username fullName classLevel examFocus city instagram snapchat bio")'),
+    profileContent.includes('.select("username fullName classLevel examFocus city instagram snapchat bio publicProfileEnabled")'),
     "profile.ts must use a public-field allowlist that cannot expose IP or login timestamp fields"
   );
 
