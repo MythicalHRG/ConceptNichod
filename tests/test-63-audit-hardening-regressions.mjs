@@ -17,7 +17,7 @@ test("sessions bind expiry and account session version", () => {
 test("client IP uses the Vercel-overwritten source, not client forwarding headers", () => {
   const source = read("src/lib/ip.ts");
   assert.match(source, /headerList\.get\("x-real-ip"\)/);
-  assert.doesNotMatch(source, /headerList\\.get\\("(?:x-forwarded-for|cf-connecting-ip)"\\)/i);
+  assert.doesNotMatch(source, /headerList\.get\("(?:x-forwarded-for|cf-connecting-ip)"\)/i);
 });
 
 test("public donation reads are pure and submission honors the admin switch", () => {
