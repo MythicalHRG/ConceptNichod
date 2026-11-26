@@ -44,7 +44,7 @@ async function getCanonicalDonationSettings() {
     return {
       upiId: DEFAULT_DONATION_UPI_ID,
       payeeName: "ConceptNichod",
-      isEnabled: false,
+      isEnabled: true,
     };
   }
   return {
