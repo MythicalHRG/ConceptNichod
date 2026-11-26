@@ -23,7 +23,7 @@ function addSecurityHeaders(response: NextResponse): NextResponse {
   return response;
 }
 
-// Public profiles (/profile/[username]) are intentionally public per robots.ts & privacy spec.
+// Public profile routes are rendered only when the account has explicitly opted in.
 const PROTECTED_PREFIXES = [
   '/dashboard',
   '/aspirants-connect',
