@@ -350,10 +350,14 @@ test("Tareeka 22.5: actions.ts guards against re-submission and loads authoritat
   const actionsPath = path.resolve("src/app/actions.ts");
   const content = fs.readFileSync(actionsPath, "utf-8");
 
-  // Check practiceStatus completed guard
+  // A completed status with no persisted report is recoverable; the saved report is final.
   assert.ok(
-    content.includes("topicDoc.practiceStatus === 'completed'"),
-    "runFinalAnalysisAction must check if topic is already completed"
+    content.includes("if (topicDoc.analysis)"),
+    "runFinalAnalysisAction must return an already-saved analysis"
+  );
+  assert.ok(
+    content.includes("interrupted legacy lock"),
+    "A completed status without a report must remain recoverable after reload"
   );
   assert.ok(
     content.includes("return { analysis: topicDoc.analysis }"),
@@ -499,7 +503,7 @@ test("Tareeka 22.11: Currency amounts like $50 and $100 are NOT erroneously matc
   assert.strictEqual(codeTokens[3].formula, "x");
 });
 
-test("Tareeka 22.12: Server actions verify signed session cookies via database-backed session validation", () => {
+test("Tareeka 22.12: Server actions verify signed session cookies via verifySessionCookie", () => {
   const filesToCheck = [
     "src/app/actions.ts",
     "src/app/actions/broadcast.ts",
@@ -518,8 +522,8 @@ test("Tareeka 22.12: Server actions verify signed session cookies via database-b
     const fullPath = path.resolve(relativePath);
     const content = fs.readFileSync(fullPath, "utf-8");
     assert.ok(
-      content.includes("getVerifiedSessionUuid"),
-      `${relativePath} must use database-backed session validation to validate signed session cookies`
+      content.includes("verifySessionCookie"),
+      `${relativePath} must call verifySessionCookie to validate signed session cookies`
     );
   }
 });
@@ -547,8 +551,14 @@ test("Tareeka 22.14: Atomic submission lock in runFinalAnalysisAction prevents c
   const content = fs.readFileSync(actionsPath, "utf-8");
 
   assert.ok(
-    content.includes("Topic.findOneAndUpdate") && content.includes("practiceStatus: { $ne: 'completed' }"),
-    "runFinalAnalysisAction must use atomic findOneAndUpdate to prevent duplicate submissions"
+    content.includes("Topic.findOneAndUpdate") &&
+      content.includes('practiceStatus: "analyzing"') &&
+      content.includes("analysisStartedAt: analysisLeaseStartedAt"),
+    "runFinalAnalysisAction must use an atomic expiring analysis lease to prevent duplicate submissions"
+  );
+  assert.ok(
+    content.includes("analysisLeaseStaleBefore") && content.includes("analysisStartedAt: { $lt: analysisLeaseStaleBefore }"),
+    "Abandoned analysis leases must be reclaimable after the timeout"
   );
   assert.ok(
     content.includes("safeWrittenAnswers") && content.includes("textQuestions[idx].question"),
