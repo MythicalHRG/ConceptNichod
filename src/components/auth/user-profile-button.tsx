@@ -57,6 +57,7 @@ export function UserProfileButton() {
   const [futureCollege, setFutureCollege] = useState("");
   const [snapchat, setSnapchat] = useState("");
   const [instagram, setInstagram] = useState("");
+  const [publicProfileEnabled, setPublicProfileEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -124,6 +125,7 @@ export function UserProfileButton() {
       setFutureCollege(user.futureCollege || "");
       setSnapchat(user.snapchat || "");
       setInstagram(user.instagram || "");
+      setPublicProfileEnabled(user.publicProfileEnabled === true);
     }
     setIsSettingsOpen(true);
     setActiveTab("profile");
@@ -143,6 +145,7 @@ export function UserProfileButton() {
       formData.append("futureCollege", futureCollege);
       formData.append("snapchat", snapchat);
       formData.append("instagram", instagram);
+      formData.append("publicProfileEnabled", String(publicProfileEnabled));
 
       const res = await updateProfileAction(formData);
       if (res.success && res.user) {
@@ -504,6 +507,20 @@ export function UserProfileButton() {
                       onChange={(e) => setSnapchat(e.target.value)}
                       maxLength={80}
                     />
+                  </div>
+                  <div className="space-y-2 rounded-lg border p-3">
+                    <label className="flex items-start gap-2 text-sm font-medium">
+                      <input
+                        type="checkbox"
+                        checked={publicProfileEnabled}
+                        onChange={(e) => setPublicProfileEnabled(e.target.checked)}
+                        className="mt-0.5"
+                      />
+                      <span>Make my profile public</span>
+                    </label>
+                    <p className="text-xs text-muted-foreground">
+                      When enabled, your name, class, exam focus, city, social handles, bio and learning analytics can appear on your public profile. Off by default.
+                    </p>
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Instagram</label>
