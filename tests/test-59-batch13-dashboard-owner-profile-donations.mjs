@@ -39,7 +39,7 @@ test("Batch 13: all five profile graph cards share the six-column desktop grid",
   assert.ok(analytics.includes("grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-4 sm:gap-5 items-stretch"));
   assert.ok(analytics.includes("min-h-[260px] sm:min-h-[280px]"));
   assert.ok(analytics.includes('ChartContainer config={chartConfig} className="w-full h-[250px]"'));
-  assert.ok(analytics.includes("5-Axis Mastery Pentagon Radar"));
+  assert.ok(analytics.includes("Verified Mastery Dimensions"));
   assert.ok(analytics.includes('gridType="polygon"'));
   assert.ok(analytics.includes("Mastery Learning Curve"));
   assert.ok(analytics.includes("Subject Distribution"));
@@ -56,7 +56,7 @@ test("Batch 13: donations are permanently enabled and owner settings remain prot
   assert.ok(model.includes("isEnabled: { type: Boolean, default: true }"));
   assert.ok(actions.includes("export async function adminSetDonationsEnabledAction(enabled: boolean)"));
   assert.ok(actions.includes('typeof enabled !== "boolean"'));
-  assert.ok(actions.includes("getVerifiedSessionUuid"));
+  assert.ok(actions.includes("verifySessionCookie"));
   assert.ok(actions.includes("isPlatformOwner(adminUser)"));
   assert.ok(actions.includes("getCanonicalDonationSettings"));
   assert.ok(actions.includes("isEnabled: true"));
