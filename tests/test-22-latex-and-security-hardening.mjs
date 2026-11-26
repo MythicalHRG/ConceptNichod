@@ -503,7 +503,7 @@ test("Tareeka 22.11: Currency amounts like $50 and $100 are NOT erroneously matc
   assert.strictEqual(codeTokens[3].formula, "x");
 });
 
-test("Tareeka 22.12: Server actions verify signed session cookies via verifySessionCookie", () => {
+test("Tareeka 22.12: Server actions verify expiring sessions against database revocation versions", () => {
   const filesToCheck = [
     "src/app/actions.ts",
     "src/app/actions/broadcast.ts",
@@ -522,8 +522,8 @@ test("Tareeka 22.12: Server actions verify signed session cookies via verifySess
     const fullPath = path.resolve(relativePath);
     const content = fs.readFileSync(fullPath, "utf-8");
     assert.ok(
-      content.includes("verifySessionCookie"),
-      `${relativePath} must call verifySessionCookie to validate signed session cookies`
+      content.includes("getVerifiedSessionUuid"),
+      `${relativePath} must use database-backed session validation`
     );
   }
 });
