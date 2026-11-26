@@ -19,9 +19,9 @@ export async function getPublicProfileData(username: string) {
   const usernamePattern = new RegExp("^" + safeUsername + "$", "i");
 
   const user = await User.findOne({ username: usernamePattern })
-    .select("username fullName classLevel examFocus city instagram snapchat bio")
+    .select("username fullName classLevel examFocus city instagram snapchat bio publicProfileEnabled")
     .lean();
-  if (!user) return null;
+  if (!user || user.publicProfileEnabled !== true) return null;
 
   const userWithId = await User.findOne({ username: usernamePattern })
     .select("uuid username")
