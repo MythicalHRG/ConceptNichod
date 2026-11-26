@@ -66,15 +66,11 @@ function resolveClientIp(customHeaders: HeaderInput): string {
           },
         };
 
-    const cfConnectingIp = headerList.get("cf-connecting-ip");
-    if (cfConnectingIp) return sanitizeIp(cfConnectingIp);
-    const forwardedFor = headerList.get("x-forwarded-for");
-    if (forwardedFor) {
-      const first = forwardedFor.split(",")[0].trim();
-      if (first) return sanitizeIp(first);
-    }
-    const realIp = headerList.get("x-real-ip");
-    if (realIp) return sanitizeIp(realIp);
+    // Vercel overwrites x-real-ip with the requester's IP at its edge.
+    // Do not trust client-supplied forwarding headers (CF-Connecting-IP or XFF)
+    // unless a separately verified proxy integration is configured.
+    const vercelClientIp = headerList.get("x-real-ip");
+    if (vercelClientIp) return sanitizeIp(vercelClientIp);
     return "127.0.0.1";
   } catch {
     return "127.0.0.1";
