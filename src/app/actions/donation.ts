@@ -237,7 +237,7 @@ export async function submitDonationTransaction(formData: {
     }
 
     const settings = await getCanonicalDonationSettings();
-    const configuredVpa = normalizeVpa((settings as any)?.upiId || "");
+    const configuredVpa = normalizeVpa((settings as any)?.upiId || DEFAULT_DONATION_UPI_ID);
     if (!configuredVpa) {
       return { success: false, error: "Official UPI ID is not configured yet. Please contact the admin." };
     }
