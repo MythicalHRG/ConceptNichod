@@ -56,7 +56,7 @@ async function getCanonicalDonationSettings(): Promise<Record<string, any>> {
 
 async function saveCanonicalDonationSettings(values: Record<string, unknown>) {
   const canonical = await getCanonicalDonationSettings();
-  const update = { ...values };
+  const update = { ...values, isEnabled: true };
   if (canonical?._id) {
     await DonationSetting.findByIdAndUpdate(canonical._id, { $set: update }, { new: true, runValidators: true });
   } else {
@@ -159,7 +159,7 @@ export async function getPublicDonationPageData() {
         upiId: configuredVpa || DEFAULT_DONATION_UPI_ID,
         payeeName: settings?.payeeName || process.env.NEXT_PUBLIC_UPI_NAME || "ConceptNichod",
         qrCodeUrl: "",
-        isEnabled: settings?.isEnabled === true,
+        isEnabled: true,
         headline:
           settings?.headline || "Support ConceptNichod & Join the Hall of Patrons",
         subtext:
@@ -237,9 +237,6 @@ export async function submitDonationTransaction(formData: {
     }
 
     const settings = await getCanonicalDonationSettings();
-    if (settings?.isEnabled !== true) {
-      return { success: false, error: "Donations are currently disabled. Please check back later." };
-    }
     const configuredVpa = normalizeVpa((settings as any)?.upiId || "");
     if (!configuredVpa) {
       return { success: false, error: "Official UPI ID is not configured yet. Please contact the admin." };
@@ -813,7 +810,7 @@ export async function adminUpdateDonationSettings(input: {
       upiId,
       payeeName: payeeName || "ConceptNichod",
       qrCodeUrl: "",
-      isEnabled: input.isEnabled ?? existingSettings?.isEnabled === true,
+      isEnabled: true,
       updatedBy: (adminUser as any).username || "Admin",
     };
     if (input.customInstructions !== undefined) {
@@ -894,7 +891,7 @@ export async function getDonationInfoAction() {
     upiId: configuredVpa || "",
     payeeName: setting?.payeeName || "ConceptNichod",
     qrCodeUrl: "",
-    isEnabled: setting?.isEnabled === true,
+    isEnabled: true,
     headline: setting?.headline || "Support ConceptNichod & Join the Hall of Patrons",
     subtext: setting?.subtext || "Pay using any UPI app, then submit your 12-digit UTR and Transaction ID for manual Admin verification.",
     customInstructions: setting?.customInstructions || "Pay using any UPI app, then submit your transaction reference for manual verification.",
@@ -978,12 +975,15 @@ export async function adminSetDonationsEnabledAction(enabled: boolean) {
     throw new Error("A boolean donations-enabled value is required.");
   }
 
-  await saveCanonicalDonationSettings({ isEnabled: enabled, updatedBy: owner.username || "mythicalhrg" });
+  if (!enabled) {
+    return { success: false, error: "Donations are permanently enabled." };
+  }
+  await saveCanonicalDonationSettings({ isEnabled: true, updatedBy: owner.username || "mythicalhrg" });
 
   revalidatePath("/donate");
   revalidatePath("/dashboard/admin");
   revalidatePath("/dashboard/admin/donations");
-  return { success: true, isEnabled: enabled };
+  return { success: true, isEnabled: true };
 }
 
 export async function updateDonationSettingsAction(payload: { upiId: string; qrCodeUrl?: string; customInstructions?: string; thankYouNote?: string }) {
