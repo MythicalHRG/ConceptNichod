@@ -24,49 +24,20 @@ interface FinalAnalysisDisplayProps {
 
 const PIE_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899"];
 
-const DEFAULT_PENTAGON_AXES = [
-  { metric: "Clarity", factor: 1.02 },
-  { metric: "Conciseness", factor: 0.88 },
-  { metric: "Confidence", factor: 1.0 },
-  { metric: "Precision", factor: 0.96 },
-  { metric: "Structure", factor: 1.01 },
-];
-
-/**
- * Guarantees a crisp 5-axis BGMI-style Pentagon Radar dataset so Recharts
- * never collapses into a 1D straight line when an AI response returns < 5 metrics.
- */
-function normalizePentagonRadarData(
-  items: Array<{ metric: string; score: number }>,
-  baseScore: number
-): Array<{ metric: string; score: number }> {
+function normalizePentagonRadarData(items: Array<{ metric: string; score: number }>): Array<{ metric: string; score: number }> {
   const unique: Array<{ metric: string; score: number }> = [];
   const seen = new Set<string>();
-
   for (const item of items) {
+    if (!item || typeof item.metric !== "string" || !Number.isFinite(item.score)) continue;
     const label = item.metric.trim();
     const key = label.toLowerCase();
     if (!label || seen.has(key)) continue;
     seen.add(key);
-    unique.push({
-      metric: label.length > 18 ? label.slice(0, 16) + "…" : label,
-      score: Math.max(0, Math.min(100, Math.round(item.score))),
-    });
+    unique.push({ metric: label.length > 18 ? label.slice(0, 16) + "…" : label, score: Math.max(0, Math.min(100, Math.round(item.score))) });
     if (unique.length === 5) break;
   }
-
-  for (const fallback of DEFAULT_PENTAGON_AXES) {
-    if (unique.length >= 5) break;
-    if (!seen.has(fallback.metric.toLowerCase())) {
-      seen.add(fallback.metric.toLowerCase());
-      unique.push({
-        metric: fallback.metric,
-        score: Math.max(5, Math.min(100, Math.round(baseScore * fallback.factor))),
-      });
-    }
-  }
-
-  return unique;
+  // Fewer than three real dimensions cannot form a trustworthy radar shape.
+  return unique.length >= 3 ? unique : [];
 }
 
 export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDisplayProps) {
@@ -76,133 +47,56 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
   useEffect(() => {
     setHasMounted(true);
     let rawList: any[] = [];
-
-    // Robust parsing: handles Array, String, or double-stringified JSON
     if (Array.isArray(analysis.chartsData)) {
       rawList = analysis.chartsData;
-    } else if (typeof analysis.chartsData === "string" && analysis.chartsData.trim().length > 0) {
+    } else if (typeof analysis.chartsData === "string" && analysis.chartsData.trim()) {
       try {
-        let firstPass = JSON.parse(analysis.chartsData);
-        if (typeof firstPass === "string") {
-          firstPass = JSON.parse(firstPass);
-        }
-        if (Array.isArray(firstPass)) {
-          rawList = firstPass;
-        }
-      } catch (e) {
-        console.warn("Failed to parse AI charts data, generating fallback metrics:", e);
+        let parsed = JSON.parse(analysis.chartsData);
+        if (typeof parsed === "string") parsed = JSON.parse(parsed);
+        if (Array.isArray(parsed)) rawList = parsed;
+      } catch (error) {
+        console.warn("Could not parse AI performance charts; using a no-data state:", error);
       }
     }
-
-    const rawOverallScore = analysis.overallScore;
-    const safeOverallScore = Number.isFinite(rawOverallScore)
-      ? Math.max(0, Math.min(100, Number(rawOverallScore)))
-      : 50;
-    const baseScore = Math.max(5, safeOverallScore);
-
-    // Full distinct diverse chart definitions tailored to the student's exact score
-    const defaultSuite = [
-      {
-        type: "bar",
-        title: "Cognitive Competencies",
-        description: "Discrete evaluation of conceptual, analytical, and practical performance",
-        data: [
-          { name: "Comprehension", score: Math.min(100, Math.round(baseScore * 1.05)) },
-          { name: "Expression", score: Math.max(5, Math.round(baseScore * 0.9)) },
-          { name: "Critical Thinking", score: Math.round(baseScore) },
-          { name: "Application", score: Math.min(100, Math.round(baseScore * 0.95)) },
-        ],
-      },
-      {
-        type: "pie",
-        title: "Knowledge Composition",
-        description: "Proportional balance between core theory, empirical facts, and insights",
-        data: [
-          { name: "Core Theory", value: Math.max(10, Math.round(baseScore * 0.5)), fill: "#3b82f6" },
-          { name: "Applied Logic", value: Math.max(10, Math.round(baseScore * 0.35)), fill: "#10b981" },
-          { name: "Analytical Insights", value: Math.max(5, Math.round(baseScore * 0.15)), fill: "#f59e0b" },
-        ],
-      },
-      {
-        type: "histo",
-        title: "Response Depth Frequency",
-        description: "Distribution of response elaboration across answer difficulty bins",
-        data: [
-          { name: "0-25% Recall", score: baseScore <= 35 ? 4 : 1 },
-          { name: "26-50% Foundational", score: baseScore <= 55 ? 3 : 2 },
-          { name: "51-75% Analytical", score: baseScore > 55 ? 3 : 1 },
-          { name: "76-100% Comprehensive", score: baseScore > 75 ? 3 : 0 },
-        ],
-      },
-      {
-        type: "polynomial",
-        title: "Adaptive Mastery Progression Curve",
-        description: "Continuous polynomial learning trajectory across assessment stages",
-        data: [
-          { step: "Stage 1: Recall", score: Math.max(5, Math.round(baseScore * 0.72)) },
-          { step: "Stage 2: Conceptual", score: Math.max(8, Math.round(baseScore * 0.85)) },
-          { step: "Stage 3: Application", score: Math.round(baseScore * 0.94) },
-          { step: "Stage 4: Synthesis", score: Math.round(baseScore) },
-          { step: "Stage 5: Peak Mastery", score: Math.min(100, Math.round(baseScore * 1.08)) },
-        ],
-      },
-      {
-        type: "radar",
-        title: "Delivery & Articulation Matrix",
-        description: "5-axis pentagon spider web across clarity, conciseness, confidence, precision, and structure",
-        data: normalizePentagonRadarData([], baseScore),
-      },
-    ];
-
-    // Guarantee that every single chart in the interface has a UNIQUE type:
-    // [bar, pie, histo, polynomial, radar] - NO DUPLICATES IN A SINGLE INTERFACE!
-    const availableTypes = ["bar", "pie", "histo", "polynomial", "radar"];
+    const availableTypes = ["bar", "pie", "histo", "radar"];
     const seenTypes = new Set<string>();
-    const diverseCharts: any[] = [];
-
-    for (const c of rawList.slice(0, 25)) {
-      if (!c || typeof c !== "object" || !availableTypes.includes(c.type) || seenTypes.has(c.type) || !Array.isArray(c.data)) continue;
-      const data = c.data.slice(0, 30).filter((item: any) => {
+    const verifiedCharts: any[] = [];
+    for (const chart of rawList.slice(0, 25)) {
+      if (!chart || typeof chart !== "object" || !availableTypes.includes(chart.type) || seenTypes.has(chart.type) || !Array.isArray(chart.data)) continue;
+      const data = chart.data.slice(0, 30).filter((item: any) => {
         if (!item || typeof item !== "object") return false;
-        if (c.type === "pie") return typeof item.name === "string" && item.name.length <= 100 && Number.isFinite(item.value) && item.value >= 0;
-        if (c.type === "radar") return typeof item.metric === "string" && item.metric.length <= 100 && Number.isFinite(item.score);
-        if (c.type === "polynomial") return typeof item.step === "string" && item.step.length <= 100 && Number.isFinite(item.score);
+        if (chart.type === "pie") return typeof item.name === "string" && item.name.length <= 100 && Number.isFinite(item.value) && item.value >= 0;
+        if (chart.type === "radar") return typeof item.metric === "string" && item.metric.length <= 100 && Number.isFinite(item.score);
+        if (chart.type === "polynomial") return typeof item.step === "string" && item.step.length <= 100 && Number.isFinite(item.score);
         return typeof item.name === "string" && item.name.length <= 100 && Number.isFinite(item.score);
       }).map((item: any) => {
-        if (c.type === "pie") return { ...item, value: Math.max(0, Math.min(100, item.value)) };
+        if (chart.type === "pie") return { ...item, value: Math.max(0, Math.min(100, item.value)) };
         return { ...item, score: Math.max(0, Math.min(100, item.score)) };
       });
       if (data.length === 0) continue;
-      seenTypes.add(c.type);
-      diverseCharts.push({
-        type: c.type,
-        title: typeof c.title === "string" ? c.title.slice(0, 120) : "Performance chart",
-        description: typeof c.description === "string" ? c.description.slice(0, 500) : "",
-        data: c.type === "radar" ? normalizePentagonRadarData(data, baseScore) : data,
+      const chartData = chart.type === "radar" ? normalizePentagonRadarData(data) : data;
+      if (chartData.length === 0) continue;
+      seenTypes.add(chart.type);
+      verifiedCharts.push({
+        type: chart.type,
+        title: typeof chart.title === "string" ? chart.title.slice(0, 120) : "Performance chart",
+        description: typeof chart.description === "string" ? chart.description.slice(0, 500) : "",
+        data: chartData,
       });
     }
-
-    for (const d of defaultSuite) {
-      if (!seenTypes.has(d.type)) {
-        seenTypes.add(d.type);
-        diverseCharts.push(d);
-      }
-    }
-
-    setCharts(diverseCharts);
+    setCharts(verifiedCharts);
   }, [analysis]);
 
   const auth = analysis.authenticityReport;
   const rawOverallScore = analysis.overallScore;
-  const safeOverallScore = Number.isFinite(rawOverallScore)
-    ? Math.max(0, Math.min(100, Number(rawOverallScore)))
-    : 50;
-  const isNatural = auth?.isNatural ?? (safeOverallScore >= 40);
+  const hasOverallScore = typeof rawOverallScore === "number" && Number.isFinite(rawOverallScore) && rawOverallScore >= 0 && rawOverallScore <= 100;
+  const safeOverallScore = hasOverallScore ? Math.max(0, Math.min(100, rawOverallScore)) : 0;
   const rawNaturalScore = auth?.naturalConfidenceScore;
-  const naturalScore = Number.isFinite(rawNaturalScore)
-    ? Math.max(0, Math.min(100, Number(rawNaturalScore)))
-    : (isNatural ? 88 : 25);
-  const verdict = auth?.verdict || (isNatural ? "natural_human" : "suspicious_synthetic");
+  const hasAuthenticityReport = Boolean(auth && typeof auth.isNatural === "boolean" &&
+    ["natural_human", "suspicious_synthetic", "nonsense_or_filler", "blended"].includes(auth.verdict) &&
+    typeof rawNaturalScore === "number" && Number.isFinite(rawNaturalScore) && rawNaturalScore >= 0 && rawNaturalScore <= 100);
+  const naturalScore = hasAuthenticityReport ? Math.round(rawNaturalScore as number) : null;
+  const verdict = hasAuthenticityReport && auth ? auth.verdict : "unavailable";
 
   const areasToFocus = Array.isArray(analysis.areasToFocus) ? analysis.areasToFocus : [];
   const areasToImprove = Array.isArray(analysis.areasToImprove) ? analysis.areasToImprove : [];
@@ -238,7 +132,7 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
               {analysis.overallScore !== undefined && (
                 <div className="text-right bg-background/80 px-4 py-2 rounded-xl border border-primary/20 shadow-sm">
                   <p className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Overall Score</p>
-                  <p className="text-3xl font-black text-primary">{safeOverallScore}/100</p>
+                  <p className="text-3xl font-black text-primary">{hasOverallScore ? `${safeOverallScore}/100` : "—"}</p>
                 </div>
               )}
             </div>
@@ -258,6 +152,8 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
             ? "bg-emerald-500"
             : verdict === "suspicious_synthetic"
             ? "bg-destructive"
+            : verdict === "unavailable"
+            ? "bg-muted-foreground/30"
             : "bg-amber-500"
         }`} />
         <CardHeader className="pb-3">
@@ -273,7 +169,7 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
               <div className="min-w-0">
                 <CardTitle className="text-lg font-bold break-words">Linguistic Authenticity & Authorship Verification</CardTitle>
                 <CardDescription className="text-xs">
-                  AI forensics inspecting natural student reasoning versus synthetic/ChatGPT patterns
+                  AI authorship estimate, when returned by the examiner
                 </CardDescription>
               </div>
             </div>
@@ -283,12 +179,15 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
                 ? "border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10"
                 : verdict === "suspicious_synthetic"
                 ? "border-destructive/40 text-destructive bg-destructive/10"
+                : verdict === "unavailable"
+                ? "border-border text-muted-foreground bg-muted"
                 : "border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/10"
             }`}>
-              {verdict === "natural_human" && `Authentic Natural Voice (${naturalScore}% Confidence)`}
-              {verdict === "suspicious_synthetic" && `Suspected AI/ChatGPT Generated (${100 - naturalScore}% AI Probability)`}
-              {verdict === "nonsense_or_filler" && `Low-Effort / Irrelevant Content Detected (${naturalScore}% Natural)`}
-              {verdict === "blended" && `Blended Natural & Structured Expression (${naturalScore}%)`}
+              {verdict === "natural_human" && `Authentic Natural Voice (${naturalScore ?? "—"}% Confidence)`}
+              {verdict === "suspicious_synthetic" && `Suspected AI/ChatGPT Generated (${100 - (naturalScore ?? 0)}% AI Probability)`}
+              {verdict === "nonsense_or_filler" && `Low-Effort / Irrelevant Content Detected (${naturalScore ?? "—"}% Natural)`}
+              {verdict === "blended" && `Blended Natural & Structured Expression (${naturalScore ?? "—"}%)`}
+              {verdict === "unavailable" && "Not assessed"}
             </Badge>
           </div>
         </CardHeader>
@@ -297,9 +196,7 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
             <LatexRenderer
               content={
                 auth?.assessmentDetails ||
-                (isNatural
-                  ? "Answers exhibit authentic student syntax, natural cognitive hesitations, and genuine concept assimilation without artificial ChatGPT boilerplate."
-                  : "Stylistic analysis detected elevated formal uniformity and robotic cadence characteristic of synthetic language models. Please express reasoning in your own spontaneous words.")
+                "The authenticity detector did not return a verified assessment for this test. No authorship estimate is available."
               }
             />
           </div>
@@ -463,7 +360,7 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
       </Card>
 
       {/* Visual Analytics, Charts & Graphs: Every single chart is a DIFFERENT type */}
-      {hasMounted && charts.length > 0 && (
+      {hasMounted && charts.length > 0 ? (
         <div className="space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-border/60 pb-3">
             <div className="flex items-center gap-2">
@@ -471,7 +368,7 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
               <h3 className="text-xl font-bold font-headline">Multi-Dimensional Performance Analytics</h3>
             </div>
             <span className="text-xs text-muted-foreground bg-muted px-2.5 py-1 rounded-full font-medium">
-              5 Distinct Visual Graph Models
+              {charts.length} verified chart{charts.length === 1 ? "" : "s"}
             </span>
           </div>
 
@@ -700,7 +597,13 @@ export function FinalAnalysisDisplay({ analysis, topicName }: FinalAnalysisDispl
             ))}
           </div>
         </div>
-      )}
+      ) : hasMounted ? (
+        <Card className="border-dashed">
+          <CardContent className="py-8 text-center text-sm text-muted-foreground">
+            No verified performance charts were returned for this test. The overall score and written feedback remain available above; charts will not be estimated from the total score.
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }
