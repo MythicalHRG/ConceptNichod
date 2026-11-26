@@ -50,7 +50,7 @@ async function getCanonicalDonationSettings(): Promise<Record<string, any>> {
   return {
     ...canonical,
     upiId: normalizeVpa(canonical.upiId || "") || "",
-    isEnabled: canonical.isEnabled === true,
+    isEnabled: true,
   };
 }
 
@@ -178,7 +178,7 @@ export async function getPublicDonationPageData() {
         upiId: DEFAULT_DONATION_UPI_ID,
         payeeName: process.env.NEXT_PUBLIC_UPI_NAME || "ConceptNichod",
         qrCodeUrl: "",
-        isEnabled: false,
+        isEnabled: true,
         headline: "Support ConceptNichod & Join the Hall of Patrons",
         subtext:
           "Pay using any UPI app to the verified UPI ID above, then submit your 12-digit UTR and Transaction ID below.",
