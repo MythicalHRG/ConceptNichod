@@ -8,5 +8,6 @@ test("owner-provided UPI ID is the fallback across public payment and submission
   assert.match(action, /upiId: configuredVpa \|\| DEFAULT_DONATION_UPI_ID/);
   assert.match(action, /normalizeVpa\(\(settings as any\)\?\.upiId \|\| DEFAULT_DONATION_UPI_ID\)/);
   assert.match(action, /upiId: DEFAULT_DONATION_UPI_ID/);
-  assert.match(action, /updateMany\(\{\}, \{ \$set: \{ upiId: DEFAULT_DONATION_UPI_ID, isEnabled: true \} \}\)/);
+  const reader = action.slice(action.indexOf("async function getCanonicalDonationSettings"), action.indexOf("async function saveCanonicalDonationSettings"));
+  assert.doesNotMatch(reader, /updateMany|findByIdAndUpdate|create\(/);
 });
