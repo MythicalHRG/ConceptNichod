@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { markSummaryViewedAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,14 +23,16 @@ type TopicPageClientProps = {
 };
 
 export function TopicPageClient({ topicId, initialTopic }: TopicPageClientProps) {
+  const router = useRouter();
   const [topic, setTopic] = useState<Topic>(initialTopic);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [finalAnalysis, setFinalAnalysis] = useState<FinalAnalysisOutput | null>(topic.analysis || null);
 
   const initialShouldBePractice =
+    Boolean(initialTopic.analysis) ||
     initialTopic.practiceStatus === "completed" ||
-    initialTopic.analysis ||
+    initialTopic.practiceStatus === "analyzing" ||
     initialTopic.practiceStatus === "in_progress" ||
     initialTopic.summaryViewed;
 
@@ -42,6 +45,7 @@ export function TopicPageClient({ topicId, initialTopic }: TopicPageClientProps)
   const [customTime, setCustomTime] = useState<string>("");
 
   const autoSubmitStartedRef = useRef(false);
+  const initialSessionCheckedTopicRef = useRef<string | null>(null);
   const shakeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { toast } = useToast();
 
@@ -128,7 +132,7 @@ export function TopicPageClient({ topicId, initialTopic }: TopicPageClientProps)
 
   const handleAutoSubmit = useCallback(
     async (currentTopic: Topic) => {
-      if (!currentTopic.questions || autoSubmitStartedRef.current) return;
+      if (!Array.isArray(currentTopic.questions) || currentTopic.questions.length === 0 || autoSubmitStartedRef.current) return;
       autoSubmitStartedRef.current = true;
 
       const numQuestions = currentTopic.questions.length;
@@ -143,11 +147,15 @@ export function TopicPageClient({ topicId, initialTopic }: TopicPageClientProps)
         question: q.question,
         answer: currentTopic.savedSpokenAnswers?.[i] || "Abandoned",
       }));
+      spokenAnswers.push({
+        question: "Overall Topic Summary (2-Minute Challenge)",
+        answer: currentTopic.savedFinalSummarySpeech?.trim() || "Abandoned",
+      });
 
       toast({
         variant: "destructive",
-        title: "Session Restored",
-        description: "You reloaded the page during a test. Your partial answers have been automatically submitted.",
+        title: "Session Auto-Submitted",
+        description: "The active test was submitted automatically after the page was reloaded. Unsaved answers are marked as unanswered.",
       });
 
       await handleFinalAnalysis(writtenAnswers, spokenAnswers, true, currentTopic);
@@ -155,24 +163,69 @@ export function TopicPageClient({ topicId, initialTopic }: TopicPageClientProps)
     [handleFinalAnalysis, toast]
   );
 
-  // If initialTopic changes via Server Component re-render
+  // Only the server state from the initial page load is used to detect an
+  // interrupted test. A later revalidation after markSummaryViewedAction must
+  // not mistake the current, newly-started test for a reload.
   useEffect(() => {
     setTopic(initialTopic);
     setFinalAnalysis(initialTopic.analysis || null);
 
-    // Anti-Cheating: Check practice status on reload
-    if (initialTopic.practiceStatus === "completed" || initialTopic.analysis) {
+    if (initialSessionCheckedTopicRef.current === topicId) return;
+    initialSessionCheckedTopicRef.current = topicId;
+    autoSubmitStartedRef.current = false;
+
+    if (initialTopic.analysis) {
       setActiveTab("practice");
       setIsPracticing(true);
-    } else if (initialTopic.practiceStatus === "in_progress") {
+    } else if (initialTopic.practiceStatus === "analyzing") {
+      setActiveTab("practice");
+      setIsPracticing(true);
+      toast({
+        title: "Finishing Your Analysis",
+        description: "Your saved answers are being evaluated. This page will check for the report automatically.",
+      });
+    } else if (
+      initialTopic.practiceStatus === "completed" ||
+      initialTopic.practiceStatus === "in_progress" ||
+      initialTopic.summaryViewed
+    ) {
+      // A legacy completed status without an analysis is an interrupted submit.
       setActiveTab("practice");
       setIsPracticing(true);
       handleAutoSubmit(initialTopic);
-    } else if (initialTopic.summaryViewed) {
-      setActiveTab("practice");
-      setIsPracticing(true);
     }
-  }, [initialTopic, handleAutoSubmit]);
+  }, [initialTopic, handleAutoSubmit, toast]);
+
+  // Refresh while a server-side analysis lease is active. If the server request
+  // died during navigation, retry automatically as soon as the 2-minute lease
+  // expires; the server action then atomically grants the stale lease to retry.
+  useEffect(() => {
+    if (initialTopic.practiceStatus !== "analyzing" || initialTopic.analysis) return;
+
+    const startedAt = initialTopic.analysisStartedAt
+      ? new Date(initialTopic.analysisStartedAt).getTime()
+      : 0;
+    const elapsed = Number.isFinite(startedAt) ? Date.now() - startedAt : 120_000;
+    const remaining = Math.max(0, 120_000 - elapsed);
+
+    const pollTimer = setInterval(() => router.refresh(), 5_000);
+    const recoveryTimer = setTimeout(() => {
+      autoSubmitStartedRef.current = false;
+      handleAutoSubmit({ ...initialTopic, practiceStatus: "in_progress" });
+    }, remaining + 250);
+
+    return () => {
+      clearInterval(pollTimer);
+      clearTimeout(recoveryTimer);
+    };
+  }, [
+    topicId,
+    initialTopic.practiceStatus,
+    initialTopic.analysisStartedAt,
+    initialTopic.analysis,
+    handleAutoSubmit,
+    router,
+  ]);
 
   useEffect(() => {
     if (typeof document !== "undefined") {
@@ -189,9 +242,7 @@ export function TopicPageClient({ topicId, initialTopic }: TopicPageClientProps)
 
   const handleTabChange = useCallback(
     (value: string) => {
-      setActiveTab(value);
       if (value === "practice" && !isPracticing) {
-        setIsPracticing(true);
         setIsShaking(true);
 
         // Request Fullscreen (standard + WebKit)
@@ -210,31 +261,34 @@ export function TopicPageClient({ topicId, initialTopic }: TopicPageClientProps)
           }
         }
 
-        // Anti-Cheating: Mark summary as viewed so they can't go back on reload
-        markSummaryViewedAction(topicId).catch(console.error);
+        // Persist the test start before rendering the live practice form.
+        // A failed write means the test must not begin without reload protection.
+        markSummaryViewedAction(topicId)
+          .then(() => {
+            setIsPracticing(true);
+            setActiveTab("practice");
+          })
+          .catch((error) => {
+            setActiveTab("summary");
+            setIsPracticing(false);
+            toast({
+              variant: "destructive",
+              title: "Could Not Start Test",
+              description: error?.message || "Your test session could not be secured. Please try again.",
+            });
+          });
 
         if (typeof window !== "undefined" && window.navigator.vibrate) {
           window.navigator.vibrate([100, 30, 100, 30, 100]);
         }
 
-        if (typeof window !== "undefined" && "speechSynthesis" in window) {
-          try {
-            window.speechSynthesis.cancel();
-            const utterance = new SpeechSynthesisUtterance(
-              "You have moved to the Questions section. Now you have to answer the questions."
-            );
-            utterance.lang = "en-US";
-            window.speechSynthesis.speak(utterance);
-          } catch (e) {
-            console.error("Speech synthesis failed.", e);
-          }
-        }
-
         if (shakeTimerRef.current) clearTimeout(shakeTimerRef.current);
         shakeTimerRef.current = setTimeout(() => setIsShaking(false), 820);
+        return;
       }
+      setActiveTab(value);
     },
-    [isPracticing, topicId]
+    [isPracticing, topicId, toast]
   );
 
   useEffect(() => {
