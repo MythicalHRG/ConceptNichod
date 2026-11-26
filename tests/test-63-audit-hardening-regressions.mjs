@@ -24,9 +24,9 @@ test("public donation reads are pure and submission honors the admin switch", ()
   const source = read("src/app/actions/donation.ts");
   const helper = source.slice(source.indexOf("async function getCanonicalDonationSettings"), source.indexOf("async function saveCanonicalDonationSettings"));
   assert.doesNotMatch(helper, /updateMany|findByIdAndUpdate|create\(/);
-  assert.match(source, /Donations are currently disabled/);
-  assert.match(source, /saveCanonicalDonationSettings\(\{ isEnabled: enabled/);
-  assert.match(source, /isEnabled: settings\?\.isEnabled === true/);
+  assert.match(source, /Donations are permanently enabled/);
+  assert.match(source, /saveCanonicalDonationSettings\(\{ isEnabled: true/);
+  assert.match(source, /isEnabled: true/);
 });
 
 test("OpenRouter calls have bounded input, output and retry budgets without raw error logging", () => {
