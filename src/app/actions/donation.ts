@@ -60,7 +60,11 @@ async function saveCanonicalDonationSettings(values: Record<string, unknown>) {
   if (canonical?._id) {
     await DonationSetting.findByIdAndUpdate(canonical._id, { $set: update }, { new: true, runValidators: true });
   } else {
-    await DonationSetting.create(update);
+    await DonationSetting.create({
+      upiId: normalizeVpa(String(update.upiId || canonical?.upiId || DEFAULT_DONATION_UPI_ID)),
+      payeeName: String(update.payeeName || canonical?.payeeName || "ConceptNichod"),
+      ...update,
+    });
   }
   // Synchronize legacy duplicate rows only during an explicit owner action.
   await DonationSetting.updateMany({}, { $set: update });
