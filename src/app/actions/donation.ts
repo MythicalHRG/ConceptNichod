@@ -35,7 +35,7 @@ const DEFAULT_DONATION_UPI_ID = "harsh.2525@ptaxis";
  * Read the canonical settings without mutating persisted admin configuration.
  * Public requests must never enable donations or write a fallback recipient.
  */
-async function getCanonicalDonationSettings() {
+async function getCanonicalDonationSettings(): Promise<Record<string, any>> {
   await connectToDatabase();
   const records = await DonationSetting.find({}).sort({ updatedAt: -1, _id: -1 }).lean();
   const configured = records.find((record: any) => Boolean(normalizeVpa(record.upiId || "")));
@@ -61,7 +61,7 @@ async function saveCanonicalDonationSettings(values: Record<string, unknown>) {
     await DonationSetting.findByIdAndUpdate(canonical._id, { $set: update }, { new: true, runValidators: true });
   } else {
     await DonationSetting.create({
-      upiId: normalizeVpa(String(update.upiId || canonical?.upiId || DEFAULT_DONATION_UPI_ID)),
+      upiId: normalizeVpa(String(update.upiId || canonical?.upiId || DEFAULT_DONATION_UPI_ID)) || DEFAULT_DONATION_UPI_ID,
       payeeName: String(update.payeeName || canonical?.payeeName || "ConceptNichod"),
       ...update,
     });
