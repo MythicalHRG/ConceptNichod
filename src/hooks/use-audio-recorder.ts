@@ -4,38 +4,26 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 
 /**
  * use-audio-recorder.ts
- * Browser-native Web Speech API with Pause/Resume, Reset, Chime, and Lock/Abort defense
+ * Browser-native Web Speech API with bounded reconnects, reset, and lock/abort defense
  */
 
-let sharedChimeCtx: AudioContext | null = null;
+function getSpeechStartErrorMessage(error: unknown): string {
+  const name = error && typeof error === "object" && "name" in error
+    ? String((error as { name?: unknown }).name || "")
+    : "";
 
-// Subtle mic chime when recording begins (reuses a single AudioContext to prevent browser context-cap leaks)
-function playMicReadyChime() {
-  try {
-    if (typeof window === 'undefined') return;
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioContextClass) return;
-    if (!sharedChimeCtx || sharedChimeCtx.state === 'closed') {
-      sharedChimeCtx = new AudioContextClass();
-    }
-    const ctx = sharedChimeCtx;
-    if (ctx.state === 'suspended') {
-      ctx.resume().catch(() => {});
-    }
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(659.25, ctx.currentTime);
-    gain.gain.setValueAtTime(0.05, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
-
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.15);
-  } catch {
-    // AudioContext blocked or unsupported, fail silently
+  switch (name) {
+    case "NotAllowedError":
+    case "SecurityError":
+      return "The browser blocked microphone access. Allow microphone permission for this site, then try again.";
+    case "NotSupportedError":
+      return "This browser does not provide a speech-recognition service. Try a current version of Chrome or Edge.";
+    case "InvalidStateError":
+      return "The speech service is already active or changing state. Press Stop, wait a moment, then try again.";
+    case "AbortError":
+      return "The browser interrupted speech recognition before it could start. Try again.";
+    default:
+      return "Speech recognition could not start. Check microphone permission and your connection, then try again.";
   }
 }
 
@@ -94,7 +82,6 @@ export function useAudioRecorder(): AudioRecorderState {
       setIsRecording(true);
       setIsPaused(false);
       setErrorMessage(null);
-      playMicReadyChime();
     };
 
     recognition.onresult = (event: any) => {
@@ -120,21 +107,37 @@ export function useAudioRecorder(): AudioRecorderState {
 
     recognition.onerror = (event: any) => {
       if (isLockedRef.current) return;
-      console.warn('Speech recognition notice:', event.error);
+      const code = typeof event?.error === "string" ? event.error : "unknown";
+      console.warn("Speech recognition notice:", code);
 
-      if (event.error === 'not-allowed') {
+      const fatalMessages: Record<string, string> = {
+        "not-allowed": "Microphone permission was denied. Allow microphone access in your browser and try again.",
+        "service-not-allowed": "This browser or device has blocked its speech-recognition service. Try Chrome or Edge with microphone access enabled.",
+        "audio-capture": "No usable microphone was found. Check your device microphone and browser permissions.",
+        "language-not-supported": "Speech recognition for English (India) is unavailable in this browser. Try another supported browser.",
+      };
+      const fatalMessage = fatalMessages[code];
+      if (fatalMessage) {
         isIntentActiveRef.current = false;
+        isPausedRef.current = false;
+        if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
         setIsRecording(false);
         setIsPaused(false);
         setIsConnecting(false);
-        setErrorMessage(
-          'Microphone permission denied. Please allow microphone access in your browser settings.'
-        );
-      } else if (event.error === 'no-speech') {
-        // No speech detected during pause; the browser may continue the session.
-      } else if (event.error === 'network') {
-        setErrorMessage('Speech recognition connection interrupted. Reconnecting with a bounded retry policy...');
+        setErrorMessage(fatalMessage);
+        return;
       }
+
+      if (code === "no-speech" || code === "aborted") {
+        // No speech and intentional aborts are handled by the end/retry state.
+        return;
+      }
+      if (code === "network") {
+        setErrorMessage("Speech service connection interrupted. Reconnecting automatically...");
+        return;
+      }
+      setErrorMessage("Speech recognition encountered an unexpected error. Try stopping and starting the microphone again.");
     };
 
     recognition.onend = () => {
@@ -144,7 +147,7 @@ export function useAudioRecorder(): AudioRecorderState {
         return;
       }
 
-      // Preserve everything spoken before the browser ended/restarted the recognition session
+      // Preserve everything spoken before the browser ended/restarted recognition.
       baseTranscriptRef.current = fullTranscriptRef.current;
 
       restartCountRef.current += 1;
@@ -152,17 +155,20 @@ export function useAudioRecorder(): AudioRecorderState {
         isIntentActiveRef.current = false;
         setIsRecording(false);
         setIsConnecting(false);
-        setErrorMessage('Speech recognition could not reconnect. Press Start Speaking to try again.');
+        setErrorMessage("Speech recognition could not reconnect after several attempts. Check your connection, then press Start Speaking to try again.");
         return;
       }
 
       if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
       const retryDelay = Math.min(250 * (2 ** (restartCountRef.current - 1)), 4000);
-      setIsRecording(false);
+      // Keep the active recording clock running during the short browser restart.
+      // isConnecting indicates the microphone is temporarily reconnecting.
+      setIsRecording(true);
       setIsConnecting(true);
       retryTimeoutRef.current = setTimeout(() => {
         retryTimeoutRef.current = null;
         if (isLockedRef.current || isPausedRef.current || !isIntentActiveRef.current) {
+          setIsRecording(false);
           setIsConnecting(false);
           return;
         }
@@ -172,8 +178,8 @@ export function useAudioRecorder(): AudioRecorderState {
           isIntentActiveRef.current = false;
           setIsRecording(false);
           setIsConnecting(false);
-          setErrorMessage('Speech recognition could not restart. Press Start Speaking to try again.');
-          console.warn('Speech recognition restart failed:', error);
+          setErrorMessage("Speech recognition could not restart. Check microphone permissions and try again.");
+          console.warn("Speech recognition restart failed:", error);
         }
       }, retryDelay);
     };
@@ -237,11 +243,22 @@ export function useAudioRecorder(): AudioRecorderState {
 
     try {
       recognition.start();
-    } catch (e: any) {
-      console.error('Failed to start recognition:', e);
-      setIsConnecting(false);
+    } catch (error) {
+      console.warn("Failed to start speech recognition:", error);
       isIntentActiveRef.current = false;
-      setErrorMessage('Could not initialize microphone. Please check permissions.');
+      isPausedRef.current = false;
+      setIsRecording(false);
+      setIsPaused(false);
+      setIsConnecting(false);
+      setErrorMessage(getSpeechStartErrorMessage(error));
+      if (recognitionRef.current === recognition) {
+        recognitionRef.current = null;
+        recognition.onstart = null;
+        recognition.onresult = null;
+        recognition.onerror = null;
+        recognition.onend = null;
+      }
+      try { recognition.abort?.(); } catch {}
     }
   }, [isSupported, initRecognition]);
 
@@ -300,9 +317,22 @@ export function useAudioRecorder(): AudioRecorderState {
     recognitionRef.current = recognition;
     try {
       recognition.start();
-    } catch (e) {
-      console.error('Failed to resume recognition:', e);
+    } catch (error) {
+      console.warn("Failed to resume speech recognition:", error);
+      isIntentActiveRef.current = false;
+      isPausedRef.current = false;
+      setIsRecording(false);
+      setIsPaused(false);
       setIsConnecting(false);
+      setErrorMessage(getSpeechStartErrorMessage(error));
+      if (recognitionRef.current === recognition) {
+        recognitionRef.current = null;
+        recognition.onstart = null;
+        recognition.onresult = null;
+        recognition.onerror = null;
+        recognition.onend = null;
+      }
+      try { recognition.abort?.(); } catch {}
     }
   }, [initRecognition]);
 
