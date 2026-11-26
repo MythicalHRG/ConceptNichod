@@ -29,44 +29,35 @@ const { sanitizeIp, getClientIp } = ipModule;
 test("Challenger 1.1: Forged signature on valid UUID is strictly rejected", () => {
   const validUuid = "12345678-abcd-ef01-2345-6789abcdef01";
   const signed = createSignedSessionCookie(validUuid);
-  const [uuid, sig] = signed.split(".");
+  const [uuid, version, expiry, sig] = signed.split(".");
 
-  // 1. Bit flip in signature
   const flippedSig = (sig[0] === "0" ? "1" : "0") + sig.slice(1);
-  assert.strictEqual(verifySessionCookie(`${uuid}.${flippedSig}`), null, "Flipped signature bit must return null");
+  assert.strictEqual(verifySessionCookie(`${uuid}.${version}.${expiry}.${flippedSig}`), null);
 
-  // 2. Completely randomized 64-char hex signature
   const randomSig = crypto.randomBytes(32).toString("hex");
-  assert.strictEqual(verifySessionCookie(`${uuid}.${randomSig}`), null, "Random signature must return null");
+  assert.strictEqual(verifySessionCookie(`${uuid}.${version}.${expiry}.${randomSig}`), null);
 
-  // 3. Truncated signature (32 chars instead of 64)
-  assert.strictEqual(verifySessionCookie(`${uuid}.${sig.slice(0, 32)}`), null, "Truncated signature must return null");
-
-  // 4. Overlong signature (65 chars)
-  assert.strictEqual(verifySessionCookie(`${uuid}.${sig}a`), null, "Overlong signature must return null");
-
-  // 5. Signature with invalid characters
-  assert.strictEqual(verifySessionCookie(`${uuid}.${sig.slice(0, 60)}!@#$`), null, "Non-hex signature must return null");
+  assert.strictEqual(verifySessionCookie(`${uuid}.${version}.${expiry}.${sig.slice(0, 32)}`), null);
+  assert.strictEqual(verifySessionCookie(`${uuid}.${version}.${expiry}.${sig}a`), null);
+  assert.strictEqual(verifySessionCookie(`${uuid}.${version}.${expiry}.${sig.slice(0, 60)}!@#$`), null);
 });
 
 test("Challenger 1.2: Cross-UUID signature replay attack is rejected", () => {
   const victimUuid = "11111111-2222-3333-4444-555555555555";
   const attackerUuid = "99999999-8888-7777-6666-555555555555";
-
   const victimSigned = createSignedSessionCookie(victimUuid);
-  const [, victimSig] = victimSigned.split(".");
-
-  // Attacker tries to reuse victim's valid signature with their own UUID
-  const forgedCookie = `${attackerUuid}.${victimSig}`;
-  assert.strictEqual(verifySessionCookie(forgedCookie), null, "Signature reuse across UUIDs must return null");
+  const [, victimVersion, victimExpiry, victimSig] = victimSigned.split(".");
+  const forgedCookie = `${attackerUuid}.${victimVersion}.${victimExpiry}.${victimSig}`;
+  assert.strictEqual(verifySessionCookie(forgedCookie), null);
 });
 
 test("Challenger 1.3: Foreign secret HMAC generation is rejected", () => {
   const uuid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
   const fakeSecret = "adversarial-attacker-secret-key-salt";
-  const fakeSig = crypto.createHmac("sha256", fakeSecret).update(uuid).digest("hex");
+  const expiry = Math.floor(Date.now() / 1000) + 3600;
+  const fakeSig = crypto.createHmac("sha256", fakeSecret).update(`${uuid}.0.${expiry}`).digest("hex");
 
-  assert.strictEqual(verifySessionCookie(`${uuid}.${fakeSig}`), null, "Foreign secret signature must return null");
+  assert.strictEqual(verifySessionCookie(`${uuid}.0.${expiry}.${fakeSig}`), null, "Foreign secret signature must return null");
 });
 
 test("Challenger 1.4: Malformed, punctuated, and injection cookie values fail closed", () => {
@@ -328,10 +319,10 @@ test("Challenger 5.1: Aspirants Connect search strictly redacts user UUID from r
   const aspirantsFilePath = path.resolve("src/app/actions/aspirants.ts");
   const content = fs.readFileSync(aspirantsFilePath, "utf-8");
 
-  // In searchAspirantsAction, verify session is verified using verifySessionCookie
+  // In searchAspirantsAction, verify session is validated against the database session version
   assert.ok(
-    content.includes("verifySessionCookie"),
-    "searchAspirantsAction must use verifySessionCookie"
+    content.includes("getVerifiedSessionUuid"),
+    "searchAspirantsAction must use database-backed session validation"
   );
 
   // In the return mapping, verify uuid is NOT in the mapped fields

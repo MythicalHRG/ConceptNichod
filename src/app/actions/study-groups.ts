@@ -8,7 +8,7 @@ import User from "@/models/User";
 import StudyGroup from "@/models/StudyGroup";
 import GroupMessage from "@/models/GroupMessage";
 import DirectMessage from "@/models/DirectMessage";
-import { verifySessionCookie } from "@/lib/session";
+import { getVerifiedSessionUuid } from "@/lib/session-auth";
 import { checkDistributedRateLimit } from "@/lib/distributed-rate-limiter";
 import { assertActiveNonBlacklistedUser } from "@/lib/ai-flow-auth";
 import { recordUserStudyActivity } from "@/lib/streak";
@@ -31,7 +31,7 @@ function escapeRegex(str: string): string {
 async function getAuthenticatedUser() {
   await dbConnect();
   const rawSession = (await cookies()).get("user_session")?.value;
-  const sessionUuid = verifySessionCookie(rawSession);
+  const sessionUuid = await getVerifiedSessionUuid(rawSession);
   if (!sessionUuid) {
     throw new Error("Authentication required.");
   }
@@ -48,7 +48,7 @@ async function getAuthenticatedUser() {
 
 async function requirePlatformOwner() {
   await dbConnect();
-  const sessionUuid = verifySessionCookie((await cookies()).get("user_session")?.value);
+  const sessionUuid = await getVerifiedSessionUuid();
   if (!sessionUuid) throw new Error("Authentication required.");
   const fetchedUser = await User.findOne({ uuid: sessionUuid })
     .select("uuid username email role")

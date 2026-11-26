@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { z } from 'zod';
 import { runFinalAnalysisAction } from '@/app/actions';
-import { verifySessionCookie } from '@/lib/session';
+import { getVerifiedSessionUuid } from "@/lib/session-auth";
 import { getClientIp } from '@/lib/ip';
 import { checkDistributedRateLimit } from '@/lib/distributed-rate-limiter';
 
@@ -72,7 +72,7 @@ export async function POST(req: Request) {
 
     // 1. Session authentication check
     const rawSession = (await cookies()).get('user_session')?.value;
-    const sessionUuid = verifySessionCookie(rawSession);
+    const sessionUuid = await getVerifiedSessionUuid(rawSession);
     if (!sessionUuid) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

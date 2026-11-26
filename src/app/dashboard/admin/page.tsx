@@ -4,14 +4,14 @@ import { cookies } from "next/headers";
 import User from "@/models/User";
 import dbConnect from "@/lib/mongoose";
 import { notFound } from "next/navigation";
-import { verifySessionCookie } from "@/lib/session";
+import { getVerifiedSessionUuid } from "@/lib/session-auth";
 import { ensurePlatformOwnerRole, isPlatformOwner } from "@/lib/owner-access";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
   const rawSession = (await cookies()).get("user_session")?.value;
-  const sessionUuid = verifySessionCookie(rawSession);
+  const sessionUuid = await getVerifiedSessionUuid(rawSession);
   if (!sessionUuid) {
     notFound();
   }

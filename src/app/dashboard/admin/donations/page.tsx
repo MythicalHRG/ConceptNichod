@@ -2,14 +2,14 @@ import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import User from "@/models/User";
 import dbConnect from "@/lib/mongoose";
-import { verifySessionCookie } from "@/lib/session";
+import { getVerifiedSessionUuid } from "@/lib/session-auth";
 import { ensurePlatformOwnerRole, isPlatformOwner } from "@/lib/owner-access";
 import { DonationReconciliation } from "@/components/admin/donation-reconciliation";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminDonationsPage() {
-  const sessionUuid = verifySessionCookie((await cookies()).get("user_session")?.value);
+  const sessionUuid = await getVerifiedSessionUuid();
   if (!sessionUuid) notFound();
   await dbConnect();
   const fetchedUser = await User.findOne({ uuid: sessionUuid }).select("uuid username email role").lean();

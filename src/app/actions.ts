@@ -9,7 +9,7 @@ import { generateTopicSummary } from "@/ai/flows/generate-topic-summary";
 import { generateQuestionsFlow } from "@/ai/flows/generate-questions";
 import { analyzeAnswersFlow, FinalAnalysisOutput } from "@/ai/flows/analyze-answers";
 import { textToSpeech } from "@/ai/flows/text-to-speech";
-import { verifySessionCookie } from "@/lib/session";
+import { getVerifiedSessionUuid } from "@/lib/session-auth";
 import { checkDistributedRateLimit } from "@/lib/distributed-rate-limiter";
 import { assertActiveNonBlacklistedUser } from "@/lib/ai-flow-auth";
 
@@ -17,7 +17,7 @@ export async function generateContentAction(topicId: string, topicName: string, 
   await dbConnect();
 
   const rawSession = (await cookies()).get("user_session")?.value;
-  const sessionUuid = verifySessionCookie(rawSession);
+  const sessionUuid = await getVerifiedSessionUuid(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
   const rateLimit = await checkDistributedRateLimit(`generate-content:${sessionUuid}`, 3, 10 * 60 * 1000);
   if (!rateLimit.success) throw new Error("Too many topic-generation requests. Please wait before trying again.");
@@ -25,9 +25,8 @@ export async function generateContentAction(topicId: string, topicName: string, 
 
   await assertActiveNonBlacklistedUser(sessionUuid);
 
-  const topicDoc = await Topic.findById(topicId);
-  if (!topicDoc) throw new Error("Topic not found");
-  if (topicDoc.userId !== sessionUuid) throw new Error("Unauthorized");
+  const topicDoc = await Topic.findOne({ _id: topicId, userId: sessionUuid }).lean();
+  if (!topicDoc) throw new Error("Topic not found or access denied.");
 
   const subject = topicDoc.subject || "Unknown";
   const chapter = topicDoc.chapter || "Unknown";
@@ -72,7 +71,7 @@ export async function runFinalAnalysisAction(
   topicId: string
 ): Promise<{ analysis: FinalAnalysisOutput }> {
   const rawSession = (await cookies()).get("user_session")?.value;
-  const sessionUuid = verifySessionCookie(rawSession);
+  const sessionUuid = await getVerifiedSessionUuid(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
   const rateLimit = await checkDistributedRateLimit(`final-analysis:${sessionUuid}`, 5, 15 * 60 * 1000);
   if (!rateLimit.success) throw new Error("Too many analysis requests. Please wait before trying again.");
@@ -94,9 +93,8 @@ export async function runFinalAnalysisAction(
   await dbConnect();
   await assertActiveNonBlacklistedUser(sessionUuid);
 
-  const topicDoc = await Topic.findById(topicId);
-  if (!topicDoc) throw new Error("Topic not found");
-  if (topicDoc.userId !== sessionUuid) throw new Error("Unauthorized");
+  const topicDoc = await Topic.findOne({ _id: topicId, userId: sessionUuid });
+  if (!topicDoc) throw new Error("Topic not found or access denied.");
 
   // Guard against re-submission if practice session has already been completed
   if (topicDoc.practiceStatus === 'completed') {
@@ -146,7 +144,7 @@ export async function runFinalAnalysisAction(
   );
 
   if (!lockedTopic) {
-    const refreshed = await Topic.findById(topicId);
+    const refreshed = await Topic.findOne({ _id: topicId, userId: sessionUuid });
     if (refreshed?.analysis) {
       return { analysis: refreshed.analysis };
     }
@@ -187,7 +185,7 @@ export async function runFinalAnalysisAction(
 
 export async function generateAudioAction(text: string): Promise<string> {
     const rawSession = (await cookies()).get("user_session")?.value;
-    const sessionUuid = verifySessionCookie(rawSession);
+    const sessionUuid = await getVerifiedSessionUuid(rawSession);
     if (!sessionUuid) throw new Error("Not authenticated");
 
     const cleanText = typeof text === "string" ? text.trim() : "";
@@ -205,7 +203,7 @@ export async function generateAudioAction(text: string): Promise<string> {
 
 export async function revalidateDashboard() {
   const rawSession = (await cookies()).get("user_session")?.value;
-  const sessionUuid = verifySessionCookie(rawSession);
+  const sessionUuid = await getVerifiedSessionUuid(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
   const rateLimit = await checkDistributedRateLimit(`revalidate-dashboard:${sessionUuid}`, 30, 60 * 1000);
   if (!rateLimit.success) throw new Error("Too many refresh requests. Please wait a moment.");
@@ -222,7 +220,7 @@ export async function getDeepgramSessionKey(): Promise<{ key?: string; error?: s
 export async function createTopicAction(data: { name: string, subject: string, chapter: string }) {
   await dbConnect();
   const rawSession = (await cookies()).get("user_session")?.value;
-  const sessionUuid = verifySessionCookie(rawSession);
+  const sessionUuid = await getVerifiedSessionUuid(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
   const rateLimit = await checkDistributedRateLimit(`create-topic:${sessionUuid}`, 20, 60 * 60 * 1000);
   if (!rateLimit.success) throw new Error("You have reached the topic-creation limit. Please try again later.");
@@ -258,7 +256,7 @@ export async function createTopicAction(data: { name: string, subject: string, c
 export async function markSummaryViewedAction(topicId: string) {
   await dbConnect();
   const rawSession = (await cookies()).get("user_session")?.value;
-  const sessionUuid = verifySessionCookie(rawSession);
+  const sessionUuid = await getVerifiedSessionUuid(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
   if (typeof topicId !== "string" || !mongoose.isValidObjectId(topicId)) throw new Error("Invalid Topic ID");
 
@@ -285,7 +283,7 @@ export async function updateTopicProgressAction(
 ) {
   await dbConnect();
   const rawSession = (await cookies()).get("user_session")?.value;
-  const sessionUuid = verifySessionCookie(rawSession);
+  const sessionUuid = await getVerifiedSessionUuid(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
   if (typeof topicId !== "string" || !mongoose.isValidObjectId(topicId)) throw new Error("Invalid Topic ID");
   if (status !== "in_progress" && status !== "completed") throw new Error("Invalid practice status.");

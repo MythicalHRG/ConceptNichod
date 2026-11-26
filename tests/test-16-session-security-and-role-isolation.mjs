@@ -5,19 +5,23 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   createSignedSessionCookie,
+  getSessionVersionFromCookie,
   verifySessionCookie
 } from "../src/lib/session.ts";
 
-test("Tareeka 16: Session signer produces valid HMAC-SHA256 signed cookie format <uuid>.<signature>", () => {
+test("Tareeka 16: Session signer produces a version-bound HMAC-SHA256 cookie", () => {
   const uuid = "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d";
   const signedCookie = createSignedSessionCookie(uuid);
 
   assert.ok(signedCookie.includes("."), "Signed cookie must contain a dot delimiter");
   const parts = signedCookie.split(".");
-  assert.strictEqual(parts.length, 2, "Signed cookie must split into exactly uuid and signature");
+  assert.strictEqual(parts.length, 4, "Signed cookie must split into UUID, version, expiry, and signature");
   assert.strictEqual(parts[0], uuid, "First part must be the exact UUID");
-  assert.strictEqual(parts[1].length, 64, "Signature must be 64-character SHA256 hex digest");
-  assert.match(parts[1], /^[0-9a-f]{64}$/i, "Signature must be valid hex characters");
+  assert.strictEqual(parts[1], "0", "New accounts begin at session version zero");
+  assert.ok(Number(parts[2]) > Math.floor(Date.now() / 1000), "Signed cookie must contain a future expiry");
+  assert.strictEqual(parts[3].length, 64, "Signature must be 64-character SHA256 hex digest");
+  assert.match(parts[3], /^[0-9a-f]{64}$/i, "Signature must be valid hex characters");
+  assert.strictEqual(getSessionVersionFromCookie(signedCookie), 0);
 });
 
 test("Tareeka 16: verifySessionCookie verifies valid signed session and returns payload UUID", () => {
@@ -31,12 +35,12 @@ test("Tareeka 16: verifySessionCookie verifies valid signed session and returns 
 test("Tareeka 16: Forged or tampered signature is strictly rejected", () => {
   const uuid = "12345678-1234-1234-1234-123456789abc";
   const signedCookie = createSignedSessionCookie(uuid);
-  const [origUuid, origSig] = signedCookie.split(".");
+  const [origUuid, version, expiry, origSig] = signedCookie.split(".");
 
   // Tamper 1 character in the signature
   const corruptedChar = origSig[0] === "a" ? "b" : "a";
   const tamperedSig = corruptedChar + origSig.slice(1);
-  const tamperedCookie = `${origUuid}.${tamperedSig}`;
+  const tamperedCookie = `${origUuid}.${version}.${expiry}.${tamperedSig}`;
 
   const result = verifySessionCookie(tamperedCookie);
   assert.strictEqual(result, null, "Tampered signature must return null");
@@ -47,10 +51,10 @@ test("Tareeka 16: Cross-UUID tampering (valid signature applied to different UUI
   const attackerUuid = "99999999-9999-9999-9999-999999999999";
 
   const legitimateCookie = createSignedSessionCookie(legitimateUuid);
-  const [, legitimateSig] = legitimateCookie.split(".");
+  const [, version, expiry, legitimateSig] = legitimateCookie.split(".");
 
   // Attacker tries to use legitimate signature with their attacker UUID
-  const forgedCookie = `${attackerUuid}.${legitimateSig}`;
+  const forgedCookie = `${attackerUuid}.${version}.${expiry}.${legitimateSig}`;
   const result = verifySessionCookie(forgedCookie);
 
   assert.strictEqual(result, null, "Cross-UUID signature mismatch must return null");
@@ -59,8 +63,9 @@ test("Tareeka 16: Cross-UUID tampering (valid signature applied to different UUI
 test("Tareeka 16: Signature generated with different secret key is rejected", () => {
   const uuid = "44444444-4444-4444-4444-444444444444";
   const foreignSecret = "unauthorized-external-attacker-secret-key-999";
-  const forgedSig = crypto.createHmac("sha256", foreignSecret).update(uuid).digest("hex");
-  const forgedCookie = `${uuid}.${forgedSig}`;
+  const expiry = Math.floor(Date.now() / 1000) + 3600;
+  const forgedSig = crypto.createHmac("sha256", foreignSecret).update(`${uuid}.0.${expiry}`).digest("hex");
+  const forgedCookie = `${uuid}.0.${expiry}.${forgedSig}`;
 
   const result = verifySessionCookie(forgedCookie);
   assert.strictEqual(result, null, "Signature with foreign secret must be rejected");
@@ -79,6 +84,26 @@ test("Tareeka 16: Backward compatibility - valid unsigned UUID format is accepte
   const legacyUuid = "abcdef12-3456-7890-abcd-ef1234567890";
   const verified = verifySessionCookie(legacyUuid);
   assert.strictEqual(verified, legacyUuid, "Legacy valid UUID format should be verified for zero-downtime migration");
+});
+
+
+test("Tareeka 16: Session version changes invalidate old signed cookies", () => {
+  const uuid = "12345678-1234-5678-1234-567812345678";
+  const versionZero = createSignedSessionCookie(uuid, 0);
+  const versionOne = createSignedSessionCookie(uuid, 1);
+  assert.strictEqual(verifySessionCookie(versionZero), uuid);
+  assert.strictEqual(verifySessionCookie(versionOne), uuid);
+  assert.strictEqual(getSessionVersionFromCookie(versionZero), 0);
+  assert.strictEqual(getSessionVersionFromCookie(versionOne), 1);
+  assert.notStrictEqual(versionZero, versionOne);
+});
+
+
+test("Tareeka 16: Expired signed cookies are rejected before database access", () => {
+  const uuid = "12345678-1234-5678-1234-567812345678";
+  const token = createSignedSessionCookie(uuid, 0);
+  const [tokenUuid, version, , signature] = token.split(".");
+  assert.strictEqual(verifySessionCookie(`${tokenUuid}.${version}.1.${signature}`), null);
 });
 
 test("Tareeka 16: UUID is strictly redacted from Aspirants Connect search payload", () => {

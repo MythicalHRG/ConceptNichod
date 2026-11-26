@@ -56,7 +56,7 @@ test("Batch 13: donations are permanently enabled and owner settings remain prot
   assert.ok(model.includes("isEnabled: { type: Boolean, default: true }"));
   assert.ok(actions.includes("export async function adminSetDonationsEnabledAction(enabled: boolean)"));
   assert.ok(actions.includes('typeof enabled !== "boolean"'));
-  assert.ok(actions.includes("verifySessionCookie"));
+  assert.ok(actions.includes("getVerifiedSessionUuid"));
   assert.ok(actions.includes("isPlatformOwner(adminUser)"));
   assert.ok(actions.includes("getCanonicalDonationSettings"));
   assert.ok(actions.includes("isEnabled: true"));

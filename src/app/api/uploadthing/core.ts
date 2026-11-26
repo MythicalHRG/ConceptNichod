@@ -2,7 +2,7 @@ import { createUploadthing, type FileRouter } from "uploadthing/next";
 import { cookies } from "next/headers";
 import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
-import { verifySessionCookie } from "@/lib/session";
+import { getVerifiedSessionUuid } from "@/lib/session-auth";
 import { ensurePlatformOwnerRole, isPlatformOwner } from "@/lib/owner-access";
 import { checkDistributedRateLimit } from "@/lib/distributed-rate-limiter";
 
@@ -17,7 +17,7 @@ export const ourFileRouter = {
     .middleware(async () => {
       await dbConnect();
       const rawSession = (await cookies()).get("user_session")?.value;
-      const sessionUuid = verifySessionCookie(rawSession);
+      const sessionUuid = await getVerifiedSessionUuid(rawSession);
       if (!sessionUuid) throw new Error("Unauthorized");
 
       const fetchedUser = await User.findOne({ uuid: sessionUuid })

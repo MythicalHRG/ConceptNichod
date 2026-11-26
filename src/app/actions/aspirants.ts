@@ -2,7 +2,7 @@
 import { cookies } from "next/headers";
 import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
-import { verifySessionCookie } from "@/lib/session";
+import { getVerifiedSessionUuid } from "@/lib/session-auth";
 import { checkDistributedRateLimit } from "@/lib/distributed-rate-limiter";
 import { assertActiveNonBlacklistedUser } from "@/lib/ai-flow-auth";
 
@@ -16,7 +16,7 @@ export type SearchFilters = {
 export async function searchAspirantsAction(filters: SearchFilters) {
     await dbConnect();
     const rawSession = (await cookies()).get("user_session")?.value;
-    const sessionUuid = verifySessionCookie(rawSession);
+    const sessionUuid = await getVerifiedSessionUuid(rawSession);
     if (!sessionUuid) throw new Error("Not authenticated");
 
     const rateLimit = await checkDistributedRateLimit("aspirant-search:" + sessionUuid, 30, 60_000);

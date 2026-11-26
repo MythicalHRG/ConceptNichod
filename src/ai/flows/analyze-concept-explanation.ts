@@ -2,7 +2,7 @@
 
 import { cookies } from 'next/headers';
 import { callOpenRouter, parseJsonResponse } from '@/lib/openrouter';
-import { verifySessionCookie } from '@/lib/session';
+import { getVerifiedSessionUuid } from "@/lib/session-auth";
 import dbConnect from '@/lib/mongoose';
 import ConceptMirror from '@/models/ConceptMirror';
 import MistakeEntry from '@/models/MistakeEntry';
@@ -61,7 +61,7 @@ function normalizePercentagesTo100(items: { name: string; value: number }[]): { 
 export async function analyzeConceptExplanation(input: AnalyzeConceptExplanationInput): Promise<MasteryReportOutput> {
   // Authentication check to prevent unauthenticated bot AI-scraping and token draining
   const rawSession = (await cookies()).get('user_session')?.value;
-  const sessionUuid = verifySessionCookie(rawSession);
+  const sessionUuid = await getVerifiedSessionUuid(rawSession);
   if (!sessionUuid) {
     throw new Error('Please log in to analyze your concept explanation.');
   }

@@ -4,7 +4,7 @@ import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
 import Blacklist from "@/models/Blacklist";
 import { sendEmail } from "@/services/email";
-import { verifySessionCookie } from "@/lib/session";
+import { getVerifiedSessionUuid } from "@/lib/session-auth";
 import { getClientIp } from "@/lib/ip";
 import { checkDistributedRateLimit } from "@/lib/distributed-rate-limiter";
 import { normalizeEmail } from "@/lib/email-utils";
@@ -42,7 +42,7 @@ export async function submitFeedbackAction(formData: FormData) {
   // Rate limiting: 3 submissions per 15 minutes per user/IP + IP-level cap
   const ip = await getClientIp();
   const rawSession = (await cookies()).get("user_session")?.value;
-  const sessionUuid = verifySessionCookie(rawSession);
+  const sessionUuid = await getVerifiedSessionUuid(rawSession);
   const rateLimitKey = `feedback:${sessionUuid || ip}`;
   const rateCheck = await checkDistributedRateLimit(rateLimitKey, 3, 15 * 60 * 1000);
   const ipRateCheck = sessionUuid

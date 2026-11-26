@@ -5,7 +5,7 @@ import { cookies } from "next/headers";
 import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
 import MistakeEntry from "@/models/MistakeEntry";
-import { verifySessionCookie } from "@/lib/session";
+import { getVerifiedSessionUuid } from "@/lib/session-auth";
 import { checkDistributedRateLimit } from "@/lib/distributed-rate-limiter";
 import { assertActiveNonBlacklistedUser } from "@/lib/ai-flow-auth";
 import { recordUserStudyActivity } from "@/lib/streak";
@@ -29,7 +29,7 @@ function sanitize(str: string, maxLen?: number): string {
 async function getAuthenticatedUser() {
   await dbConnect();
   const rawSession = (await cookies()).get("user_session")?.value;
-  const sessionUuid = verifySessionCookie(rawSession);
+  const sessionUuid = await getVerifiedSessionUuid(rawSession);
   if (!sessionUuid) {
     throw new Error("Authentication required.");
   }

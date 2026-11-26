@@ -7,7 +7,7 @@ import dbConnect from "@/lib/mongoose";
 import User from "@/models/User";
 import Broadcast from "@/models/Broadcast";
 import NotificationRead from "@/models/NotificationRead";
-import { verifySessionCookie } from "@/lib/session";
+import { getVerifiedSessionUuid } from "@/lib/session-auth";
 import { checkDistributedRateLimit } from "@/lib/distributed-rate-limiter";
 import { UTApi } from "uploadthing/server";
 
@@ -48,7 +48,7 @@ function parseSafeUploadThingUrl(rawUrl: string): { url: string; fileKey: string
 async function verifyOwner() {
   await dbConnect();
   const rawSession = (await cookies()).get("user_session")?.value;
-  const sessionUuid = verifySessionCookie(rawSession);
+  const sessionUuid = await getVerifiedSessionUuid(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
 
   const fetchedUser = await User.findOne({ uuid: sessionUuid })
@@ -121,7 +121,7 @@ export async function createBroadcastAction(formData: FormData) {
 export async function getActiveBroadcastsAction() {
   await dbConnect();
   const rawSession = (await cookies()).get("user_session")?.value;
-  const sessionUuid = verifySessionCookie(rawSession);
+  const sessionUuid = await getVerifiedSessionUuid(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
 
   // Fetch active broadcasts that have not expired yet (bounded for safety)
@@ -136,7 +136,7 @@ export async function getActiveBroadcastsAction() {
 export async function markBroadcastsAsReadAction() {
   await dbConnect();
   const rawSession = (await cookies()).get("user_session")?.value;
-  const sessionUuid = verifySessionCookie(rawSession);
+  const sessionUuid = await getVerifiedSessionUuid(rawSession);
   if (!sessionUuid) throw new Error("Not authenticated");
 
   await NotificationRead.findOneAndUpdate(
@@ -151,7 +151,7 @@ export async function markBroadcastsAsReadAction() {
 export async function getUnreadCountAction() {
   await dbConnect();
   const rawSession = (await cookies()).get("user_session")?.value;
-  const sessionUuid = verifySessionCookie(rawSession);
+  const sessionUuid = await getVerifiedSessionUuid(rawSession);
   if (!sessionUuid) return { success: true, count: 0 };
 
   const readState = await NotificationRead.findOne({ userId: sessionUuid })

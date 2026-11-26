@@ -5,7 +5,7 @@ import Topic from "@/models/Topic";
 import mongoose from "mongoose";
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
-import { verifySessionCookie } from "@/lib/session";
+import { getVerifiedSessionUuid } from "@/lib/session-auth";
 import { assertActiveNonBlacklistedUser } from "@/lib/ai-flow-auth";
 
 export default async function TopicPage({
@@ -16,7 +16,7 @@ export default async function TopicPage({
   const { topicId } = await params;
 
   const rawSession = (await cookies()).get("user_session")?.value;
-  const sessionUuid = verifySessionCookie(rawSession);
+  const sessionUuid = await getVerifiedSessionUuid(rawSession);
   if (!sessionUuid) {
     redirect("/?login=true");
   }
